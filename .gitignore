@@ -8,6 +8,11 @@ README.weixin.md
 ## Node.js
 node_modules/
 
+# AI
+.agents/
+.claude/
+skills-lock.json
+
 # Compile
 ## TypeScript
 packages/*/lib/

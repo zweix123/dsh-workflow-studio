@@ -51,6 +51,7 @@ test('browser artifact uses dsh factory and host React, registers panel and side
   assert.deepEqual(entries.map(entry => entry.name), ['main', 'sidebar.panellist'])
   assert.equal(entries[0].key, entries[1].id)
   assert.equal(entries[0].locale, plugin!.name)
+  assert.equal(entries[0].inject, undefined)
   assert.deepEqual(Object.keys(dictionaries.zh).sort(), Object.keys(dictionaries.en).sort())
   const label = entries[1].label as () => string
   assert.equal(label(), dictionaries.zh.title)

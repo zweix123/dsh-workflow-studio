@@ -5,8 +5,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import { PANEL_ID, PLUGIN_NAME } from '../shared/constants.js'
-import { getPluginStatus } from './apis/plugin-status.js'
-import { ConnectionPanel } from './features/connection/ConnectionPanel.js'
+import { WorkflowStudioPanel } from './pages/workflow-studio/WorkflowStudioPanel.js'
 import { en, zh } from './locales/index.js'
 
 export const name = PLUGIN_NAME
@@ -26,8 +25,7 @@ export function apply(ctx: Context): void {
     yield ctx.slots.register({
       name: 'main', key: PANEL_ID,
       locale: PLUGIN_NAME,
-      inject: () => ({ loadStatus: getPluginStatus }),
-    }, ConnectionPanel)
+    }, WorkflowStudioPanel)
     yield ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({
       name: 'sidebar.panellist', id: PANEL_ID, order: 10, label: () => t('title'),
     }, WorkflowIcon))

@@ -3,75 +3,99 @@ import { test } from 'node:test'
 import { JSDOM } from 'jsdom'
 import React, { act } from 'react'
 import { createRoot } from 'react-dom/client'
-import { ConnectionPanel } from '../src/client/features/connection/ConnectionPanel.js'
+import { WorkflowStudioPanel } from '../src/client/pages/workflow-studio/WorkflowStudioPanel.js'
 import { getPluginStatus } from '../src/client/apis/plugin-status.js'
 import { en, zh, type WorkflowTranslate } from '../src/client/locales/index.js'
 
 const status = { plugin: 'dsh-workflow-studio', version: '0.1.0', status: 'ready' as const, serverTime: '2026-09-22T10:00:00.000Z' }
 
 for (const [language, initial, other] of [['zh', zh, en], ['en', en, zh]] as const) {
-test(`panel handles connection states and language switching (${language})`, async () => {
-  const dom = new JSDOM('<!doctype html><div id="root"></div>')
-  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window')
-  const previousDocument = Object.getOwnPropertyDescriptor(globalThis, 'document')
-  Object.defineProperty(globalThis, 'window', { value: dom.window, configurable: true })
-  Object.defineProperty(globalThis, 'document', { value: dom.window.document, configurable: true })
-  Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
-  const container = dom.window.document.getElementById('root')!
-  const root = createRoot(container)
-  let complete: (value: typeof status) => void = () => {}
-  let fail: (error: Error) => void = () => {}
-  let signal: AbortSignal
-  const load = (next: AbortSignal) => {
-    signal = next
-    return new Promise<typeof status>((resolve, reject) => { complete = resolve; fail = reject })
-  }
-  const click = () => container.querySelector('button')!.click()
-  let dictionary = initial
-  const t: WorkflowTranslate = key => dictionary[key]
-  const render = () => root.render(<ConnectionPanel loadStatus={load} t={t} />)
-  try {
-    await act(async () => render())
-    for (const key of ['title', 'subtitle', 'description', 'idle', 'check', 'scope'] as const) {
-      assert.ok(container.textContent!.includes(initial[key]), key)
+  test(`studio supports accessible tabs and language switching without requests (${language})`, async () => {
+    const dom = new JSDOM('<!doctype html><div id="root"></div>')
+    const globals = ['window', 'document', 'IS_REACT_ACT_ENVIRONMENT', 'fetch'] as const
+    const previous = globals.map(name => [name, Object.getOwnPropertyDescriptor(globalThis, name)] as const)
+    Object.defineProperty(globalThis, 'window', { value: dom.window, configurable: true })
+    Object.defineProperty(globalThis, 'document', { value: dom.window.document, configurable: true })
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
+    let requests = 0
+    globalThis.fetch = async () => { requests++; throw new Error('Studio must not fetch') }
+    const container = dom.window.document.getElementById('root')!
+    const root = createRoot(container)
+    let dictionary = initial
+    const t: WorkflowTranslate = key => dictionary[key]
+    const render = () => root.render(<WorkflowStudioPanel t={t} />)
+    const tabs = () => [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
+    const panels = () => [...container.querySelectorAll<HTMLElement>('[role="tabpanel"]')]
+    const assertSelection = (selected: number) => {
+      assert.equal(tabs().length, 2)
+      assert.equal(panels().length, 2)
+      tabs().forEach((tab, index) => {
+        const panel = panels()[index]
+        assert.equal(tab.getAttribute('aria-selected'), String(index === selected))
+        assert.equal(tab.tabIndex, index === selected ? 0 : -1)
+        assert.equal(tab.getAttribute('aria-controls'), panel.id)
+        assert.equal(panel.getAttribute('aria-labelledby'), tab.id)
+        assert.equal(panel.hidden, index !== selected)
+        assert.equal(panel.childNodes.length, 0)
+      })
     }
-    await act(async () => click())
-    assert.ok(container.querySelector('button')!.disabled)
-    assert.equal(container.querySelector('[role="status"]')!.textContent, initial.checking)
-    dictionary = other
-    await act(async () => render())
-    assert.equal(container.querySelector('[role="status"]')!.textContent, other.checking)
-    assert.equal(signal!.aborted, false)
-    await act(async () => complete(status))
-    assert.equal(container.querySelector('[role="status"]')!.textContent, other.ready)
-    dictionary = initial
-    await act(async () => render())
-    assert.equal(container.querySelector('[role="status"]')!.textContent, initial.ready)
-    assert.deepEqual([...container.querySelectorAll('dt')].map(node => node.textContent), [initial.version, initial.serverTime])
-    assert.match(container.textContent!, /0\.1\.0/)
-    assert.equal(container.querySelector('time')!.dateTime, status.serverTime)
-    await act(async () => click())
-    await act(async () => fail(new Error('offline')))
-    assert.equal(container.querySelector('[role="status"]')!.textContent, initial.failed)
-    dictionary = other
-    await act(async () => render())
-    assert.equal(container.querySelector('[role="status"]')!.textContent, other.failed)
-    assert.equal(container.querySelector('button')!.disabled, false)
-    await act(async () => click())
-    await act(async () => complete(status))
-    assert.equal(container.querySelector('[role="status"]')!.textContent, other.ready)
-    await act(async () => click())
-    await act(async () => root.unmount())
-    assert.ok(signal!.aborted)
-    await act(async () => complete(status))
-  } finally {
-    dom.window.close()
-    for (const [name, descriptor] of [['window', previousWindow], ['document', previousDocument]] as const) {
-      if (descriptor) Object.defineProperty(globalThis, name, descriptor)
-      else Reflect.deleteProperty(globalThis, name)
+    const press = async (key: string, selected: number) => {
+      const event = new dom.window.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })
+      await act(async () => { dom.window.document.activeElement!.dispatchEvent(event) })
+      assert.ok(event.defaultPrevented)
+      assertSelection(selected)
+      assert.equal(dom.window.document.activeElement, tabs()[selected])
     }
-  }
-})
+    try {
+      await act(async () => render())
+      assert.equal(container.querySelector('h1')!.textContent, initial.title)
+      assert.equal(container.querySelector('[role="tablist"]')!.getAttribute('aria-labelledby'), container.querySelector('h1')!.id)
+      assert.deepEqual(tabs().map(tab => tab.textContent), [initial.instances, initial.templates])
+      assertSelection(0)
+      await act(async () => tabs()[1].click())
+      assertSelection(1)
+      tabs()[1].focus()
+      const originalTabs = tabs()
+      const originalPanels = panels()
+      dictionary = other
+      await act(async () => render())
+      assert.equal(container.querySelector('h1')!.textContent, other.title)
+      assert.deepEqual(tabs().map(tab => tab.textContent), [other.instances, other.templates])
+      assertSelection(1)
+      tabs().forEach((tab, index) => assert.equal(tab, originalTabs[index]))
+      panels().forEach((panel, index) => assert.equal(panel, originalPanels[index]))
+      assert.equal(dom.window.document.activeElement, originalTabs[1])
+      await press('ArrowRight', 0)
+      await press('ArrowLeft', 1)
+      await press('Home', 0)
+      await press('End', 1)
+      await press('ArrowLeft', 0)
+      await press('ArrowRight', 1)
+      const tabKey = new dom.window.KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })
+      await act(async () => { tabs()[1].dispatchEvent(tabKey) })
+      assert.equal(tabKey.defaultPrevented, false)
+      assertSelection(1)
+      dictionary = initial
+      await act(async () => render())
+      assertSelection(1)
+      assert.deepEqual(tabs().map(tab => tab.textContent), [initial.instances, initial.templates])
+      await act(async () => root.render(null))
+      await act(async () => render())
+      assertSelection(0)
+      // Multiple mounted copies must not share tab/panel IDs.
+      await act(async () => root.render(<><WorkflowStudioPanel t={t} /><WorkflowStudioPanel t={t} /></>))
+      const ids = [...container.querySelectorAll('[id]')].map(element => element.id)
+      assert.equal(new Set(ids).size, ids.length)
+      assert.equal(requests, 0)
+    } finally {
+      await act(async () => root.unmount())
+      dom.window.close()
+      for (const [name, descriptor] of previous) {
+        if (descriptor) Object.defineProperty(globalThis, name, descriptor)
+        else Reflect.deleteProperty(globalThis, name)
+      }
+    }
+  })
 }
 
 test('API validates HTTP status and protocol payload', async () => {
