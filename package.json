@@ -1,0 +1,30 @@
+{
+  "name": "dsh-workflow-studio-workspace",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "scripts": {
+    "build": "npm run build --workspace=dsh-workflow-studio",
+    "typecheck": "npm run typecheck --workspace=dsh-workflow-studio",
+    "test": "npm run test --workspace=dsh-workflow-studio",
+    "check": "npm run typecheck && npm run build && npm test",
+    "install:local": "npm run build && dsh plugin --profile web add ./packages/dsh-workflow-studio"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.0",
+    "@types/react": "18.3.1",
+    "@types/react-dom": "18.3.0",
+    "esbuild": "^0.25.0",
+    "jsdom": "^26.1.0",
+    "@types/jsdom": "^21.1.7",
+    "tsx": "^4.20.0",
+    "typescript": "~5.9.3",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  }
+}

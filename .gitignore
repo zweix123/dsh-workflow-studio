@@ -1,0 +1,23 @@
+# Developer
+add-skills.sh
+README.weixin.md
+# OS
+.DS_Store
+
+# Dependencies
+## Node.js
+node_modules/
+
+# Compile
+## TypeScript
+packages/*/lib/
+*.tsbuildinfo
+
+# Test & Debug & Run
+coverage/
+artifacts/
+.local/
+
+# Other
+## Reference code
+references/
