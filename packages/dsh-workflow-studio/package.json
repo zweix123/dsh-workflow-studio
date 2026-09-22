@@ -34,9 +34,9 @@
     }
   },
   "scripts": {
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p tests/tsconfig.dag-engine.json",
     "build": "node scripts/build.mjs && tsc --emitDeclarationOnly",
-    "test": "tsx --tsconfig tsconfig.json --test tests/*.test.ts tests/*.test.tsx"
+    "test": "tsx --tsconfig tsconfig.json --test tests/*.test.ts tests/*.test.tsx tests/*.test.mjs"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.2",

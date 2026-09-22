@@ -1,8 +1,12 @@
 # Developer
 add-skills.sh
 README.weixin.md
+
 # OS
 .DS_Store
+
+# Editor
+.vscode/
 
 # Dependencies
 ## Node.js

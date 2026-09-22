@@ -1,0 +1,9 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "..",
+    "noEmit": true,
+    "exactOptionalPropertyTypes": true
+  },
+  "include": ["../src/host/dag-engine/**/*.ts", "dag-engine.types.ts"]
+}
