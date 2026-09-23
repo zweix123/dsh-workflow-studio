@@ -24,6 +24,10 @@ const detail: InstanceDetail = {
       { parentInstanceId: 'i1', definitionPath: ['dag', 3], from: { parentInstanceId: 'i1', definitionId: 'prepare' }, to: { parentInstanceId: 'i1', definitionId: 'work' }, status: 'active' },
       { parentInstanceId: 'i1', definitionPath: ['dag', 4], from: { parentInstanceId: 'i1', definitionId: 'work' }, to: { parentInstanceId: 'i1', definitionId: 'later' }, status: 'pending' },
     ],
+    instanceConnections: [
+      { edgeDefinitionPath: ['dag', 3], from: { parentInstanceId: 'i1', definitionId: 'prepare' }, sourceKind: 'instance', sourceInstanceIds: ['i2'], toInstanceId: 'i3' },
+      { edgeDefinitionPath: ['dag', 3], from: { parentInstanceId: 'i1', definitionId: 'prepare' }, sourceKind: 'instance', sourceInstanceIds: ['i2'], toInstanceId: 'i4' },
+    ],
   },
 }
 
@@ -42,11 +46,23 @@ test('projects created instances and waiting positions with horizontal dependenc
   assert.ok(first.position.y < second.position.y)
   assert.ok(first.position.x < later.position.x)
   assert.equal(edges.filter(edge => edge.data?.status === 'active').length, 2)
-  assert.equal(edges.filter(edge => edge.data?.status === 'pending').length, 2)
+  assert.equal(edges.filter(edge => edge.data?.status === 'pending').length, 1)
+  assert.equal(edges.find(edge => edge.data?.status === 'pending')?.source, 'aggregate:i1\u0000work')
+  assert.deepEqual(edges.filter(edge => edge.data?.status === 'aggregation').map(edge => edge.source).sort(), ['i3', 'i4'])
   assert.ok(edges.every(edge => edge.markerEnd))
   assert.equal(typeof edges[0]?.markerEnd === 'object' && edges[0].markerEnd.color, 'var(--dsw-alias-state-business-primary)')
   assert.ok(edges.filter(edge => edge.data?.status === 'active').every(edge => edge.label === 'for $.jobs'))
   assert.ok(edges.filter(edge => edge.data?.status === 'pending').every(edge => edge.label === undefined))
+})
+
+test('keeps an active definition edge visible until its target instance is created', () => {
+  const partial: InstanceDetail = structuredClone(detail)
+  partial.snapshot.instances = partial.snapshot.instances.filter(row => row.definitionId !== 'work')
+  partial.snapshot.waitingPositions.push({ parentInstanceId: 'i1', definitionId: 'work', definitionPath: ['dag', 1] })
+  partial.snapshot.instanceConnections = []
+  const { edges } = buildCanvasGraph(partial)
+  assert.equal(edges.find(edge => edge.data?.status === 'active')?.source, 'i2')
+  assert.equal(edges.find(edge => edge.data?.status === 'active')?.target, 'waiting:i1\u0000work')
 })
 
 test('keeps nested DAG children inside visible groups and stacks created recursion below its source', () => {
@@ -105,4 +121,20 @@ test('shows skipped positions and inactive conditional edges without inventing a
   assert.equal(edges[0]?.data?.status, 'inactive')
   assert.equal(typeof edges[0]?.markerEnd === 'object' && edges[0].markerEnd.color, 'var(--dsw-alias-label-tertiary)')
   assert.equal(edges[0]?.label, 'if $.enabled')
+})
+
+test('does not connect a closed condition to an instance created by another edge', () => {
+  const branched: InstanceDetail = structuredClone(detail)
+  branched.definition.dag[3] = { type: 'edge', from: 'prepare', to: 'work', if: '$.enabled' }
+  branched.definition.dag.push({ type: 'edge', from: 'prepare', to: 'work' })
+  branched.snapshot.instances = branched.snapshot.instances.filter(row => row.instanceId !== 'i4')
+  delete branched.snapshot.instances.find(row => row.instanceId === 'i3')!.forItem
+  branched.snapshot.edges[0]!.status = 'inactive'
+  branched.snapshot.edges.push({ parentInstanceId: 'i1', definitionPath: ['dag', 5],
+    from: { parentInstanceId: 'i1', definitionId: 'prepare' }, to: { parentInstanceId: 'i1', definitionId: 'work' }, status: 'active' })
+  branched.snapshot.instanceConnections = [{ edgeDefinitionPath: ['dag', 5],
+    from: { parentInstanceId: 'i1', definitionId: 'prepare' }, sourceKind: 'instance', sourceInstanceIds: ['i2'], toInstanceId: 'i3' }]
+  const { edges } = buildCanvasGraph(branched)
+  assert.equal(edges.filter(edge => edge.data?.status === 'inactive').length, 0)
+  assert.deepEqual(edges.filter(edge => edge.data?.status === 'active').map(edge => [edge.source, edge.target]), [['i2', 'i3']])
 })

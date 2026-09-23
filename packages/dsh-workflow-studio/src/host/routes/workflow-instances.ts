@@ -44,6 +44,11 @@ export function createWorkflowInstancesRoute(service: WorkflowInstanceService): 
           return json(response, 405, { error: { code: 'method-not-allowed', message: 'Method not allowed' } })
         }
         if (path.startsWith(`${INSTANCES_PATH}/`)) {
+          const execution = path.match(new RegExp(`^${INSTANCES_PATH}/([^/]+)/nodes/([^/]+)/execute$`))
+          if (execution) {
+            if (request.method !== 'POST') return json(response, 405, { error: { code: 'method-not-allowed', message: 'Method not allowed' } })
+            return json(response, 200, await service.executeNode(decodeURIComponent(execution[1]!), decodeURIComponent(execution[2]!), await body(request)))
+          }
           const id = decodeURIComponent(path.slice(INSTANCES_PATH.length + 1))
           if (request.method === 'GET') return json(response, 200, service.getInstance(id))
           if (request.method === 'DELETE') {
@@ -54,7 +59,7 @@ export function createWorkflowInstancesRoute(service: WorkflowInstanceService): 
         }
         json(response, 404, { error: { code: 'not-found', message: 'Not found' } })
       } catch (error) {
-        if (error instanceof WorkflowInstanceError) return json(response, error.status, { error: { code: error.code, message: error.message } })
+        if (error instanceof WorkflowInstanceError) return json(response, error.status, { error: { code: error.code, message: error.message }, ...(error.latest && { latest: error.latest }) })
         json(response, 500, { error: { code: 'internal-error', message: 'Internal server error' } })
       }
     },

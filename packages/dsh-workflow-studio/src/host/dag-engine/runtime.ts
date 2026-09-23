@@ -1,4 +1,4 @@
-import type { DataMap, Schema, InstanceId, ForItemIdentity, ErrorLocation, ErrorSource, ExecutionPhase, Program, Execution, FrontierItem, ExecutionSnapshot, ExecutionResult } from './types.js';
+import type { DataMap, Schema, InstanceId, ForItemIdentity, ErrorLocation, ErrorSource, ExecutionPhase, Program, Execution, FrontierItem, ExecutionSnapshot, ExecutionResult, SavedExecution } from './types.js';
 import type { Vertex, Plan, Edge } from './compiler.js';
 import { cloneDefinition } from './compiler.js';
 import { copy, fail, put } from './data.js';
@@ -216,7 +216,7 @@ class RunningExecution implements Execution {
     return [...this.#state.instances.values()].filter(i => i.vertex.definition.type === 'node' && i.output === undefined).map(i => ({ instanceId: i.id, parentInstanceId: i.parent!, definition: cloneDefinition(i.vertex.definition) as import('./types.js').NodeDefinition, input: copy(i.input, i.vertex.input, false, 'input-validation', location(i)), ...(i.forItem ? { forItem: { ...i.forItem } } : {}) }));
   }
   getSnapshot(): ExecutionSnapshot {
-    const snapshot: ExecutionSnapshot = { rootInstanceId: this.#state.root, instances: [], waitingPositions: [], skippedPositions: [], edges: [] };
+    const snapshot: ExecutionSnapshot = { rootInstanceId: this.#state.root, instances: [], waitingPositions: [], skippedPositions: [], edges: [], instanceConnections: [] };
     for (const i of this.#state.instances.values()) {
       const base = { instanceId: i.id, definitionId: i.vertex.definition.id, definitionPath: [...i.vertex.path], parentInstanceId: i.parent, input: copy(i.input, i.vertex.input, false, 'input-validation', location(i)), ...(i.forItem ? { forItem: { ...i.forItem } } : {}) };
       if (i.output !== undefined) snapshot.instances.push({ ...base, type: i.vertex.definition.type, status: 'completed', output: copy(i.output, i.vertex.output, true, 'node-output', location(i)) });
@@ -227,7 +227,15 @@ class RunningExecution implements Execution {
       for (const [id, p] of frame.positions) if (p.status === 'waiting' || p.status === 'skipped') {
         snapshot[p.status === 'waiting' ? 'waitingPositions' : 'skippedPositions'].push({ parentInstanceId: frame.id, definitionId: id, definitionPath: [...frame.plan.positions.get(id)!.path] });
       }
-      for (const edge of frame.plan.edges) snapshot.edges.push({ parentInstanceId: frame.id, definitionPath: [...edge.path], ...(edge.definition.id === undefined ? {} : { definitionId: edge.definition.id }), from: { parentInstanceId: frame.id, definitionId: edge.from }, to: { parentInstanceId: frame.id, definitionId: edge.to }, status: frame.edges.get(edge)!.status });
+      for (const edge of frame.plan.edges) {
+        const status = frame.edges.get(edge)!.status;
+        snapshot.edges.push({ parentInstanceId: frame.id, definitionPath: [...edge.path], ...(edge.definition.id === undefined ? {} : { definitionId: edge.definition.id }), from: { parentInstanceId: frame.id, definitionId: edge.from }, to: { parentInstanceId: frame.id, definitionId: edge.to }, status });
+        if (status === 'active') for (const toInstanceId of frame.positions.get(edge.to)!.instances) {
+          snapshot.instanceConnections!.push({ edgeDefinitionPath: [...edge.path], from: { parentInstanceId: frame.id, definitionId: edge.from },
+            sourceKind: frame.plan.incoming.get(edge.from)!.some(incoming => incoming.iteration) ? 'group' : 'instance',
+            sourceInstanceIds: [...frame.positions.get(edge.from)!.instances], toInstanceId });
+        }
+      }
     }
     return snapshot;
   }
@@ -235,8 +243,22 @@ class RunningExecution implements Execution {
     const root = this.#state.instances.get(this.#state.root)!;
     return root.output === undefined ? { status: 'running' } : { status: 'completed', output: copy(root.output, root.vertex.output, true, 'dag-output-validation', location(root)) };
   }
+  exportState(): SavedExecution {
+    return {
+      version: 2, root: this.#state.root, next: this.#state.next,
+      instances: [...this.#state.instances.values()].map(i => ({ id: i.id, path: [...i.vertex.path], parent: i.parent, ...(i.position === undefined ? {} : { position: i.position }), ...(i.forItem ? { forItem: { ...i.forItem } } : {}), input: structuredClone(i.input), ...(i.output === undefined ? {} : { output: structuredClone(i.output) }) })),
+      frames: [...this.#state.frames.values()].map(f => ({ id: f.id, positions: [...f.positions].map(([id, p]) => [id, structuredClone(p)]), edges: f.plan.edges.map(e => structuredClone(f.edges.get(e)!)) })),
+      connections: this.getSnapshot().instanceConnections!,
+    };
+  }
 }
 export function program(vertex: Vertex): Program {
+  const vertices = new Map<string, Vertex>();
+  function index(current: Vertex): void {
+    vertices.set(JSON.stringify(current.path), current);
+    for (const child of current.plan?.positions.values() ?? []) if (child !== current) index(child);
+  }
+  index(vertex);
   return {
     getDefinition: () => cloneDefinition(vertex.definition) as import('./types.js').DagDefinition,
     createExecution(rootInput: unknown): Execution {
@@ -247,6 +269,59 @@ export function program(vertex: Vertex): Program {
         const root = tx.create(vertex, input, null); advance(tx);
         return new RunningExecution(tx.publish(root));
       } catch (error) { throw new InitializationError(failure(error, 'root-input', loc)); }
+    },
+    restoreExecution(saved: SavedExecution): Execution {
+      if (!saved || (saved.version !== 1 && saved.version !== 2) || !Number.isSafeInteger(saved.next) || saved.next < 1
+        || !Array.isArray(saved.instances) || !Array.isArray(saved.frames)
+        || (saved.version === 2 && !Array.isArray(saved.connections))) throw new Error('Unsupported execution state');
+      const instances = new Map<InstanceId, Instance>();
+      for (const row of saved.instances) {
+        const definition = vertices.get(JSON.stringify(row.path));
+        if (!definition || instances.has(row.id) || !/^i[1-9]\d*$/.test(row.id) || Number(row.id.slice(1)) >= saved.next) throw new Error('Invalid execution instance');
+        instances.set(row.id, { id: row.id, vertex: definition, parent: row.parent, ...(row.position === undefined ? {} : { position: row.position }), ...(row.forItem ? { forItem: { ...row.forItem } } : {}), input: copy(row.input, definition.input, false, 'input-validation', {}), ...(row.output === undefined ? {} : { output: copy(row.output, definition.output, true, 'node-output', {}) }) });
+      }
+      const root = instances.get(saved.root);
+      if (!root || root.vertex !== vertex || root.parent !== null || root.position !== undefined) throw new Error('Invalid execution root');
+      for (const instance of instances.values()) if (instance !== root) {
+        const parent = instances.get(instance.parent!);
+        if (!parent?.vertex.plan || !instance.position || parent.vertex.plan.positions.get(instance.position) !== instance.vertex) throw new Error('Invalid execution parent');
+        const iterative = parent.vertex.plan.incoming.get(instance.position)!.some(edge => edge.iteration);
+        if (Boolean(instance.forItem) !== iterative) throw new Error('Invalid execution item identity');
+      }
+      const frames = new Map<InstanceId, Frame>();
+      const members = new Set<InstanceId>();
+      for (const row of saved.frames) {
+        const instance = instances.get(row.id);
+        const plan = instance?.vertex.plan;
+        if (!plan || row.edges.length !== plan.edges.length || row.positions.length !== plan.positions.size || frames.has(row.id)) throw new Error('Invalid execution frame');
+        const positions = new Map(row.positions.map(([id, p]) => [id, structuredClone(p)]));
+        if ([...plan.positions.keys()].some(id => !positions.has(id))) throw new Error('Invalid execution position');
+        for (const [positionId, position] of positions) {
+          if (!['waiting', 'created', 'completed', 'skipped'].includes(position.status) || !Array.isArray(position.instances)
+            || ((position.status === 'waiting' || position.status === 'skipped') && (position.instances.length || position.output !== undefined))
+            || ((position.status === 'created' || position.status === 'completed') && !position.instances.length)
+            || (position.status === 'completed' && position.output === undefined)) throw new Error('Invalid execution position state');
+          for (const id of position.instances) {
+            const child = instances.get(id);
+            if (!child || child.parent !== row.id || child.position !== positionId || members.has(id)
+              || (position.status === 'completed' && child.output === undefined)) throw new Error('Invalid execution member');
+            members.add(id);
+          }
+        }
+        for (let index = 0; index < plan.edges.length; index++) {
+          const edge = plan.edges[index]!;
+          const state = row.edges[index]!;
+          const sourceStatus = positions.get(edge.from)!.status;
+          if (!['pending', 'active', 'inactive'].includes(state.status)
+            || (state.status === 'pending' && (sourceStatus === 'completed' || sourceStatus === 'skipped'))
+            || (state.status === 'active' && sourceStatus !== 'completed')) throw new Error('Invalid execution edge state');
+        }
+        frames.set(row.id, { id: row.id, plan, positions, edges: new Map(plan.edges.map((e, i) => [e, structuredClone(row.edges[i]!)])) });
+      }
+      if ([...instances.values()].some(i => i.vertex.plan && !frames.has(i.id) || i !== root && !members.has(i.id))) throw new Error('Incomplete execution graph');
+      const execution = new RunningExecution({ root: saved.root, next: saved.next, instances, frames });
+      if (saved.version === 2 && JSON.stringify(execution.getSnapshot().instanceConnections) !== JSON.stringify(saved.connections)) throw new Error('Invalid execution connections');
+      return execution;
     },
   };
 }

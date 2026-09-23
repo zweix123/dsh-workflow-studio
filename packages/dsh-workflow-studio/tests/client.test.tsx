@@ -311,6 +311,7 @@ test('instance cards and creation dialog preserve drafts, then open details only
     assert.equal(container.querySelector<HTMLElement>('[data-definition-id="later"]')!.dataset.status, 'waiting')
     assert.equal(container.querySelector<HTMLElement>('[data-definition-id="closed"]')!.dataset.status, 'skipped')
     assert.match(container.querySelector<HTMLElement>('.dsh-workflow-dag-group[data-definition-id="nested"]')!.textContent!, /运行中/)
+    assert.equal(container.querySelector('.dsh-workflow-dag-group[data-definition-id="nested"] button[aria-label^="执行"]'), null)
     const inner = container.querySelector<HTMLElement>('[data-definition-id="inner"]')!
     const after = container.querySelector<HTMLElement>('[data-definition-id="after"]')!
     assert.ok(inner.closest('.react-flow__node'))

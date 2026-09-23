@@ -4,7 +4,7 @@ import type { WorkspaceSnapshot } from '@deepseek-ai/dsh-api-workspace-controlle
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import type { InstanceDetail } from '../../../shared/types/workflow-instance.js'
 import type { WorkflowTranslate } from '../../locales/index.js'
-import { DagCanvas } from './instances/DagCanvas.js'
+import { InstanceRunPanel } from './instances/InstanceRunPanel.js'
 import { InstancesPanel } from './instances/InstancesPanel.js'
 import { styles } from './styles.js'
 
@@ -98,10 +98,7 @@ export function WorkflowStudioPanel({ t, useWorkspaces }: { t: WorkflowTranslate
         if (activeTab === `instance-${instanceId}`) setActiveTab('instances')
       }} />
       : tab.detail
-        ? <section className="dsh-workflow-detail" aria-label={tab.detail.name}>
-          <header className="dsh-workflow-detail-header"><div><h2>{tab.detail.name}</h2><p>{tab.detail.templateId}</p></div></header>
-          <DagCanvas detail={tab.detail} t={t} />
-        </section>
+        ? <InstanceRunPanel detail={tab.detail} t={t} onUpdate={updated => setOpened(current => current.map(item => item.id === updated.id ? updated : item))} />
         : null}</div>)}
   </section>
 }

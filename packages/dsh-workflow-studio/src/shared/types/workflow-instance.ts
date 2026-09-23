@@ -39,6 +39,8 @@ export type InstanceErrorCode =
   | 'template-invalid'
   | 'initialization-failed'
   | 'instance-missing'
+  | 'node-not-ready'
+  | 'submission-failed'
 
 export interface ErrorResponse {
   error: { code: InstanceErrorCode; message: string }

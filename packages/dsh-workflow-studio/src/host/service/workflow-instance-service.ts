@@ -6,8 +6,8 @@ import type { Context } from '@deepseek-ai/cordis'
 import { defineDomain, domainTable, type Domain } from '@deepseek-ai/dsh-storage-domain'
 import { WorkspaceId } from '@deepseek-ai/dsh-workspace'
 import { z } from 'zod'
-import type { DagDefinition, ExecutionSnapshot, JsonObject } from '../dag-engine/index.js'
-import { initializeWorkflow } from '../workflow-runtime.js'
+import { SubmissionError, type DagDefinition, type ExecutionSnapshot, type JsonObject, type SavedExecution } from '../dag-engine/index.js'
+import { executeWorkflowNode, initializeWorkflow } from '../runtime/index.js'
 import { validateTemplateDirectory } from '../template-directory.js'
 import type { CreateInstanceInput, InstanceDetail, InstanceErrorCode, InstanceSummary, TemplateCatalog, TemplateRow } from '../../shared/types/workflow-instance.js'
 
@@ -20,6 +20,7 @@ const instanceSchema = z.object({
   definition: z.json(),
   input: z.json(),
   snapshot: z.json(),
+  state: z.json().optional(),
 }).strict()
 
 export const workflowInstanceDomain = defineDomain({
@@ -40,12 +41,14 @@ const errorStatuses: Record<InstanceErrorCode, number> = {
   'template-invalid': 422,
   'initialization-failed': 422,
   'instance-missing': 404,
+  'node-not-ready': 409,
+  'submission-failed': 422,
 }
 
 export class WorkflowInstanceError extends Error {
   readonly status: number
 
-  constructor(readonly code: InstanceErrorCode, message: string) {
+  constructor(readonly code: InstanceErrorCode, message: string, readonly latest?: InstanceDetail) {
     super(message)
     this.name = 'WorkflowInstanceError'
     this.status = errorStatuses[code]
@@ -111,6 +114,30 @@ export class WorkflowInstanceService {
     return result
   }
 
+  executeNode(id: string, nodeInstanceId: string, value: unknown): Promise<InstanceDetail> {
+    if (value === null || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).length) {
+      throw new WorkflowInstanceError('invalid-request', 'Execution request must be an empty object')
+    }
+    const result = this.tail.then(async () => {
+      const table = this.domain.table('instances')
+      const row = table.get(id)
+      if (!row) throw new WorkflowInstanceError('instance-missing', 'Workflow instance not found')
+      let result: ReturnType<typeof executeWorkflowNode>
+      try {
+        result = executeWorkflowNode(row.definition as DagDefinition, row.input as JsonObject, row.state as unknown as SavedExecution | undefined, nodeInstanceId)
+      } catch (error) {
+        if (error instanceof SubmissionError) throw new WorkflowInstanceError('submission-failed', error.message)
+        throw error
+      }
+      if (!result) throw new WorkflowInstanceError('node-not-ready', 'Node is no longer ready', this.detail(row))
+      const updated: StoredInstance = { ...row, state: z.json().parse(result.state), snapshot: z.json().parse(result.snapshot) }
+      await table.put(id, updated)
+      return this.detail(updated)
+    })
+    this.tail = result.catch(() => {})
+    return result
+  }
+
   close(): Promise<void> {
     return this.domain.close()
   }
@@ -149,6 +176,7 @@ export class WorkflowInstanceService {
       definition: template.definition,
       input: initialized.input,
       snapshot: z.json().parse(initialized.snapshot),
+      state: z.json().parse(initialized.state),
     }
     await table.put(row.id, row)
     return this.detail(row)

@@ -4,7 +4,7 @@ import type { EntityDefinition, PositionSnapshot, RuntimeEdgeSnapshot } from '..
 import type { InstanceDetail } from '../../../../shared/types/workflow-instance.js'
 
 const NODE_WIDTH = 184
-const NODE_HEIGHT = 72
+const NODE_HEIGHT = 96
 const GAP = 20
 const GROUP_PADDING = 28
 const GROUP_HEADER = 40
@@ -12,6 +12,8 @@ const GROUP_HEADER = 40
 type GraphNode = Node<{ label: string; status: string; kind: 'node' | 'dag' | 'position'; forItem?: { key: string; index: number } }>
 
 const positionKey = (parent: string, definition: string) => `${parent}\u0000${definition}`
+export const buildPositionNodeId = (position: Pick<PositionSnapshot, 'parentInstanceId' | 'definitionId'>, status: 'waiting' | 'skipped') =>
+  `${status}:${positionKey(position.parentInstanceId, position.definitionId)}`
 
 function definitionAt(root: InstanceDetail['definition'], path: readonly (string | number)[]): EntityDefinition | undefined {
   let current: EntityDefinition = root
@@ -64,7 +66,7 @@ export function buildCanvasGraph(detail: InstanceDetail): { nodes: Node[]; edges
       instance.parentInstanceId, instance.definitionId)
   }
   const placeholder = (position: PositionSnapshot, status: 'waiting' | 'skipped') => add(
-    `${status}:${positionKey(position.parentInstanceId, position.definitionId)}`, 'workflow',
+    buildPositionNodeId(position, status), 'workflow',
     { label: position.definitionId, status, kind: 'position' }, position.parentInstanceId, position.definitionId)
   snapshot.waitingPositions.forEach(position => placeholder(position, 'waiting'))
   snapshot.skippedPositions.forEach(position => placeholder(position, 'skipped'))
@@ -136,6 +138,24 @@ export function buildCanvasGraph(detail: InstanceDetail): { nodes: Node[]; edges
   }
   layout(snapshot.rootInstanceId)
   for (const item of frameItems.values()) nodes.push(...item)
+  const aggregateIds = new Map<string, string>()
+  const outgoing = new Set(snapshot.edges.map(edge => positionKey(edge.from.parentInstanceId, edge.from.definitionId)))
+  for (const [key, ids] of byPosition) if (outgoing.has(key) && (ids.length > 1 || ids.some(id => instances.get(id)?.forItem))) {
+    const row = ids.map(id => nodes.find(node => node.id === id)!)
+    const first = row[0]!
+    const last = row.at(-1)!
+    const id = `aggregate:${key}`
+    aggregateIds.set(key, id)
+    nodes.push({
+      id, type: 'aggregate', data: { label: '', status: '', kind: 'position' },
+      position: { x: last.position.x + Number(last.style?.width || NODE_WIDTH) + 8,
+        y: (first.position.y + last.position.y + Number(last.style?.height || NODE_HEIGHT)) / 2 },
+      style: { width: 60, height: 22 },
+      ...(first.parentId ? { parentId: first.parentId } : {}),
+      draggable: false, selectable: false, connectable: false,
+      sourcePosition: Position.Right, targetPosition: Position.Left,
+    })
+  }
   // React Flow needs group nodes before descendants to resolve relative positions.
   const nodeById = new Map(nodes.map(node => [node.id, node]))
   const depth = (node: GraphNode): number => node.parentId ? 1 + depth(nodeById.get(node.parentId)!) : 0
@@ -145,8 +165,26 @@ export function buildCanvasGraph(detail: InstanceDetail): { nodes: Node[]; edges
     const sources = byPosition.get(positionKey(edge.from.parentInstanceId, edge.from.definitionId)) ?? []
     const targets = byPosition.get(positionKey(edge.to.parentInstanceId, edge.to.definitionId)) ?? []
     const label = edgeLabel(detail.definition, edge)
-    return sources.flatMap((source, sourceIndex) => targets.map((target, targetIndex): Edge => ({
-      id: `${edgeIndex}:${sourceIndex}:${targetIndex}`,
+    const connections = (snapshot.instanceConnections ?? []).filter(connection =>
+      JSON.stringify(connection.edgeDefinitionPath) === JSON.stringify(edge.definitionPath)
+      && connection.from.parentInstanceId === edge.parentInstanceId)
+    const source = aggregateIds.get(positionKey(edge.from.parentInstanceId, edge.from.definitionId)) ?? sources[0]
+    const targetPosition = targets.find(id => nodeById.get(id)?.data.kind === 'position')
+    const pairs = edge.status === 'active'
+      ? snapshot.instanceConnections
+        ? connections.length
+          ? connections.flatMap(connection => {
+            const origin = connection.sourceKind === 'group'
+              ? aggregateIds.get(positionKey(connection.from.parentInstanceId, connection.from.definitionId))
+              : connection.sourceInstanceIds[0]
+            return origin ? [[origin, connection.toInstanceId] as const] : []
+          })
+          : source && targetPosition && nodeById.get(targetPosition)?.data.status === 'waiting'
+            ? [[source, targetPosition] as const] : []
+        : source && targets[0] ? [[source, targets[0]] as const] : []
+      : source && targetPosition ? [[source, targetPosition] as const] : []
+    return pairs.map(([source, target], pairIndex): Edge => ({
+      id: `${edgeIndex}:${pairIndex}`,
       source, target,
       ...(label && { label }),
       data: { status: edge.status },
@@ -156,7 +194,12 @@ export function buildCanvasGraph(detail: InstanceDetail): { nodes: Node[]; edges
         ? 'var(--dsw-alias-state-business-primary)'
         : edge.status === 'inactive' ? 'var(--dsw-alias-label-tertiary)' : 'var(--dsw-alias-label-secondary)' },
       selectable: false,
-    })))
+    }))
+  })
+  for (const [key, aggregate] of aggregateIds) for (const source of byPosition.get(key) ?? []) edges.push({
+    id: `member:${source}:${aggregate}`, source, target: aggregate, type: 'smoothstep',
+    data: { status: 'aggregation' }, className: 'dsh-workflow-edge-aggregation', selectable: false,
+    markerEnd: { type: MarkerType.ArrowClosed, color: 'var(--dsw-alias-label-secondary)' },
   })
   return { nodes, edges }
 }

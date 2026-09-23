@@ -8,7 +8,8 @@ import WebServer from '@deepseek-ai/dsh-host-webserver'
 import Storage from '@deepseek-ai/dsh-storage'
 import * as storageDomain from '@deepseek-ai/dsh-storage-domain'
 import * as storageJson from '@deepseek-ai/dsh-storage-json'
-import { WorkflowInstanceService } from '../src/host/service/workflow-instance-service.js'
+import { WorkflowInstanceService, workflowInstanceDomain } from '../src/host/service/workflow-instance-service.js'
+import { compile, type SavedExecution } from '../src/host/dag-engine/index.js'
 import { createWorkflowInstancesRoute } from '../src/host/routes/workflow-instances.js'
 import { INSTANCES_PATH, TEMPLATES_PATH } from '../src/shared/constants.js'
 
@@ -227,4 +228,201 @@ test('deleting an instance removes its stored snapshot and frees its name', asyn
   const restarted = await openHost(f.storageRoot, f.templateRoot, f.root)
   cleanups.push(restarted.close)
   assert.equal((await fetch(restarted.url(path))).status, 404)
+})
+
+test('execute advances one ready node, keeps its identity after restart, and rejects a stale click', async () => {
+  const f = await fixture()
+  await putTemplate(f.templateRoot, 'writer', validTemplate)
+  const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Step', templateId: 'writer' })).json() as any
+  const draft = created.snapshot.instances.find((item: any) => item.definitionId === 'draft')
+  const path = `${INSTANCES_PATH}/${created.id}`
+  const executed = await postJson(f.url(`${path}/nodes/${draft.instanceId}/execute`), {})
+  assert.equal(executed.status, 200)
+  const advanced = await executed.json() as any
+  assert.deepEqual(advanced.snapshot.instances.find((item: any) => item.instanceId === draft.instanceId).output, { result: '' })
+  const finish = advanced.snapshot.instances.find((item: any) => item.definitionId === 'finish')
+  assert.equal(finish.status, 'ready')
+  const stale = await postJson(f.url(`${path}/nodes/${draft.instanceId}/execute`), {})
+  assert.equal(stale.status, 409)
+  assert.deepEqual((await stale.json() as any).latest, advanced)
+  assert.deepEqual(await (await fetch(f.url(path))).json(), advanced)
+  await f.close()
+  await rm(join(f.templateRoot, 'writer'), { recursive: true, force: true })
+  const restarted = await openHost(f.storageRoot, f.templateRoot, f.root)
+  cleanups.push(restarted.close)
+  assert.deepEqual(await (await fetch(restarted.url(path))).json(), advanced)
+  const completed = await postJson(restarted.url(`${path}/nodes/${finish.instanceId}/execute`), {})
+  assert.equal(completed.status, 200)
+  assert.equal((await completed.json() as any).snapshot.instances.find((item: any) => item.instanceId === finish.instanceId).status, 'completed')
+})
+
+test('placeholder outputs use declared zero values and close if and empty for branches', async () => {
+  const f = await fixture()
+  await putTemplate(f.templateRoot, 'branches', `
+id: root
+type: dag
+dag:
+  - id: emit
+    type: node
+    output_schema:
+      text: string
+      amount: number
+      enabled: boolean
+      payload:
+        type: object
+        properties:
+          nested:
+            type: object
+            properties:
+              flag: boolean
+      jobs:
+        type: array
+        items:
+          type: object
+          properties:
+            key: string
+            title: string
+  - id: conditional
+    type: node
+  - id: each
+    type: node
+    input_schema:
+      title: string
+  - type: edge
+    from: emit
+    to: conditional
+    if: $.enabled
+  - type: edge
+    from: emit
+    to: each
+    for: $.jobs
+`)
+  const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Branches', templateId: 'branches' })).json() as any
+  const emit = created.snapshot.instances.find((item: any) => item.definitionId === 'emit')
+  const response = await postJson(f.url(`${INSTANCES_PATH}/${created.id}/nodes/${emit.instanceId}/execute`), {})
+  assert.equal(response.status, 200)
+  const updated = await response.json() as any
+  assert.deepEqual(updated.snapshot.instances.find((item: any) => item.instanceId === emit.instanceId).output,
+    { text: '', amount: 0, enabled: false, payload: { nested: { flag: false } }, jobs: [] })
+  assert.deepEqual(updated.snapshot.skippedPositions.map((item: any) => item.definitionId).sort(), ['conditional', 'each'])
+  assert.equal(updated.snapshot.instanceConnections.length, 0)
+  assert.deepEqual(updated.snapshot.edges.map((edge: any) => edge.status), ['inactive', 'inactive'])
+})
+
+test('nonempty for items advance separately and retain aggregated connections across restart', async () => {
+  const f = await fixture()
+  await putTemplate(f.templateRoot, 'items', `
+id: root
+type: dag
+dag:
+  - id: source
+    type: node
+    output_schema:
+      jobs:
+        type: array
+        items:
+          type: object
+          properties:
+            key: string
+            title: string
+  - id: each
+    type: node
+    input_schema:
+      title: string
+    output_schema:
+      done: string
+  - id: finish
+    type: node
+    input_schema:
+      done:
+        type: array
+        items: string
+  - type: edge
+    from: source
+    to: each
+    for: $.jobs
+  - type: edge
+    from: each
+    to: finish
+`)
+  const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Items', templateId: 'items' })).json() as any
+  const path = `${INSTANCES_PATH}/${created.id}`
+  await f.close()
+
+  // Occupy the same public domain only while the HTTP host is closed; a real task output can contain these items.
+  const ctx = new Context()
+  await ctx.plugin(Storage)
+  await ctx.plugin(storageJson, { root: f.storageRoot })
+  await ctx.plugin(storageDomain, { backend: 'json' })
+  const domain = await ctx.storageDomain.open(workflowInstanceDomain)
+  const row = domain.table('instances').get(created.id)!
+  const execution = compile(row.definition).restoreExecution(row.state as unknown as SavedExecution)
+  execution.submit(execution.getFrontier()[0]!.instanceId, { jobs: [{ key: 'a', title: 'A' }, { key: 'b', title: 'B' }] })
+  await domain.table('instances').put(created.id, { ...row, state: execution.exportState() as any, snapshot: execution.getSnapshot() as any })
+  await domain.close()
+  await ctx.fiber.dispose()
+
+  let host = await openHost(f.storageRoot, f.templateRoot, f.root)
+  cleanups.push(host.close)
+  const initial = await (await fetch(host.url(path))).json() as any
+  const items = initial.snapshot.instances.filter((item: any) => item.definitionId === 'each')
+  assert.deepEqual(items.map((item: any) => item.forItem.key), ['a', 'b'])
+  assert.deepEqual(items.map((item: any) => item.status), ['ready', 'ready'])
+  assert.deepEqual(initial.snapshot.instanceConnections.map((edge: any) => edge.toInstanceId), items.map((item: any) => item.instanceId))
+
+  const first = await postJson(host.url(`${path}/nodes/${items[0].instanceId}/execute`), {})
+  assert.equal(first.status, 200)
+  const partial = await first.json() as any
+  assert.equal(partial.snapshot.instances.find((item: any) => item.instanceId === items[0].instanceId).status, 'completed')
+  assert.equal(partial.snapshot.instances.find((item: any) => item.instanceId === items[1].instanceId).status, 'ready')
+  assert.equal(partial.snapshot.instances.some((item: any) => item.definitionId === 'finish'), false)
+  await host.close()
+  host = await openHost(f.storageRoot, f.templateRoot, f.root)
+  cleanups.push(host.close)
+  assert.deepEqual(await (await fetch(host.url(path))).json(), partial)
+
+  const second = await postJson(host.url(`${path}/nodes/${items[1].instanceId}/execute`), {})
+  assert.equal(second.status, 200)
+  const complete = await second.json() as any
+  const finish = complete.snapshot.instances.find((item: any) => item.definitionId === 'finish')
+  assert.equal(finish.status, 'ready')
+  assert.deepEqual(finish.input, { done: ['', ''] })
+  assert.deepEqual(complete.snapshot.instanceConnections.filter((edge: any) => edge.toInstanceId === finish.instanceId), [{
+    edgeDefinitionPath: ['dag', 4],
+    from: { parentInstanceId: complete.snapshot.rootInstanceId, definitionId: 'each' },
+    sourceKind: 'group',
+    sourceInstanceIds: items.map((item: any) => item.instanceId),
+    toInstanceId: finish.instanceId,
+  }])
+  assert.deepEqual(await (await fetch(host.url(path))).json(), complete)
+})
+
+test('DAG output rejection rolls back the submitted node and persists no partial graph', async () => {
+  const f = await fixture()
+  await putTemplate(f.templateRoot, 'reject', `
+id: root
+type: dag
+output_schema:
+  result: string
+dag:
+  - id: start
+    type: node
+    output_schema:
+      enabled: boolean
+  - id: finish
+    type: node
+    output_schema:
+      result: string
+  - type: edge
+    from: start
+    to: finish
+    if: $.enabled
+`)
+  const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Reject', templateId: 'reject' })).json() as any
+  const start = created.snapshot.instances.find((item: any) => item.definitionId === 'start')
+  const path = `${INSTANCES_PATH}/${created.id}`
+  const failed = await postJson(f.url(`${path}/nodes/${start.instanceId}/execute`), {})
+  assert.equal(failed.status, 422)
+  assert.equal((await failed.json() as any).error.code, 'submission-failed')
+  assert.deepEqual(await (await fetch(f.url(path))).json(), created)
 })

@@ -52,6 +52,7 @@ export type DataPath = readonly (string | number)[];
 export interface Program {
   getDefinition(): DagDefinition;
   createExecution(rootInput: unknown): Execution;
+  restoreExecution(state: SavedExecution): Execution;
 }
 
 export interface Execution {
@@ -59,6 +60,16 @@ export interface Execution {
   getSnapshot(): ExecutionSnapshot;
   submit(instanceId: InstanceId, output: unknown): void;
   getResult(): ExecutionResult;
+  exportState(): SavedExecution;
+}
+
+export interface SavedExecution {
+  version: 1 | 2;
+  root: InstanceId;
+  next: number;
+  instances: Array<{ id: InstanceId; path: DefinitionPath; parent: InstanceId | null; position?: string; forItem?: ForItemIdentity; input: DataMap; output?: DataMap }>;
+  frames: Array<{ id: InstanceId; positions: Array<[string, { status: 'waiting' | 'created' | 'completed' | 'skipped'; instances: InstanceId[]; output?: DataMap }]>; edges: Array<{ status: 'pending' | 'active' | 'inactive'; rows?: Array<{ input: DataMap; identity: ForItemIdentity }> }> }>;
+  connections?: InstanceConnection[];
 }
 
 export interface ForItemIdentity {
@@ -117,12 +128,21 @@ export interface RuntimeEdgeSnapshot {
   status: "pending" | "active" | "inactive";
 }
 
+export interface InstanceConnection {
+  edgeDefinitionPath: DefinitionPath;
+  from: PositionRef;
+  sourceKind: 'instance' | 'group';
+  sourceInstanceIds: InstanceId[];
+  toInstanceId: InstanceId;
+}
+
 export interface ExecutionSnapshot {
   rootInstanceId: InstanceId;
   instances: InstanceSnapshot[];
   waitingPositions: PositionSnapshot[];
   skippedPositions: PositionSnapshot[];
   edges: RuntimeEdgeSnapshot[];
+  instanceConnections?: InstanceConnection[];
 }
 
 export type CompileIssueCode =

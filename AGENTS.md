@@ -17,6 +17,7 @@ packages/dsh-workflow-studio/
 │   ├── host/
 │   │   ├── apply.ts              # 服务装配和生命周期
 │   │   ├── dag-engine/           # 独立 DAG 编译与状态引擎，index.ts 统一导出
+│   │   ├── runtime/              # 薄运行时：实例初始化与逐节点占位执行
 │   │   ├── routes/plugin-status.ts    # GET /api/dsh-workflow-studio/status
 │   │   ├── service/              # 领域服务
 │   │   └── storage/              # 仅文档占位：运行持久化

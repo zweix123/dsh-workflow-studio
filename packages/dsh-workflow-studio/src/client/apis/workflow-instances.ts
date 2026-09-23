@@ -30,7 +30,7 @@ function failure(value: unknown): value is ErrorResponse {
 }
 
 export class WorkflowInstanceApiError extends Error {
-  constructor(readonly code: InstanceErrorCode | 'request-failed', message: string) {
+  constructor(readonly code: InstanceErrorCode | 'request-failed', message: string, readonly latest?: InstanceDetail) {
     super(message)
     this.name = 'WorkflowInstanceApiError'
   }
@@ -41,7 +41,7 @@ async function request(path: string, init?: RequestInit): Promise<unknown> {
   let value: unknown
   try { value = await response.json() } catch { value = undefined }
   if (!response.ok) {
-    if (failure(value)) throw new WorkflowInstanceApiError(value.error.code as InstanceErrorCode, value.error.message)
+    if (failure(value)) throw new WorkflowInstanceApiError(value.error.code as InstanceErrorCode, value.error.message, object(value) && detail(value.latest) ? value.latest : undefined)
     throw new WorkflowInstanceApiError('request-failed', `HTTP ${response.status}`)
   }
   return value
@@ -71,6 +71,14 @@ export async function createInstance(input: CreateInstanceInput): Promise<Instan
 
 export async function getInstance(id: string): Promise<InstanceDetail> {
   const value = await request(`${INSTANCES_PATH}/${encodeURIComponent(id)}`)
+  if (!detail(value)) throw new Error('Unexpected workflow instance')
+  return value
+}
+
+export async function executeNode(id: string, nodeInstanceId: string): Promise<InstanceDetail> {
+  const value = await request(`${INSTANCES_PATH}/${encodeURIComponent(id)}/nodes/${encodeURIComponent(nodeInstanceId)}/execute`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+  })
   if (!detail(value)) throw new Error('Unexpected workflow instance')
   return value
 }
