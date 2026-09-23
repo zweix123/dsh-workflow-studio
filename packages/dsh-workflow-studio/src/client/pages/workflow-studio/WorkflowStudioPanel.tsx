@@ -1,23 +1,51 @@
-import { useId, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
-import type { WorkflowKey, WorkflowTranslate } from '../../locales/index.js'
+import type { WorkspaceSnapshot } from '@deepseek-ai/dsh-api-workspace-controller/client'
+import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
+import type { InstanceDetail } from '../../../shared/types/workflow-instance.js'
+import type { WorkflowTranslate } from '../../locales/index.js'
+import { DagCanvas } from './instances/DagCanvas.js'
 import { InstancesPanel } from './instances/InstancesPanel.js'
-import { TemplatesPanel } from './templates/TemplatesPanel.js'
 import { styles } from './styles.js'
 
-const tabs = [
-  { id: 'instances', label: 'instances' },
-  { id: 'templates', label: 'templates' },
-] as const satisfies readonly { id: string; label: WorkflowKey }[]
+type UseWorkspaces = <T>(selector: (snapshot: WorkspaceSnapshot) => T) => T
 
-type TabId = typeof tabs[number]['id']
-
-export function WorkflowStudioPanel({ t }: { t: WorkflowTranslate }) {
+export function WorkflowStudioPanel({ t, useWorkspaces }: { t: WorkflowTranslate; useWorkspaces: UseWorkspaces }) {
   const id = useId()
-  const [activeTab, setActiveTab] = useState<TabId>('instances')
-  const buttons = useRef<Partial<Record<TabId, HTMLButtonElement | null>>>({})
+  const [activeTab, setActiveTab] = useState('instances')
+  const [opened, setOpened] = useState<InstanceDetail[]>([])
+  const buttons = useRef<Record<string, HTMLButtonElement | null>>({})
+  const tabs: { id: string; label: string; detail?: InstanceDetail }[] = [
+    { id: 'instances', label: t('instanceManagement') },
+    { id: 'templates', label: t('templateManagement') },
+    ...opened.map(detail => ({ id: `instance-${detail.id}`, label: detail.name, detail })),
+  ]
 
-  function handleKeyDown(event: KeyboardEvent<HTMLButtonElement>, tabId: TabId) {
+  useEffect(() => {
+    if (activeTab.startsWith('instance-')) buttons.current[activeTab]?.focus()
+  }, [activeTab])
+
+  function openDetail(detail: InstanceDetail) {
+    setOpened(current => current.some(item => item.id === detail.id) ? current : [...current, detail])
+    setActiveTab(`instance-${detail.id}`)
+  }
+
+  function openExisting(instanceId: string) {
+    if (!opened.some(detail => detail.id === instanceId)) return false
+    setActiveTab(`instance-${instanceId}`)
+    return true
+  }
+
+  function closeDetail(tabId: string) {
+    const index = tabs.findIndex(tab => tab.id === tabId)
+    const next = tabs[index + 1]?.id ?? tabs[index - 1]?.id ?? 'instances'
+    const focused = activeTab === tabId ? next : activeTab
+    setOpened(current => current.filter(detail => `instance-${detail.id}` !== tabId))
+    if (activeTab === tabId) setActiveTab(next)
+    buttons.current[focused]?.focus()
+  }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLButtonElement>, tabId: string) {
     const index = tabs.findIndex(tab => tab.id === tabId)
     let nextIndex: number
     switch (event.key) {
@@ -40,18 +68,20 @@ export function WorkflowStudioPanel({ t }: { t: WorkflowTranslate }) {
         <h1 id={`${id}-title`}>{t('title')}</h1>
       </div>
       <div className="dsh-workflow-studio-tabs" role="tablist" aria-labelledby={`${id}-title`}>
-        {tabs.map(tab => <button
-          key={tab.id}
-          ref={element => { buttons.current[tab.id] = element }}
-          type="button"
-          role="tab"
-          id={`${id}-tab-${tab.id}`}
-          aria-controls={`${id}-panel-${tab.id}`}
-          aria-selected={activeTab === tab.id}
-          tabIndex={activeTab === tab.id ? 0 : -1}
-          onClick={() => setActiveTab(tab.id)}
-          onKeyDown={event => handleKeyDown(event, tab.id)}
-        >{t(tab.label)}</button>)}
+        {tabs.map(tab => <div key={tab.id} className="dsh-workflow-studio-tab" role="presentation" data-selected={activeTab === tab.id}>
+          <button
+            ref={element => { buttons.current[tab.id] = element }}
+            type="button"
+            role="tab"
+            id={`${id}-tab-${tab.id}`}
+            aria-controls={`${id}-panel-${tab.id}`}
+            aria-selected={activeTab === tab.id}
+            tabIndex={activeTab === tab.id ? 0 : -1}
+            onClick={() => setActiveTab(tab.id)}
+            onKeyDown={event => handleKeyDown(event, tab.id)}
+          >{tab.label}</button>
+          {tab.detail && <button type="button" className="dsh-workflow-tab-close" aria-label={`${t('closeInstanceTab')} ${tab.label}`} onClick={() => closeDetail(tab.id)}>×</button>}
+        </div>)}
       </div>
     </header>
     {tabs.map(tab => <div
@@ -62,6 +92,16 @@ export function WorkflowStudioPanel({ t }: { t: WorkflowTranslate }) {
       aria-labelledby={`${id}-tab-${tab.id}`}
       hidden={activeTab !== tab.id}
       tabIndex={0}
-    >{tab.id === 'instances' ? <InstancesPanel /> : <TemplatesPanel />}</div>)}
+    >{tab.id === 'instances'
+      ? <InstancesPanel t={t} useWorkspaces={useWorkspaces} onSelect={openDetail} onOpenExisting={openExisting} onDeleted={instanceId => {
+        setOpened(current => current.filter(detail => detail.id !== instanceId))
+        if (activeTab === `instance-${instanceId}`) setActiveTab('instances')
+      }} />
+      : tab.detail
+        ? <section className="dsh-workflow-detail" aria-label={tab.detail.name}>
+          <header className="dsh-workflow-detail-header"><div><h2>{tab.detail.name}</h2><p>{tab.detail.templateId}</p></div></header>
+          <DagCanvas detail={tab.detail} t={t} />
+        </section>
+        : null}</div>)}
   </section>
 }

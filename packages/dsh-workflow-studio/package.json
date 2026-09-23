@@ -26,30 +26,47 @@
     "client": {
       "platform": "web",
       "inject": [
+        "@deepseek-ai/dsh-api-workspace-controller",
         "@deepseek-ai/dsh-client-locale",
         "@deepseek-ai/dsh-client-ui-renderer",
         "@deepseek-ai/dsh-client-ui-layout",
-        "@deepseek-ai/dsh-client-ui-sidebar"
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-client-ui-workspace"
       ]
     }
   },
   "scripts": {
     "typecheck": "tsc --noEmit && tsc -p tests/tsconfig.dag-engine.json",
     "build": "node scripts/build.mjs && tsc --emitDeclarationOnly",
-    "test": "tsx --tsconfig tsconfig.json --test tests/*.test.ts tests/*.test.tsx tests/*.test.mjs"
+    "test": "node --import tsx --test tests/*.test.ts tests/*.test.tsx tests/*.test.mjs"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.2",
-    "@deepseek-ai/dsh-host-webserver": "0.1.6-alpha.2"
+    "@deepseek-ai/dsh-host-webserver": "0.1.6-alpha.2",
+    "@deepseek-ai/dsh-storage-domain": "0.1.6-alpha.2",
+    "@deepseek-ai/dsh-workspace": "0.1.6-alpha.2"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.2",
+    "@deepseek-ai/dsh-api-workspace-controller": "0.1.6-alpha.2",
     "@deepseek-ai/dsh-client-locale": "0.1.6-alpha.2",
     "@deepseek-ai/dsh-client-ui-layout": "0.1.6-alpha.2",
     "@deepseek-ai/dsh-client-ui-renderer": "0.1.6-alpha.2",
     "@deepseek-ai/dsh-client-ui-sidebar": "0.1.6-alpha.2",
     "@deepseek-ai/dsh-client-ui-slots": "0.1.6-alpha.2",
-    "@deepseek-ai/dsh-host-webserver": "0.1.6-alpha.2"
+    "@deepseek-ai/dsh-client-ui-workspace": "0.1.6-alpha.2",
+    "@deepseek-ai/dsh-host-webserver": "0.1.6-alpha.2",
+    "@deepseek-ai/dsh-storage": "0.1.6-alpha.2",
+    "@deepseek-ai/dsh-storage-domain": "0.1.6-alpha.2",
+    "@deepseek-ai/dsh-storage-json": "0.1.6-alpha.2",
+    "@deepseek-ai/dsh-workspace": "0.1.6-alpha.2"
+  },
+  "dependencies": {
+    "@dagrejs/dagre": "^3.1.1",
+    "@deepseek-ai/dsh-home-paths": "0.1.6-alpha.2",
+    "@xyflow/react": "^12.11.6",
+    "yaml": "^2.8.1",
+    "zod": "^4.0.0"
   },
   "private": true
 }

@@ -9,6 +9,7 @@ test('browser artifact uses dsh factory and host React, registers panel and side
   const modules: string[] = []
   let plugin: { name: string; inject: string[]; apply: (ctx: unknown) => void } | undefined
   const source = await readFile(new URL('../lib/client.js', import.meta.url), 'utf8')
+  assert.match(source, /react-flow__pane/)
   runInNewContext(source, {
     window: { __ModuleLoader__: { load({ id, factory }: { id: string; factory: (load: (name: string) => unknown) => typeof plugin }) {
       assert.equal(id, 'dsh-workflow-studio')

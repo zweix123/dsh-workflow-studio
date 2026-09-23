@@ -1,15 +1,29 @@
 import type { Context } from '@deepseek-ai/cordis'
+import { fileURLToPath } from 'node:url'
 import type {} from '@deepseek-ai/dsh-host-webserver'
+import type {} from '@deepseek-ai/dsh-storage-domain'
+import type {} from '@deepseek-ai/dsh-workspace'
+import { dshHomeDisplay, dshHomePath } from '@deepseek-ai/dsh-home-paths'
 import { createPluginStatusRoute } from './routes/plugin-status.js'
+import { createWorkflowInstancesRoute } from './routes/workflow-instances.js'
 import { PluginStatusService } from './service/plugin-status-service.js'
+import { WorkflowInstanceService } from './service/workflow-instance-service.js'
+import { copyBuiltinTemplates } from './template-directory.js'
 
 declare const __PLUGIN_VERSION__: string
 
-export function apply(ctx: Context): void {
-  const service = new PluginStatusService(__PLUGIN_VERSION__)
+export async function apply(ctx: Context): Promise<void> {
+  const status = new PluginStatusService(__PLUGIN_VERSION__)
+  const home = dshHomePath()
+  const templateRoot = dshHomePath('dsh-workflow-studio', 'templates')
+  await copyBuiltinTemplates(fileURLToPath(new URL('./templates/', import.meta.url)), templateRoot)
+  const instances = await WorkflowInstanceService.create(
+    ctx,
+    templateRoot,
+    `${dshHomeDisplay(home)}/dsh-workflow-studio/templates/<template-id>/workflow.yaml`,
+  )
 
-  // 新增接口时，在 routes/ 中定义路由工厂，并在此逐条注册；业务逻辑放在 service/ 中。
-  // 路由增多后，可在 routes/index.ts 提取 createRoutes(...) 返回路由列表，在此遍历注册。
-  // 每条路由都通过 ctx.effect 托管 register 返回的取消注册函数，随插件卸载自动清理。
-  ctx.effect(() => ctx.webServer.register(createPluginStatusRoute(service)))
+  ctx.effect(() => async () => instances.close())
+  ctx.effect(() => ctx.webServer.register(createPluginStatusRoute(status)))
+  ctx.effect(() => ctx.webServer.register(createWorkflowInstancesRoute(instances)))
 }
