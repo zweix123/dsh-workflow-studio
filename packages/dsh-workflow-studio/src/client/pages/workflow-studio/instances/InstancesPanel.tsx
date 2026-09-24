@@ -19,6 +19,10 @@ const errorKeys: Record<InstanceErrorCode | 'request-failed', WorkflowKey> = {
   'instance-missing': 'instanceMissing',
   'node-not-ready': 'nodeNotReady',
   'submission-failed': 'submissionFailed',
+  'instance-incompatible': 'instanceIncompatible',
+  'instance-running': 'instanceRunning',
+  'node-running': 'nodeRunning',
+  'node-kind-invalid': 'nodeKindInvalid',
   'request-failed': 'requestFailed',
 }
 

@@ -377,6 +377,7 @@ ${reactFlowCss}
 .dsh-workflow-detail-header { flex: none; margin: 0; padding: 16px 20px; border-bottom: 0.5px solid var(--dsw-alias-border-l3); }
 .dsh-workflow-run { display: flex; position: relative; flex: 1; min-height: 0; min-width: 0; }
 .dsh-workflow-run-error { margin: 0; padding: 8px 20px; color: var(--dsw-alias-label-error); font-size: 12px; }
+.dsh-workflow-run-note { margin: 0; padding: 8px 20px; color: var(--dsw-alias-label-secondary); font-size: 12px; }
 .dsh-workflow-inspector { position: absolute; z-index: 5; top: 0; right: 0; bottom: 0; box-sizing: border-box; max-width: 100%; border-left: 0.5px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); box-shadow: var(--dsw-elevation-prominent); }
 .dsh-workflow-inspector-resize { position: absolute; top: 0; bottom: 0; left: -5px; width: 10px; cursor: col-resize; touch-action: none; }
 .dsh-workflow-inspector-resize:hover { background: var(--dsw-alias-state-business-primary); opacity: .35; }
@@ -385,6 +386,10 @@ ${reactFlowCss}
 .dsh-workflow-inspector p { margin: 6px 0 0; color: var(--dsw-alias-label-secondary); font-size: 12px; }
 .dsh-workflow-inspector button { border: 0; border-radius: 6px; background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; font-size: 22px; cursor: pointer; }
 .dsh-workflow-inspector button:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.dsh-workflow-inspector-body { overflow: auto; padding: 16px 18px; font-size: 12px; }
+.dsh-workflow-inspector-body button { padding: 6px 10px; margin: 0 8px 8px 0; border: 1px solid var(--dsw-alias-border-l2); font-size: 12px; }
+.dsh-workflow-inspector-body button:disabled { opacity: .5; cursor: default; }
+.dsh-workflow-inspector-body pre { overflow-wrap: anywhere; white-space: pre-wrap; font: inherit; }
 .dsh-workflow-graph { flex: 1; min-height: 0; min-width: 0; background: var(--dsw-alias-bg-module-platform); }
 .dsh-workflow-graph .react-flow { width: 100%; height: 100%; }
 .dsh-workflow-graph .react-flow__node { cursor: default; }

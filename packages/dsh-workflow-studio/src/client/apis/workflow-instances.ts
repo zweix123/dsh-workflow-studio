@@ -12,10 +12,14 @@ function summary(value: unknown): value is InstanceSummary {
 function detail(value: unknown): value is InstanceDetail {
   if (!summary(value)) return false
   const row = value as InstanceSummary & Record<string, unknown>
+  if (row.revision !== undefined && (!Number.isInteger(row.revision) || (row.revision as number) < 0)) return false
   if ((row.drawerWidth !== undefined && (typeof row.drawerWidth !== 'number' || !Number.isFinite(row.drawerWidth) || row.drawerWidth <= 0))
     || !object(row.definition) || row.definition.type !== 'dag' || !Array.isArray(row.definition.dag)
     || !object(row.input) || !object(row.snapshot)) return false
   const snapshot = row.snapshot
+  if (row.incompatible !== undefined && typeof row.incompatible !== 'string') return false
+  if (row.executions !== undefined && (!object(row.executions) || Object.values(row.executions).some(item => !object(item)
+    || !['chat', 'bash'].includes(String(item.kind)) || !['running', 'chat', 'succeeded', 'failed', 'unknown'].includes(String(item.status))))) return false
   return typeof snapshot.rootInstanceId === 'string'
     && ['instances', 'waitingPositions', 'skippedPositions', 'edges'].every(key => Array.isArray(snapshot[key]))
 }
@@ -78,6 +82,14 @@ export async function getInstance(id: string): Promise<InstanceDetail> {
 
 export async function executeNode(id: string, nodeInstanceId: string): Promise<InstanceDetail> {
   const value = await request(`${INSTANCES_PATH}/${encodeURIComponent(id)}/nodes/${encodeURIComponent(nodeInstanceId)}/execute`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+  })
+  if (!detail(value)) throw new Error('Unexpected workflow instance')
+  return value
+}
+
+export async function completeNode(id: string, nodeInstanceId: string): Promise<InstanceDetail> {
+  const value = await request(`${INSTANCES_PATH}/${encodeURIComponent(id)}/nodes/${encodeURIComponent(nodeInstanceId)}/complete`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
   })
   if (!detail(value)) throw new Error('Unexpected workflow instance')

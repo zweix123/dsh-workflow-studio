@@ -22,13 +22,14 @@ test('browser artifact uses dsh factory and host React, registers panel and side
   })
   assert.equal(plugin!.name, 'dsh-workflow-studio')
   assert.ok(modules.includes('react'))
-  assert.deepEqual(Array.from(plugin!.inject), ['slots', 'locale'])
+  assert.deepEqual(Array.from(plugin!.inject), ['slots', 'locale', 'uiWorkspace'])
   const entries: Record<string, unknown>[] = []
   let dictionaries: Record<string, Record<string, string>> = {}
   let active = 'zh'
   let disposed = false
   const cleanup: (() => void)[] = []
   plugin!.apply({
+    uiWorkspace: { openSession() {} },
     effect(setup: () => () => void) { cleanup.push(setup()) },
     locale: {
       register(namespace: string, value: typeof dictionaries) {

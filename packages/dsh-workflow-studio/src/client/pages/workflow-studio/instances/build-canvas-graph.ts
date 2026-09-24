@@ -15,7 +15,7 @@ const positionKey = (parent: string, definition: string) => `${parent}\u0000${de
 export const buildPositionNodeId = (position: Pick<PositionSnapshot, 'parentInstanceId' | 'definitionId'>, status: 'waiting' | 'skipped') =>
   `${status}:${positionKey(position.parentInstanceId, position.definitionId)}`
 
-function definitionAt(root: InstanceDetail['definition'], path: readonly (string | number)[]): EntityDefinition | undefined {
+export function definitionAt(root: InstanceDetail['definition'], path: readonly (string | number)[]): EntityDefinition | undefined {
   let current: EntityDefinition = root
   for (let index = 0; index < path.length; index += 2) {
     if (path[index] !== 'dag' || typeof path[index + 1] !== 'number' || current.type !== 'dag') return

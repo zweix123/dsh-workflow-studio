@@ -295,17 +295,19 @@ playground:
 dag:
   - id: 绘制-Wayfinder-地图
     type: node
+    node_kind: chat
     input_schema:
       request: string
     output_schema:
       map_reference: string
       requires_wayfinding: boolean
-    chat: 调用 $.wayfinder，使用“Chart the map”模式处理输入中的工程需求。确定 destination，创建唯一归属于当前 workflow 的 Wayfinder
+    prompt: 调用 $.wayfinder，使用“Chart the map”模式处理输入中的工程需求。确定 destination，创建唯一归属于当前 workflow 的 Wayfinder
       map，并创建当前能够明确描述的 decision tickets 及其阻塞关系。返回 map_reference 和
       requires_wayfinding=true。如果路线已经清晰且工作不需要 Wayfinder map，返回稳定的当前规划上下文引用并将 requires_wayfinding 设为
       false。本节点不得实现产品代码。
   - id: 选择全部决策票
     type: node
+    node_kind: chat
     input_schema:
       map_reference: string
     output_schema:
@@ -318,7 +320,7 @@ dag:
             key: string
             map_reference: string
             ticket_reference: string
-    chat: 调用 $.wayfinder，读取 map_reference 指向的完整地图，一次返回当前全部开放 decision tickets，不在此处按 blocker 过滤。当前 map
+    prompt: 调用 $.wayfinder，读取 map_reference 指向的完整地图，一次返回当前全部开放 decision tickets，不在此处按 blocker 过滤。当前 map
       只由本 workflow 创建和处理，不需要 claim、assignee 或跨 workflow 并发控制。tickets 中每一项使用稳定且唯一的 key，并携带
       map_reference 和 ticket_reference。只返回严格符合 output_schema 的结果，不要开始讨论任何 ticket。
   - id: 决策票递归树
@@ -331,6 +333,7 @@ dag:
     dag:
       - id: 处理单个决策票
         type: node
+        node_kind: chat
         input_schema:
           map_reference: string
           ticket_reference: string
@@ -344,7 +347,7 @@ dag:
                 key: string
                 map_reference: string
                 ticket_reference: string
-        chat: 调用 $.wayfinder，使用“Work through the map”模式处理 ticket_reference 指向的单个 decision ticket。如果 tracker
+        prompt: 调用 $.wayfinder，使用“Work through the map”模式处理 ticket_reference 指向的单个 decision ticket。如果 tracker
           显示该 ticket 仍被其他 ticket 阻塞，不要提交节点结果，也不要绕过 blocker；等待同一 workflow 中的 blocker
           完成后重新检查，或者请求人工介入，并在当前 chat 中继续。ticket 可处理时，根据类型调用 $.research、$.prototype，或同时调用 $.grilling
           和 $.domain-modeling。若决策已经解决，记录 resolution、关闭或重新划定 ticket 范围、更新 map，并返回 next_tickets=[] 和
@@ -360,20 +363,22 @@ dag:
         for: $.next_tickets
   - id: 发布规格
     type: node
+    node_kind: chat
     input_schema:
       map_reference: string
     output_schema:
       spec_reference: string
-    chat: 调用 $.to-spec。将 map_reference 指向的已完成 Wayfinder map、已解决 decision tickets、当前对话、仓库领域词汇和相关 ADR
+    prompt: 调用 $.to-spec。将 map_reference 指向的已完成 Wayfinder map、已解决 decision tickets、当前对话、仓库领域词汇和相关 ADR
       作为规划上下文。确认测试 seam 后，使用该 skill 的模板综合并发布 spec。不要重新打开已经确定的决策，也不要实现代码。返回已发布 spec 的稳定
       spec_reference。
   - id: 发布实现票
     type: node
+    node_kind: chat
     input_schema:
       spec_reference: string
     output_schema:
       ticket_set_reference: string
-    chat: 调用 $.to-tickets 处理 spec_reference 指向的 spec。将工作拆分为 tracer-bullet
+    prompt: 调用 $.to-tickets 处理 spec_reference 指向的 spec。将工作拆分为 tracer-bullet
       垂直切片，设置真实阻塞关系，并与用户迭代直到粒度和依赖获得确认。发布 tickets 后返回能够稳定恢复实现 frontier 的
       ticket_set_reference。本节点不得实现代码。
   - id: 实现循环
@@ -384,12 +389,13 @@ dag:
     dag:
       - id: 实现下一张票
         type: node
+        node_kind: chat
         input_schema:
           ticket_set_reference: string
         output_schema:
           ticket_set_reference: string
           continue_implementation: boolean
-        chat: 检查 ticket_set_reference 并选择下一个 blocker 均已完成的开放实现 ticket，针对且仅针对该 ticket 调用 $.implement。按约定使用
+        prompt: 检查 ticket_set_reference 并选择下一个 blocker 均已完成的开放实现 ticket，针对且仅针对该 ticket 调用 $.implement。按约定使用
           TDD，持续运行类型检查和测试，最终运行完整测试套件，调用 $.code-review，处理必须修复的问题，提交工作并更新 tracker。仍有必要 ticket 时返回
           continue_implementation=true；全部完成时返回 false。被外部操作或非法依赖阻塞时应请求介入，不得错误地返回完成。
       - id: 继续实现循环

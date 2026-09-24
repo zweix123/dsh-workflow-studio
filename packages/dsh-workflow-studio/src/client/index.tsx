@@ -10,7 +10,7 @@ import { WorkflowStudioPanel } from './pages/workflow-studio/WorkflowStudioPanel
 import { en, zh } from './locales/index.js'
 
 export const name = PLUGIN_NAME
-export const inject = ['slots', 'locale']
+export const inject = ['slots', 'locale', 'uiWorkspace']
 
 function WorkflowIcon({ size }: PropsRuntime<'sidebar.panellist'>) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
@@ -26,7 +26,7 @@ export function apply(ctx: Context): void {
     yield ctx.slots.register({
       name: 'main', key: PANEL_ID,
       locale: PLUGIN_NAME,
-    }, WorkflowStudioPanel)
+    }, props => <WorkflowStudioPanel {...props} onOpenSession={sessionId => ctx.uiWorkspace.openSession(sessionId as Parameters<typeof ctx.uiWorkspace.openSession>[0])} />)
     yield ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({
       name: 'sidebar.panellist', id: PANEL_ID, order: 10, label: () => t('title'),
     }, WorkflowIcon))

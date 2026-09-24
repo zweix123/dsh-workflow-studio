@@ -34,7 +34,7 @@ for (const [language, initial, other] of [['zh', zh, en], ['en', en, zh]] as con
     const root = createRoot(container)
     let dictionary = initial
     const t: WorkflowTranslate = key => dictionary[key]
-    const render = () => root.render(<WorkflowStudioPanel t={t} useWorkspaces={useEmptyWorkspaces} />)
+    const render = () => root.render(<WorkflowStudioPanel t={t} useWorkspaces={useEmptyWorkspaces} onOpenSession={() => {}} />)
     const tabs = () => [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
     const panels = () => [...container.querySelectorAll<HTMLElement>('[role="tabpanel"]')]
     const assertSelection = (selected: number) => {
@@ -98,7 +98,7 @@ for (const [language, initial, other] of [['zh', zh, en], ['en', en, zh]] as con
       await act(async () => render())
       assertSelection(0)
       // Multiple mounted copies must not share tab/panel IDs.
-      await act(async () => root.render(<><WorkflowStudioPanel t={t} useWorkspaces={useEmptyWorkspaces} /><WorkflowStudioPanel t={t} useWorkspaces={useEmptyWorkspaces} /></>))
+      await act(async () => root.render(<><WorkflowStudioPanel t={t} useWorkspaces={useEmptyWorkspaces} onOpenSession={() => {}} /><WorkflowStudioPanel t={t} useWorkspaces={useEmptyWorkspaces} onOpenSession={() => {}} /></>))
       const ids = [...container.querySelectorAll('[id]')].map(element => element.id)
       assert.equal(new Set(ids).size, ids.length)
       assert.ok(requests >= initialRequests)
@@ -228,7 +228,7 @@ test('instance cards and creation dialog preserve drafts, then open details only
     await act(async () => Simulate.change(element))
   }
   try {
-    await act(async () => root.render(<WorkflowStudioPanel t={key => zh[key]} useWorkspaces={useWorkspaces} />))
+    await act(async () => root.render(<WorkflowStudioPanel t={key => zh[key]} useWorkspaces={useWorkspaces} onOpenSession={() => {}} />))
     const headings = [...container.querySelectorAll('.dsh-workflow-workspace h3')].map(node => node.textContent)
     assert.deepEqual(headings, ['工作区 A', '工作区 B', '未关联工作区'])
     assert.equal(container.querySelectorAll('.dsh-workflow-workspace').length, 3)

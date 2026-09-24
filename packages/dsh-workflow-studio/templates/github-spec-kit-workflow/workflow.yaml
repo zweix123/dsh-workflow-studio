@@ -122,72 +122,81 @@ playground:
 dag:
   - id: 建立项目宪章
     type: node
+    node_kind: chat
     input_schema:
       request: string
     output_schema:
       request: string
-    chat: 检查仓库中是否已经存在有效的 Spec Kit 项目宪章，并遵循当前安装版本约定的默认存放位置。如果宪章已完整存在且用户没有要求调整治理原则，直接复用；否则调用
+    prompt: 检查仓库中是否已经存在有效的 Spec Kit 项目宪章，并遵循当前安装版本约定的默认存放位置。如果宪章已完整存在且用户没有要求调整治理原则，直接复用；否则调用
       $speckit-constitution，根据用户提供的原则创建或更新项目宪章，对无法安全推断的关键原则再向用户提问。后续 Spec Kit Skill
       会按自身约定读取默认宪章，不要把宪章路径作为业务参数传递。保持原始需求 request 不变并返回。本节点不要编写功能规格，也不要实现代码。
   - id: 编写功能规格
     type: node
+    node_kind: chat
     input_schema:
       request: string
     output_schema: {}
-    chat: 调用 $speckit-specify，将 request 作为功能描述；该 Skill 应按 Spec Kit 约定自行读取项目默认宪章并应用其中的治理约束。只创建一个功能目录及其
+    prompt: 调用 $speckit-specify，将 request 作为功能描述；该 Skill 应按 Spec Kit 约定自行读取项目默认宪章并应用其中的治理约束。只创建一个功能目录及其
       spec.md，重点描述用户需要什么以及为什么需要，不要混入实现方案。遵循当前生效的 Spec Kit
       模板，记录合理假设，仅保留真正影响范围或体验的待澄清问题，并执行内置的规格质量检查，直到通过或达到该 Skill 规定的重试上限。功能目录由 Spec Kit 记录为当前活动功能，后续
       Skill 按自身约定解析，不要把目录路径作为业务参数传递。本节点不要制定技术方案或实现代码。
   - id: 澄清功能规格
     type: node
+    node_kind: chat
     input_schema: {}
     output_schema: {}
-    chat: 调用 $speckit-clarify，按 Spec Kit 的活动功能上下文找到当前功能规格，检查是否存在会实质影响实现或验收的歧义与缺失决策。按照该 Skill
+    prompt: 调用 $speckit-clarify，按 Spec Kit 的活动功能上下文找到当前功能规格，检查是否存在会实质影响实现或验收的歧义与缺失决策。按照该 Skill
       的限制，只提出少量最高优先级问题，逐个取得用户答案，并把确认后的澄清内容写回 spec.md
       和规格质量检查清单。如果规格已经足够清晰，不要编造问题，也不要无意义改写。本节点不要决定技术方案或实现代码。
   - id: 评审功能规格
     type: node
+    node_kind: chat
     input_schema: {}
     output_schema:
       spec_approved: boolean
-    chat: 按 Spec Kit 的活动功能上下文读取由 $speckit-specify 和 $speckit-clarify 生成的 spec.md
+    prompt: 按 Spec Kit 的活动功能上下文读取由 $speckit-specify 和 $speckit-clarify 生成的 spec.md
       与需求质量清单，向用户展示范围、用户故事、可度量成功标准、假设以及仍存在的警告，请用户决定是否进入技术规划。只有获得用户明确批准时才返回
       spec_approved=true；用户拒绝或仍需重新执行 $speckit-specify、$speckit-clarify 时返回 false。本节点不要制定方案或实现代码。
   - id: 制定技术方案
     type: node
+    node_kind: chat
     input_schema: {}
     output_schema: {}
-    chat: 调用 $speckit-plan，按 Spec Kit 的活动功能上下文处理当前功能。读取已批准的 spec.md 和项目宪章，解析当前生效的方案模板，研究尚未解决的技术问题，生成
+    prompt: 调用 $speckit-plan，按 Spec Kit 的活动功能上下文处理当前功能。读取已批准的 spec.md 和项目宪章，解析当前生效的方案模板，研究尚未解决的技术问题，生成
       plan.md，并按需生成 research.md、data-model.md、contracts/、quickstart.md
       等辅助产物。设计前后都要执行宪章门禁，结合真实仓库与技术上下文，并确保方案能够追溯到功能规格。本节点不要生成任务或应用代码。
   - id: 评审技术方案
     type: node
+    node_kind: chat
     input_schema: {}
     output_schema:
       plan_approved: boolean
-    chat: 按 Spec Kit 的活动功能上下文读取由 $speckit-plan 生成的 plan.md
+    prompt: 按 Spec Kit 的活动功能上下文读取由 $speckit-plan 生成的 plan.md
       及其辅助设计产物，向用户展示架构、技术选型、接口、数据模型、宪章门禁结果、风险和明确的取舍，请用户决定是否进入任务拆解。只有获得用户明确批准时才返回
       plan_approved=true；方案被拒绝或需要再次调用 $speckit-plan 修订时返回 false。本节点不要生成任务或实现代码。
   - id: 评审需求质量
     type: node
+    node_kind: chat
     input_schema: {}
     output_schema: {}
-    chat: 与用户确认当前活动功能是否需要针对安全、可访问性、性能、用户体验等领域增加需求质量清单。需要时，针对每个确认的关注领域调用一次
+    prompt: 与用户确认当前活动功能是否需要针对安全、可访问性、性能、用户体验等领域增加需求质量清单。需要时，针对每个确认的关注领域调用一次
       $speckit-checklist；这些清单用于检验需求文本的完整性、清晰度与一致性，不是实现测试。引导人工评审未完成条目，未经评审者确认不得代替其勾选。无需自定义清单时保留内置
       requirements 清单并继续。本节点不要创建实现任务或代码。
   - id: 生成实施任务
     type: node
+    node_kind: chat
     input_schema: {}
     output_schema: {}
-    chat: 调用 $speckit-tasks，按 Spec Kit 的活动功能上下文处理当前功能。读取 spec.md、plan.md、全部可用的辅助设计产物和项目宪章，生成完整的
+    prompt: 调用 $speckit-tasks，按 Spec Kit 的活动功能上下文处理当前功能。读取 spec.md、plan.md、全部可用的辅助设计产物和项目宪章，生成完整的
       tasks.md。任务应按可独立交付的用户故事组织，先安排初始化与基础工作，写明准确文件路径和连续任务编号，体现真实依赖关系，并且只对能够安全并行的任务添加并行标记。规格、宪章或用户明确要求
       TDD 时加入测试任务。本节点不要执行任何任务。
   - id: 分析产物一致性
     type: node
+    node_kind: chat
     input_schema: {}
     output_schema:
       implementation_approved: boolean
-    chat: 在当前活动功能的 tasks.md 已生成后调用 $speckit-analyze，对 spec.md、plan.md、tasks.md
+    prompt: 在当前活动功能的 tasks.md 已生成后调用 $speckit-analyze，对 spec.md、plan.md、tasks.md
       和项目宪章执行严格只读的跨产物一致性分析，按严重程度和可追溯位置报告不一致、重复、歧义、覆盖缺口与宪章冲突，不要静默修改任何产物。存在关键问题或用户不接受剩余问题时，返回
       implementation_approved=false，并明确建议应重新调用哪个上游 Skill 或进行何种人工修订。只有产物足够一致且用户明确批准进入实现时才返回
       implementation_approved=true。
@@ -199,17 +208,19 @@ dag:
     dag:
       - id: 执行任务计划
         type: node
+        node_kind: chat
         input_schema: {}
         output_schema: {}
-        chat: 调用 $speckit-implement，按 Spec Kit 的活动功能上下文处理当前功能。首先严格执行 Spec Kit
+        prompt: 调用 $speckit-implement，按 Spec Kit 的活动功能上下文处理当前功能。首先严格执行 Spec Kit
           定义的清单门禁；任何由评审者负责的清单尚未完成时，必须先询问用户是否继续。加载
           tasks.md、plan.md、可用的设计产物和项目宪章，检查或创建适用的忽略文件，然后按照依赖顺序分阶段执行任务，只对标记为可并行的任务采用安全并行。任务成功完成后才能勾选，执行相应验证，并如实报告进展与阻塞。
       - id: 评估交付收敛
         type: node
+        node_kind: chat
         input_schema: {}
         output_schema:
           continue_delivery: boolean
-        chat: 实现完成后调用 $speckit-converge，按 Spec Kit 的活动功能上下文处理当前功能。仅以 spec.md、plan.md、tasks.md
+        prompt: 实现完成后调用 $speckit-converge，按 Spec Kit 的活动功能上下文处理当前功能。仅以 spec.md、plan.md、tasks.md
           和项目宪章作为意图来源，检查当前代码库中缺失、仅部分完成、与意图冲突或未经要求的工作。严格遵守该 Skill
           的只追加规则：本节点不得重写已有任务或修改应用代码；只有仍存在可执行缺口时，才在 tasks.md 末尾追加可追溯的 Convergence
           阶段。若追加了必须完成的新任务并需要再次实现，返回 continue_delivery=true；若代码已经满足全部产物且 tasks.md 无需变化，则返回

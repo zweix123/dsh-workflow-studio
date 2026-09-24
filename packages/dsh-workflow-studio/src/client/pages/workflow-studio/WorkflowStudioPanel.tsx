@@ -10,7 +10,7 @@ import { styles } from './styles.js'
 
 type UseWorkspaces = <T>(selector: (snapshot: WorkspaceSnapshot) => T) => T
 
-export function WorkflowStudioPanel({ t, useWorkspaces }: { t: WorkflowTranslate; useWorkspaces: UseWorkspaces }) {
+export function WorkflowStudioPanel({ t, useWorkspaces, onOpenSession }: { t: WorkflowTranslate; useWorkspaces: UseWorkspaces; onOpenSession: (sessionId: string) => void }) {
   const id = useId()
   const [activeTab, setActiveTab] = useState('instances')
   const [opened, setOpened] = useState<InstanceDetail[]>([])
@@ -98,8 +98,8 @@ export function WorkflowStudioPanel({ t, useWorkspaces }: { t: WorkflowTranslate
         if (activeTab === `instance-${instanceId}`) setActiveTab('instances')
       }} />
       : tab.detail
-        ? <InstanceRunPanel detail={tab.detail} t={t}
-          onUpdate={updated => setOpened(current => current.map(item => item.id === updated.id ? { ...updated, drawerWidth: item.drawerWidth ?? updated.drawerWidth } : item))}
+        ? <InstanceRunPanel detail={tab.detail} t={t} onOpenSession={onOpenSession}
+          onUpdate={updated => setOpened(current => current.map(item => item.id === updated.id && (updated.revision ?? 0) >= (item.revision ?? 0) ? { ...updated, drawerWidth: item.drawerWidth ?? updated.drawerWidth } : item))}
           onWidthUpdate={width => setOpened(current => current.map(item => item.id === tab.detail!.id ? { ...item, drawerWidth: width } : item))} />
         : null}</div>)}
   </section>

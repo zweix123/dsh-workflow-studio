@@ -5,7 +5,35 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { copyBuiltinTemplates, validateTemplateDirectory } from '../src/host/template-directory.js'
 
-const validYaml = 'id: example\ntype: dag\ndag:\n  - id: start\n    type: node\n'
+const validYaml = 'id: example\ntype: dag\ndag:\n  - id: start\n    type: node\n    node_kind: bash\n    command: ""\n'
+
+test('business node fields are validated at the template boundary without dropping unknown fields', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dsh-business-fields-'))
+  try {
+    await writeFile(join(root, 'workflow.yaml'), validYaml.replace('command: ""', 'command: "  "\n    custom_note: keep'))
+    const valid = await validateTemplateDirectory(root)
+    assert.equal('definition' in valid && (valid.definition.dag[0] as any).custom_note, 'keep')
+    await writeFile(join(root, 'workflow.yaml'), validYaml.replace('node_kind: bash\n    command: ""', 'node_kind: chat\n    prompt: ""'))
+    assert.equal('definition' in await validateTemplateDirectory(root), true)
+    for (const [fragment, expected] of [
+      ['command: ""', /node_kind/],
+      ['node_kind: unknown\n    command: ""', /node_kind/],
+      ['node_kind: bash', /command/],
+      ['node_kind: bash\n    command: null', /command/],
+      ['node_kind: bash\n    command: ""\n    prompt: nope', /prompt/],
+      ['node_kind: bash\n    command: ""\n    is_auto_start: yes', /is_auto_start/],
+      ['node_kind: chat', /prompt/],
+      ['node_kind: chat\n    prompt: 42', /prompt/],
+      ['node_kind: chat\n    prompt: ""\n    command: bad', /command/],
+    ] as const) {
+      const yaml = validYaml.replace('node_kind: bash\n    command: ""', fragment)
+      await writeFile(join(root, 'workflow.yaml'), yaml)
+      const result = await validateTemplateDirectory(root)
+      assert.equal('error' in result, true, fragment)
+      if ('error' in result) assert.match(result.error, expected)
+    }
+  } finally { await rm(root, { recursive: true, force: true }) }
+})
 
 test('validates a template directory and copies every bundled directory over its existing target', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dsh-template-directory-'))

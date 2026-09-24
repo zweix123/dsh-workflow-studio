@@ -42,16 +42,17 @@ function AggregateNode({ data }: NodeProps) {
 
 const nodeTypes = { workflow: WorkflowNode, dagGroup: DagGroupNode, aggregate: AggregateNode }
 
-export function DagCanvas({ detail, t, onExecute, onInspect, pending }: { detail: InstanceDetail; t: WorkflowTranslate; onExecute: (id: string) => void; onInspect: (id: string) => void; pending?: string }) {
+export function DagCanvas({ detail, t, onExecute, onInspect, pending }: { detail: InstanceDetail; t: WorkflowTranslate; onExecute: (id: string) => void; onInspect: (id: string) => void; pending?: string[] }) {
   const labels = Object.values(statusKeys).map(key => t(key)).join('\u0000') + t('node')
   const graph = useMemo(() => {
     const projected = buildCanvasGraph(detail)
     return { ...projected, nodes: projected.nodes.map(node => node.type === 'aggregate' ? { ...node, data: { ...node.data, label: t('groupOutput') } } : ({ ...node, data: {
       ...node.data,
       id: node.id,
-      statusLabel: t(statusKeys[node.data.status as keyof typeof statusKeys]),
+      status: detail.executions?.[node.id]?.status === 'running' ? 'running' : node.data.status,
+      statusLabel: t(statusKeys[detail.executions?.[node.id]?.status === 'running' ? 'running' : node.data.status as keyof typeof statusKeys]),
       kindLabel: node.data.kind === 'dag' ? 'DAG' : node.data.kind === 'node' ? t('node') : '',
-      executeLabel: t('executeNode'), detailsLabel: t('nodeDetails'), onExecute, onInspect, pending: pending === node.id,
+      executeLabel: t('executeNode'), detailsLabel: t('nodeDetails'), onExecute, onInspect, pending: Boolean(detail.incompatible) || Boolean(detail.executions?.[node.id]?.status === 'running') || Boolean(pending?.includes(node.id)),
     } })) }
   }, [detail, labels, onExecute, onInspect, pending, t])
   return <div className="dsh-workflow-graph" aria-label={t('workflowGraph')}>
