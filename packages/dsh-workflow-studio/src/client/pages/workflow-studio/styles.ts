@@ -377,7 +377,9 @@ ${reactFlowCss}
 .dsh-workflow-detail-header { flex: none; margin: 0; padding: 16px 20px; border-bottom: 0.5px solid var(--dsw-alias-border-l3); }
 .dsh-workflow-run { display: flex; position: relative; flex: 1; min-height: 0; min-width: 0; }
 .dsh-workflow-run-error { margin: 0; padding: 8px 20px; color: var(--dsw-alias-label-error); font-size: 12px; }
-.dsh-workflow-inspector { box-sizing: border-box; flex: none; width: min(320px, 34%); border-left: 0.5px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); }
+.dsh-workflow-inspector { position: absolute; z-index: 5; top: 0; right: 0; bottom: 0; box-sizing: border-box; max-width: 100%; border-left: 0.5px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); box-shadow: var(--dsw-elevation-prominent); }
+.dsh-workflow-inspector-resize { position: absolute; top: 0; bottom: 0; left: -5px; width: 10px; cursor: col-resize; touch-action: none; }
+.dsh-workflow-inspector-resize:hover { background: var(--dsw-alias-state-business-primary); opacity: .35; }
 .dsh-workflow-inspector header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 18px; border-bottom: 0.5px solid var(--dsw-alias-border-l3); }
 .dsh-workflow-inspector h3 { margin: 0; font-size: 14px; font-weight: 600; }
 .dsh-workflow-inspector p { margin: 6px 0 0; color: var(--dsw-alias-label-secondary); font-size: 12px; }
@@ -406,6 +408,7 @@ ${reactFlowCss}
 .dsh-workflow-dag-heading .dsh-workflow-node-status { margin-left: auto; white-space: nowrap; }
 .dsh-workflow-dag-heading button { border: 0; border-radius: 4px; padding: 3px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
 .dsh-workflow-dag-heading button:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.dsh-workflow-dag-heading strong { color: var(--dsw-alias-label-primary); font-weight: 600; }
 .dsh-workflow-node {
   box-sizing: border-box;
   display: grid;
@@ -421,7 +424,7 @@ ${reactFlowCss}
   color: var(--dsw-alias-label-primary);
 }
 .dsh-workflow-node strong { grid-column: 1 / -1; overflow: hidden; font-size: 13px; line-height: 18px; text-overflow: ellipsis; white-space: nowrap; }
-.dsh-workflow-node { cursor: pointer; }
+.dsh-workflow-node { cursor: default; }
 .dsh-workflow-node-actions { display: flex; grid-column: 1 / -1; align-items: center; justify-content: space-between; gap: 4px; }
 .dsh-workflow-node-actions button { border: 0; border-radius: 5px; padding: 2px 4px; background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; font-size: 11px; white-space: nowrap; cursor: pointer; }
 .dsh-workflow-node-actions button:last-child { margin-left: auto; }
@@ -451,10 +454,10 @@ ${reactFlowCss}
 .dsh-workflow-create select:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 1px; }
 .dsh-workflow-node-actions button:focus-visible,
 .dsh-workflow-dag-heading button:focus-visible,
+.dsh-workflow-inspector-resize:focus-visible,
 .dsh-workflow-inspector button:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 1px; }
 @container (max-width: 760px) {
   .dsh-workflow-card-grid { grid-template-columns: 1fr; }
-  .dsh-workflow-inspector { position: absolute; z-index: 5; top: 0; right: 0; bottom: 0; width: min(340px, 90%); box-shadow: var(--dsw-elevation-prominent); }
 }
 @media (max-width: 760px) {
   .dsh-workflow-instance-overview { padding: 24px 18px 80px; }

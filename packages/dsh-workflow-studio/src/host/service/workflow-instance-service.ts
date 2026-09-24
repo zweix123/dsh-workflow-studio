@@ -21,6 +21,7 @@ const instanceSchema = z.object({
   input: z.json(),
   snapshot: z.json(),
   state: z.json().optional(),
+  drawerWidth: z.number().positive().finite().optional(),
 }).strict()
 
 export const workflowInstanceDomain = defineDomain({
@@ -138,6 +139,24 @@ export class WorkflowInstanceService {
     return result
   }
 
+  setDrawerWidth(id: string, value: unknown): Promise<InstanceDetail> {
+    if (value === null || typeof value !== 'object' || Array.isArray(value)
+      || Object.keys(value).length !== 1 || !('width' in value)
+      || typeof value.width !== 'number' || !Number.isFinite(value.width) || value.width <= 0) {
+      throw new WorkflowInstanceError('invalid-request', 'Drawer width must be a positive number')
+    }
+    const result = this.tail.then(async () => {
+      const table = this.domain.table('instances')
+      const row = table.get(id)
+      if (!row) throw new WorkflowInstanceError('instance-missing', 'Workflow instance not found')
+      const updated = { ...row, drawerWidth: value.width as number }
+      await table.put(id, updated)
+      return this.detail(updated)
+    })
+    this.tail = result.catch(() => {})
+    return result
+  }
+
   close(): Promise<void> {
     return this.domain.close()
   }
@@ -211,6 +230,7 @@ export class WorkflowInstanceService {
       definition: row.definition as DagDefinition,
       input: row.input as JsonObject,
       snapshot: row.snapshot as unknown as ExecutionSnapshot,
+      ...(row.drawerWidth === undefined ? {} : { drawerWidth: row.drawerWidth }),
     }
   }
 }

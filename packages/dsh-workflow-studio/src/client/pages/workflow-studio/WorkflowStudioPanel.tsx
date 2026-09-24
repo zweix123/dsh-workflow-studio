@@ -98,7 +98,9 @@ export function WorkflowStudioPanel({ t, useWorkspaces }: { t: WorkflowTranslate
         if (activeTab === `instance-${instanceId}`) setActiveTab('instances')
       }} />
       : tab.detail
-        ? <InstanceRunPanel detail={tab.detail} t={t} onUpdate={updated => setOpened(current => current.map(item => item.id === updated.id ? updated : item))} />
+        ? <InstanceRunPanel detail={tab.detail} t={t}
+          onUpdate={updated => setOpened(current => current.map(item => item.id === updated.id ? { ...updated, drawerWidth: item.drawerWidth ?? updated.drawerWidth } : item))}
+          onWidthUpdate={width => setOpened(current => current.map(item => item.id === tab.detail!.id ? { ...item, drawerWidth: width } : item))} />
         : null}</div>)}
   </section>
 }

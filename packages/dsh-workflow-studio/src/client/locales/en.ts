@@ -48,6 +48,7 @@ export const en: Record<keyof typeof zh, string> = {
   nodeDetails: 'Details',
   groupOutput: 'Group output',
   closeNodeDetails: 'Close details',
+  resizeNodeDetails: 'Resize details',
   workflowGraph: 'Workflow DAG',
   node: 'Node',
   statusReady: 'Ready',

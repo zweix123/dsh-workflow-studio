@@ -22,6 +22,7 @@ export interface InstanceDetail extends InstanceSummary {
   definition: DagDefinition
   input: JsonObject
   snapshot: ExecutionSnapshot
+  drawerWidth?: number
 }
 
 export interface CreateInstanceInput {

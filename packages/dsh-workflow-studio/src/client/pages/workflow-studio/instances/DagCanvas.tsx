@@ -28,9 +28,9 @@ const DagGroupNode = memo(function DagGroupNode({ data: rawData }: NodeProps) {
   return <div className="dsh-workflow-dag-group" data-graph-node data-definition-id={data.label} data-status={data.status}>
     <Handle type="target" position={Position.Left} />
     <div className="dsh-workflow-dag-heading">
-      <button type="button" className="nodrag nopan" onClick={() => data.onInspect(data.id)}>{data.label}</button>
+      <strong>{data.label}</strong>
       <span className="dsh-workflow-node-status"><i aria-hidden="true" />{data.statusLabel}</span>
-      <button type="button" className="nodrag nopan" aria-label={`${data.detailsLabel} ${data.label}`} onClick={() => data.onInspect(data.id)}>ⓘ {data.detailsLabel}</button>
+      <button type="button" className="nodrag nopan" aria-label={`${data.detailsLabel} ${data.label}`} onClick={event => { event.stopPropagation(); data.onInspect(data.id) }}>ⓘ {data.detailsLabel}</button>
     </div>
     <Handle type="source" position={Position.Right} />
   </div>
@@ -70,7 +70,7 @@ export function DagCanvas({ detail, t, onExecute, onInspect, pending }: { detail
       nodesFocusable={false}
       edgesFocusable={false}
       elementsSelectable={false}
-      onNodeClick={(_, node) => { if (node.type === 'workflow') onInspect(node.id) }}
+      onNodeClick={() => {}}
       deleteKeyCode={null}
       proOptions={{ hideAttribution: true }}
     >

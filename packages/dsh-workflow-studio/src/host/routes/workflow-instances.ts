@@ -44,6 +44,11 @@ export function createWorkflowInstancesRoute(service: WorkflowInstanceService): 
           return json(response, 405, { error: { code: 'method-not-allowed', message: 'Method not allowed' } })
         }
         if (path.startsWith(`${INSTANCES_PATH}/`)) {
+          const drawer = path.match(new RegExp(`^${INSTANCES_PATH}/([^/]+)/drawer-width$`))
+          if (drawer) {
+            if (request.method !== 'POST') return json(response, 405, { error: { code: 'method-not-allowed', message: 'Method not allowed' } })
+            return json(response, 200, await service.setDrawerWidth(decodeURIComponent(drawer[1]!), await body(request)))
+          }
           const execution = path.match(new RegExp(`^${INSTANCES_PATH}/([^/]+)/nodes/([^/]+)/execute$`))
           if (execution) {
             if (request.method !== 'POST') return json(response, 405, { error: { code: 'method-not-allowed', message: 'Method not allowed' } })

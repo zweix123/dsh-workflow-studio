@@ -426,3 +426,31 @@ dag:
   assert.equal((await failed.json() as any).error.code, 'submission-failed')
   assert.deepEqual(await (await fetch(f.url(path))).json(), created)
 })
+
+test('drawer width belongs to its instance and survives execution and host restart', async () => {
+  const f = await fixture()
+  await putTemplate(f.templateRoot, 'writer', validTemplate)
+  const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Drawer', templateId: 'writer' })).json() as any
+  const other = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Other drawer', templateId: 'writer' })).json() as any
+  const path = `${INSTANCES_PATH}/${created.id}`
+  assert.equal(created.drawerWidth, undefined)
+  assert.equal(other.drawerWidth, undefined)
+  assert.equal((await postJson(f.url(`${path}/drawer-width`), { width: 410 })).status, 200)
+  const saved = await (await fetch(f.url(path))).json() as any
+  assert.equal(saved.drawerWidth, 410)
+  const node = saved.snapshot.instances.find((item: any) => item.definitionId === 'draft')
+  const executed = await (await postJson(f.url(`${path}/nodes/${node.instanceId}/execute`), {})).json() as any
+  assert.equal(executed.drawerWidth, 410)
+  assert.equal(executed.snapshot.instances.find((item: any) => item.instanceId === node.instanceId).status, 'completed')
+  const resized = await (await postJson(f.url(`${path}/drawer-width`), { width: 390 })).json() as any
+  assert.deepEqual(resized.snapshot, executed.snapshot)
+  assert.equal(resized.drawerWidth, 390)
+  assert.equal((await (await fetch(f.url(`${INSTANCES_PATH}/${other.id}`))).json() as any).drawerWidth, undefined)
+  const invalid = await postJson(f.url(`${path}/drawer-width`), { width: -1 })
+  assert.equal(invalid.status, 400)
+  assert.deepEqual(await (await fetch(f.url(path))).json(), resized)
+  await f.close()
+  const restarted = await openHost(f.storageRoot, f.templateRoot, f.root)
+  cleanups.push(restarted.close)
+  assert.deepEqual(await (await fetch(restarted.url(path))).json(), resized)
+})

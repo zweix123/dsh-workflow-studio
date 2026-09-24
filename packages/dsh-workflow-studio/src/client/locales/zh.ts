@@ -46,6 +46,7 @@ export const zh = {
   nodeDetails: '详情',
   groupOutput: '组输出',
   closeNodeDetails: '关闭详情',
+  resizeNodeDetails: '调整详情宽度',
   workflowGraph: '工作流 DAG',
   node: '节点',
   statusReady: '就绪',

@@ -12,7 +12,8 @@ function summary(value: unknown): value is InstanceSummary {
 function detail(value: unknown): value is InstanceDetail {
   if (!summary(value)) return false
   const row = value as InstanceSummary & Record<string, unknown>
-  if (!object(row.definition) || row.definition.type !== 'dag' || !Array.isArray(row.definition.dag)
+  if ((row.drawerWidth !== undefined && (typeof row.drawerWidth !== 'number' || !Number.isFinite(row.drawerWidth) || row.drawerWidth <= 0))
+    || !object(row.definition) || row.definition.type !== 'dag' || !Array.isArray(row.definition.dag)
     || !object(row.input) || !object(row.snapshot)) return false
   const snapshot = row.snapshot
   return typeof snapshot.rootInstanceId === 'string'
@@ -78,6 +79,14 @@ export async function getInstance(id: string): Promise<InstanceDetail> {
 export async function executeNode(id: string, nodeInstanceId: string): Promise<InstanceDetail> {
   const value = await request(`${INSTANCES_PATH}/${encodeURIComponent(id)}/nodes/${encodeURIComponent(nodeInstanceId)}/execute`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+  })
+  if (!detail(value)) throw new Error('Unexpected workflow instance')
+  return value
+}
+
+export async function setDrawerWidth(id: string, width: number): Promise<InstanceDetail> {
+  const value = await request(`${INSTANCES_PATH}/${encodeURIComponent(id)}/drawer-width`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ width }),
   })
   if (!detail(value)) throw new Error('Unexpected workflow instance')
   return value
