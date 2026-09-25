@@ -1,6 +1,6 @@
 import dagre from '@dagrejs/dagre'
 import { MarkerType, Position, type Edge, type Node } from '@xyflow/react'
-import type { EntityDefinition, PositionSnapshot, RuntimeEdgeSnapshot } from '../../../../host/dag-engine/index.js'
+import type { EntityDefinition, PositionSnapshot, RuntimeEdgeSnapshot } from '../../../../host/dag/index.js'
 import type { InstanceDetail } from '../../../../shared/types/workflow-instance.js'
 
 const NODE_WIDTH = 184

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { compile, CompileError, ExecutionError, InitializationError, SubmissionError } from '../lib/host/dag-engine/index.js';
+import { compile, CompileError, ExecutionError, InitializationError, SubmissionError } from '../lib/host/dag/index.js';
 
 const node = (id, input_schema = {}, output_schema = {}, extra = {}) => ({ id, type: 'node', input_schema, output_schema, ...extra });
 const edge = (from, to, extra = {}) => ({ type: 'edge', from, to, ...extra });

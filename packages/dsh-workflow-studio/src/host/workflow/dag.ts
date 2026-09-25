@@ -1,5 +1,5 @@
-import { compile } from '../dag-engine/index.js'
-import type { DagDefinition, ExecutionSnapshot, JsonObject, JsonValue, SavedExecution, Schema, TypeDescriptor } from '../dag-engine/index.js'
+import { compile } from '../dag/index.js'
+import type { DagDefinition, ExecutionSnapshot, JsonObject, JsonValue, SavedExecution, Schema, TypeDescriptor } from '../dag/index.js'
 
 function emptyValue(type: TypeDescriptor): JsonValue {
   if (type === 'string') return ''
@@ -11,10 +11,6 @@ function emptyValue(type: TypeDescriptor): JsonValue {
 
 function emptyInput(schema: Schema): JsonObject {
   return Object.fromEntries(Object.entries(schema).map(([key, type]) => [key, emptyValue(type)]))
-}
-
-export function placeholderOutput(schema: Schema): JsonObject {
-  return emptyInput(schema)
 }
 
 export function initializeWorkflow(definition: DagDefinition): { input: JsonObject; snapshot: ExecutionSnapshot; state: SavedExecution } {
@@ -34,6 +30,6 @@ export function executeWorkflowNode(
   const execution = state ? program.restoreExecution(state) : program.createExecution(input)
   const ready = execution.getFrontier().find(item => item.instanceId === nodeInstanceId)
   if (!ready) return undefined
-  execution.submit(nodeInstanceId, placeholderOutput(ready.definition.output_schema ?? {}))
+  execution.submit(nodeInstanceId, emptyInput(ready.definition.output_schema ?? {}))
   return { snapshot: execution.getSnapshot(), state: execution.exportState() }
 }

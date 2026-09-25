@@ -9,7 +9,7 @@ import Storage from '@deepseek-ai/dsh-storage'
 import * as storageDomain from '@deepseek-ai/dsh-storage-domain'
 import * as storageJson from '@deepseek-ai/dsh-storage-json'
 import { WorkflowInstanceService, workflowInstanceDomain } from '../src/host/service/workflow-instance-service.js'
-import { compile, type SavedExecution } from '../src/host/dag-engine/index.js'
+import { compile, type SavedExecution } from '../src/host/dag/index.js'
 import { createWorkflowInstancesRoute } from '../src/host/routes/workflow-instances.js'
 import { INSTANCES_PATH, TEMPLATES_PATH } from '../src/shared/constants.js'
 

@@ -7,7 +7,7 @@ import { copyBuiltinTemplates, validateTemplateDirectory } from '../src/host/tem
 
 const validYaml = 'id: example\ntype: dag\ndag:\n  - id: start\n    type: node\n    node_kind: bash\n    command: ""\n'
 
-test('business node fields are validated at the template boundary without dropping unknown fields', async () => {
+test('workflow node fields are validated at the template boundary without dropping unknown fields', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dsh-business-fields-'))
   try {
     await writeFile(join(root, 'workflow.yaml'), validYaml.replace('command: ""', 'command: "  "\n    custom_note: keep'))

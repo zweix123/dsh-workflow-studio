@@ -1,15 +1,15 @@
 import { cp, mkdir, readdir, readFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { parseDocument } from 'yaml'
-import { compile, type DagDefinition } from './dag-engine/index.js'
-import { validateBusinessNodes } from './business-nodes.js'
+import { compile, type DagDefinition } from './dag/index.js'
+import { validateWorkflowNodes } from './workflow/index.js'
 
 export async function validateTemplateDirectory(directory: string): Promise<{ definition: DagDefinition } | { error: string }> {
   try {
     const document = parseDocument(await readFile(join(directory, 'workflow.yaml'), 'utf8'))
     if (document.errors.length) throw document.errors[0]
     const definition = compile(document.toJS()).getDefinition()
-    validateBusinessNodes(definition)
+    validateWorkflowNodes(definition)
     return { definition }
   } catch (error) {
     return { error: error instanceof Error ? error.message : String(error) }

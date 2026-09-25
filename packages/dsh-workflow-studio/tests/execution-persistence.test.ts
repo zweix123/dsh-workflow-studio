@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { compile } from '../src/host/dag-engine/index.js'
+import { compile } from '../src/host/dag/index.js'
 import { buildCanvasGraph } from '../src/client/pages/workflow-studio/instances/build-canvas-graph.js'
 import type { InstanceDetail } from '../src/shared/types/workflow-instance.js'
 

@@ -1,13 +1,15 @@
-import type { DagDefinition, NodeDefinition } from './dag-engine/index.js'
+import type { DagDefinition, NodeDefinition } from '../dag/index.js'
+import { bashFields, validateBashNode } from '../nodes/bash.js'
+import { chatFields, validateChatNode } from '../nodes/chat.js'
 
-export type BusinessNode = NodeDefinition & { is_auto_start?: boolean } & (
+export type WorkflowNode = NodeDefinition & { is_auto_start?: boolean } & (
   | { node_kind: 'chat'; prompt: string }
   | { node_kind: 'bash'; command: string }
 )
 
-const fields = { chat: ['prompt'], bash: ['command'] } as const
+const fields = { chat: chatFields, bash: bashFields } as const
 
-export function validateBusinessNodes(definition: DagDefinition): void {
+export function validateWorkflowNodes(definition: DagDefinition): void {
   const owner = new Map<string, string>()
   for (const [kind, names] of Object.entries(fields)) for (const name of names) {
     const previous = owner.get(name)
@@ -20,8 +22,8 @@ export function validateBusinessNodes(definition: DagDefinition): void {
       if (entry.type !== 'node') continue
       const kind = entry.node_kind
       if (kind !== 'chat' && kind !== 'bash') throw new Error(`Node ${entry.id}: node_kind must be chat or bash`)
-      const required = fields[kind][0]
-      if (typeof entry[required] !== 'string') throw new Error(`Node ${entry.id}: ${required} must be a string`)
+      if (kind === 'chat') validateChatNode(entry)
+      else validateBashNode(entry)
       if (entry.is_auto_start !== undefined && typeof entry.is_auto_start !== 'boolean') {
         throw new Error(`Node ${entry.id}: is_auto_start must be a boolean`)
       }
@@ -33,6 +35,6 @@ export function validateBusinessNodes(definition: DagDefinition): void {
   visit(definition)
 }
 
-export function businessNode(definition: NodeDefinition): BusinessNode {
-  return definition as BusinessNode
+export function workflowNode(definition: NodeDefinition): WorkflowNode {
+  return definition as WorkflowNode
 }

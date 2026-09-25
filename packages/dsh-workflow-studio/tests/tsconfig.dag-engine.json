@@ -5,5 +5,5 @@
     "noEmit": true,
     "exactOptionalPropertyTypes": true
   },
-  "include": ["../src/host/dag-engine/**/*.ts", "dag-engine.types.ts"]
+  "include": ["../src/host/dag/**/*.ts", "dag-engine.types.ts"]
 }

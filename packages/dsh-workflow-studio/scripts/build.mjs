@@ -9,7 +9,7 @@ await rm('lib', { recursive: true, force: true })
 await build({
   entryPoints: {
     index: 'src/index.ts',
-    'host/dag-engine/index': 'src/host/dag-engine/index.ts',
+    'host/dag/index': 'src/host/dag/index.ts',
   },
   outdir: 'lib',
   bundle: true, platform: 'node', format: 'esm', target: 'es2022', packages: 'external',

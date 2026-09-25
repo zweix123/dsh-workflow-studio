@@ -206,7 +206,7 @@ test('cards execute independently and the inspector follows the selected graph o
   }
 })
 
-test('business node inspector opens the existing chat, completes it, and shows the last bash result', async () => {
+test('workflow node inspector opens the existing chat, completes it, and shows the last bash result', async () => {
   const { dom, cleanup } = testDom()
   const base: any = { id: 'run', workspaceId: 'w', name: 'Business', templateId: 'flow', createdAt: '2026-09-24T00:00:00Z', input: {},
     definition: { id: 'root', type: 'dag', dag: [{ id: 'chat', type: 'node', node_kind: 'chat', prompt: '' }, { id: 'bash', type: 'node', node_kind: 'bash', command: 'printf done' }] },

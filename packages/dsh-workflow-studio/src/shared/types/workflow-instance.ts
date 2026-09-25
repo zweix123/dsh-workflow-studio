@@ -1,4 +1,4 @@
-import type { DagDefinition, ExecutionSnapshot, JsonObject } from '../../host/dag-engine/index.js'
+import type { DagDefinition, ExecutionSnapshot, JsonObject } from '../../host/dag/index.js'
 
 export interface TemplateRow {
   id: string

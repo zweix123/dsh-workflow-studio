@@ -1,4 +1,4 @@
-import { compile, CompileError, SubmissionError, type DagDefinition, type DataMap } from '../src/host/dag-engine/index.js';
+import { compile, CompileError, SubmissionError, type DagDefinition, type DataMap } from '../src/host/dag/index.js';
 const definition: DagDefinition = {
   id: 'root', type: 'dag', dag: [], config: { name: 'extension' },
   input_schema: { records: { type: 'array', items: { type: 'object', properties: { name: 'string' } } } },
