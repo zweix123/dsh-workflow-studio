@@ -1,6 +1,6 @@
 # 工作流工坊 DAG 语法规范
 
-当前实现：工作流工坊内置 DAG 引擎与 `chat`、`bash` 业务节点。
+当前实现：工作流工坊内置 DAG 引擎与 `chat`、`bash` 节点能力。
 
 本文面向 DAG 语法的使用者，说明标准字段、书写规则、静态合法性、执行语义和使用示例。产品需求、功能范围与验收规格统一维护在 `docs/specs/`；内部数据结构、模块和算法属于实现设计。
 
@@ -81,11 +81,11 @@ DAG 的内容由顶点和边组成。顶点分为节点（`node`）和 DAG（`da
 }
 ```
 
-实体的标准字段按实体类型识别，其余字段对 DAG 引擎而言均为自定义字段。引擎必须原样保留这些字段，不得因字段未知而拒绝或丢弃，也不赋予编排语义。例如 `node` 上的 `if`、`for` 不控制该节点执行；只有 `edge` 上的同名字段具有条件或展开语义。工作流模板还须遵守下述业务节点字段规则。
+实体的标准字段按实体类型识别，其余字段对 DAG 引擎而言均为自定义字段。引擎必须原样保留这些字段，不得因字段未知而拒绝或丢弃，也不赋予编排语义。例如 `node` 上的 `if`、`for` 不控制该节点执行；只有 `edge` 上的同名字段具有条件或展开语义。工作流模板还须遵守下述节点字段规则。
 
 自定义字段不得改变该实体标准字段的含义或校验要求。本节的扩展规则适用于 `node`、`dag`、`edge` 实体；Schema 中的键表示业务字段，含义见下一节。
 
-### 3.1 工作流模板的业务节点字段
+### 3.1 工作流模板的节点字段
 
 工作流模板中的每个普通 `node` 必须显式提供 `node_kind`，当前只接受 `chat` 或 `bash`。公共字段 `is_auto_start` 可省略，默认 `false`；显式提供时必须是布尔值。`chat` 必须提供字符串 `prompt`，`bash` 必须提供字符串 `command`。空字符串和纯空白字符串合法，内容不被裁剪；空白 prompt 只创建对话，不发送初始消息，空白 command 作为空操作成功结束。缺失、`null` 和错误类型均报配置错误；chat 不能配置 bash 专属的 `command`，bash 不能配置 chat 专属的 `prompt`。完全未知的字段原样保留，但不获得业务含义。
 
@@ -620,7 +620,7 @@ check_order 是 outer 的结构入口和出口；check 是 check_order 的结构
 }
 ```
 
-外部执行方根据 flag 计算对应结果，必须返回包含 `number` 类型 result 的 `map`。这种写法只创建一个业务节点实例；若需要保留独立的分支执行位置，则可以采用不同字段名汇合，由汇合节点业务区分实际到达的字段。
+外部执行方根据 flag 计算对应结果，必须返回包含 `number` 类型 result 的 `map`。这种写法只创建一个节点实例；若需要保留独立的分支执行位置，则可以采用不同字段名汇合，由汇合节点业务区分实际到达的字段。
 
 ## 12. 错误与实现边界
 
@@ -641,14 +641,14 @@ check_order 是 outer 的结构入口和出口；check 是 check_order 的结构
 
 ### 12.2 实现设计范围
 
-本项目的初始化、查询和提交用法见第 13 节；完整类型和异常定义从 `packages/dsh-workflow-studio/src/host/dag-engine/index.ts` 导出。实例 ID 的内部生成、状态存储、模块划分、解析和推进算法属于实现设计，不改变本规范的执行行为。
+本项目的初始化、查询和提交用法见第 13 节；完整类型和异常定义从 `packages/dsh-workflow-studio/src/host/dag/index.ts` 导出。实例 ID 的内部生成、状态存储、模块划分、解析和推进算法属于实现设计，不改变本规范的执行行为。
 
 实现必须遵守本文规定的可观察行为，包括静态拒绝条件、声明结构与额外引用的隔离边界、输入存在时检查类型、输出严格校验、提交回滚、实例数量及聚合顺序，不能将它们作为实现方自行选择的策略。
 
 
 ## 13. 在项目中调用引擎
 
-引擎作为 Host 内部模块维护，源码入口为 `packages/dsh-workflow-studio/src/host/dag-engine/index.ts`。定义、编译器、执行状态和数据校验均在项目内部，不依赖参考目录或其他引擎包。模块职责如下：
+引擎作为 Host 内部模块维护，源码入口为 `packages/dsh-workflow-studio/src/host/dag/index.ts`。定义、编译器、执行状态和数据校验均在项目内部，不依赖参考目录或其他引擎包。模块职责如下：
 
 | 文件 | 职责 |
 | --- | --- |
@@ -659,13 +659,13 @@ check_order 是 outer 的结构入口和出口；check 是 check_order 的结构
 | `expression.ts` | 有限表达式解析和求值 |
 | `errors.ts`、`types.ts` | 结构化异常与类型契约 |
 
-Host 源码从该模块入口导入。执行根目录的 `npm run build` 后，也可直接调用独立 ESM 产物 `packages/dsh-workflow-studio/lib/host/dag-engine/index.js`；类型声明位于 `lib/types/host/dag-engine/index.d.ts`（相对于插件目录）。运行环境与项目一致：Node.js `^22.19.0 || >=24.0.0`，无第三方运行时依赖。
+Host 源码从该模块入口导入。执行根目录的 `npm run build` 后，也可直接调用独立 ESM 产物 `packages/dsh-workflow-studio/lib/host/dag/index.js`；类型声明位于 `lib/types/host/dag/index.d.ts`（相对于插件目录）。运行环境与项目一致：Node.js `^22.19.0 || >=24.0.0`，无第三方运行时依赖。
 
 以下命令从项目根目录执行，展示普通节点由调用方完成并提交结果的完整过程：
 
 ```bash
 node --input-type=module <<'JS'
-import { compile } from './packages/dsh-workflow-studio/lib/host/dag-engine/index.js'
+import { compile } from './packages/dsh-workflow-studio/lib/host/dag/index.js'
 
 const program = compile({
   id: 'main',
@@ -715,4 +715,4 @@ JS
 
 在项目根目录运行 `npm run check`，完成类型检查、构建及全部测试。引擎行为测试直接导入本项目构建产物，覆盖静态拒绝、条件、逐项节点和 DAG、按序聚合、嵌套与自递归、事务回滚、结构隔离和数据容器限制；另有启用 `exactOptionalPropertyTypes` 的类型契约检查。
 
-实例管理 Tab 已接入模板读取、HTTP 接口、宿主领域存储和真实业务执行。创建时保存模板定义、运行输入与可恢复的实例运行图；详情画布展示运行图投影。chat 和 bash 完成后，工作流运行时仍按输出声明生成零值占位输出提交给引擎；真实业务结果参与数据传递留待后续实现。
+实例管理 Tab 已接入模板读取、HTTP 接口、宿主领域存储和真实业务执行。创建时保存模板定义、运行输入与可恢复的实例运行图；详情画布展示运行图投影。chat 和 bash 完成后，工作流引擎仍按输出声明生成零值占位输出提交给 DAG；真实业务结果参与数据传递留待后续实现。

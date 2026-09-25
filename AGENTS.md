@@ -6,6 +6,7 @@
 - npm 源故障处理：安装公开依赖时，默认在安装命令中追加 `--registry=https://registry.npmjs.org`，显示使用公共 npm 源；保持依赖版本约束，不修改全局 npm 源配置。
 - 安装与分发：仅开发插件，不内置或安装 dsh CLI；用户自行安装本机 dsh，再通过本地目录添加插件。当前不维护分发或发布流程。
 - 按需建设：没有实现需求时，不创建预留目录或增加抽象。
+- 模块依赖：`workflow/` 选择并调用 `nodes/` 中的节点能力，负责工作流执行状态与持久化协调；`nodes/` 不依赖 `workflow/`、`dag/` 或工作流实例状态类型。
 
 ## 项目结构
 
@@ -16,11 +17,12 @@ packages/dsh-workflow-studio/
 │   ├── shared/                   # 插件常量、前后端协议
 │   ├── host/
 │   │   ├── apply.ts              # 服务装配和生命周期
-│   │   ├── dag-engine/           # 独立 DAG 编译与状态引擎，index.ts 统一导出
-│   │   ├── runtime/              # 薄运行时：实例初始化与逐节点占位执行
+│   │   ├── dag/                  # DAG 编译、图状态与结果提交
+│   │   ├── workflow/             # 节点选择、执行状态与恢复
+│   │   ├── nodes/                # 独立的 chat 与 bash 节点能力
 │   │   ├── routes/plugin-status.ts    # GET /api/dsh-workflow-studio/status
-│   │   ├── service/              # 领域服务
-│   │   └── storage/              # 仅文档占位：运行持久化
+│   │   ├── service/              # 模板与工作流实例管理
+│   │   └── storage/              # 工作流实例持久化与串行写入
 │   └── client/
 │       ├── index.tsx             # dsh 插槽注册
 │       ├── pages/                # 顶层页面，其他页面与工坊并列
