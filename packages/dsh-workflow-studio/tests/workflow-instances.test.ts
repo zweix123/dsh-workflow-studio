@@ -394,6 +394,17 @@ test('template route rescans the configured directory and reports invalid templa
   assert.match(catalog.templates[0]!.error!, /Missing id/)
   assert.equal(catalog.templates[1]!.error, undefined)
 
+  await putTemplate(f.templateRoot, 'layout-warning', validTemplate.replace('dag:\n', 'layout:\n  direction: vertical\n  segments:\n    - { start_at: draft, direction: horizontal }\ndag:\n'))
+  response = await fetch(f.url(TEMPLATES_PATH))
+  const withLayout = await response.json() as { templates: Array<{ id: string; error?: string; layout?: { issues: Array<{ code: string }> } }> }
+  const warning = withLayout.templates.find(row => row.id === 'layout-warning')!
+  assert.equal(warning.error, undefined)
+  assert.equal(warning.layout?.issues[0]?.code, 'emptyDefault')
+  const createdWithWarning = await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Layout warning', templateId: 'layout-warning' })
+  assert.equal(createdWithWarning.status, 201)
+  const saved = await createdWithWarning.json() as { definition: { layout: { direction: string } } }
+  assert.equal(saved.definition.layout.direction, 'vertical')
+
   assert.equal((await fetch(f.url(TEMPLATES_PATH), { method: 'POST' })).status, 405)
   assert.equal((await fetch(f.url(INSTANCES_PATH))).status, 200)
 })

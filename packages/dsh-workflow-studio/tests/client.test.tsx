@@ -425,6 +425,8 @@ test('instance API uses the host routes and rejects malformed payloads', async (
 
     globalThis.fetch = async () => Response.json({ ...detail, snapshot: null })
     await assert.rejects(getInstance('instance-a'), /Unexpected workflow instance/)
+    globalThis.fetch = async () => Response.json({ directory: '/templates', templates: [{ id: 'bad-layout', layout: { layers: 'invalid', issues: [] } }] })
+    await assert.rejects(listTemplates(), /Unexpected workflow template catalog/)
     globalThis.fetch = async () => Response.json({ error: { code: 'duplicate-name', message: 'duplicate' } }, { status: 409 })
     await assert.rejects(createInstance(input), error => {
       assert.equal((error as { code?: string }).code, 'duplicate-name')

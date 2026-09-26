@@ -2,6 +2,20 @@ import { INSTANCES_PATH, TEMPLATES_PATH } from '../../shared/constants.js'
 import type { CreateInstanceInput, ErrorResponse, InstanceDetail, InstanceErrorCode, InstanceSummary, TemplateCatalog } from '../../shared/types/workflow-instance.js'
 
 const object = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value)
+const strings = (value: unknown): value is string[] => Array.isArray(value) && value.every(item => typeof item === 'string')
+const direction = (value: unknown) => value === 'horizontal' || value === 'vertical'
+const issueCodes = new Set(['invalidLayout', 'invalidDirection', 'invalidSegments', 'invalidSegment', 'unknownStart', 'duplicateStart', 'emptyDefault', 'unorderedStart', 'unsafeStart'])
+
+function layoutReport(value: unknown): boolean {
+  if (!object(value) || !Array.isArray(value.layers) || !Array.isArray(value.issues)) return false
+  const issue = (row: unknown) => object(row) && row.level === 'WARN' && strings(row.path) && issueCodes.has(String(row.code))
+    && (row.startAt === undefined || typeof row.startAt === 'string')
+    && (row.suggestion === undefined || typeof row.suggestion === 'string')
+    && (row.segmentIndex === undefined || (Number.isInteger(row.segmentIndex) && (row.segmentIndex as number) >= 0))
+  return value.issues.every(issue) && value.layers.every(row => object(row) && strings(row.path) && direction(row.direction)
+    && strings(row.order) && Array.isArray(row.starts) && row.starts.every((start: unknown) => object(start) && typeof start.startAt === 'string' && direction(start.direction))
+    && Array.isArray(row.issues) && row.issues.every(issue))
+}
 
 function summary(value: unknown): value is InstanceSummary {
   return object(value)
@@ -27,7 +41,8 @@ function detail(value: unknown): value is InstanceDetail {
 function catalog(value: unknown): value is TemplateCatalog {
   return object(value) && typeof value.directory === 'string' && Array.isArray(value.templates)
     && value.templates.every(row => object(row) && typeof row.id === 'string'
-      && (row.error === undefined || typeof row.error === 'string'))
+      && (row.error === undefined || typeof row.error === 'string')
+      && (row.layout === undefined || layoutReport(row.layout)))
 }
 
 function failure(value: unknown): value is ErrorResponse {

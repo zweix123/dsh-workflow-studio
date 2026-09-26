@@ -1,8 +1,10 @@
 import type { DagDefinition, ExecutionSnapshot, JsonObject } from '../../host/dag/index.js'
+import type { LayoutReport } from '../layout.js'
 
 export interface TemplateRow {
   id: string
   error?: string
+  layout?: LayoutReport
 }
 
 export interface TemplateCatalog {

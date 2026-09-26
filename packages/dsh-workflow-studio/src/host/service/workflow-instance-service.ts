@@ -10,6 +10,7 @@ import { WorkflowEngine, WorkflowInstanceError, initializeWorkflow, validateWork
 import { WorkflowInstanceStore, workflowInstanceDomain } from '../storage/workflow-instance-store.js'
 import { validateTemplateDirectory } from '../template-directory.js'
 import type { CreateInstanceInput, InstanceDetail, InstanceSummary, TemplateCatalog, TemplateRow } from '../../shared/types/workflow-instance.js'
+import { inspectLayout } from '../../shared/layout.js'
 
 export { WorkflowInstanceError, workflowInstanceDomain }
 
@@ -117,7 +118,10 @@ export class WorkflowInstanceService {
   }
 
   private async readTemplate(id: string): Promise<ScannedTemplate> {
-    return { id, ...await validateTemplateDirectory(join(this.templateRoot, id)) }
+    const result = await validateTemplateDirectory(join(this.templateRoot, id))
+    if (!('definition' in result)) return { id, error: result.error }
+    const layout = inspectLayout(result.definition)
+    return { id, definition: result.definition, ...(layout.layers.length ? { layout } : {}) }
   }
 
   private async create(input: CreateInstanceInput): Promise<InstanceDetail> {

@@ -5,6 +5,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import { createInstance, deleteInstance, getInstance, listInstances, listTemplates, WorkflowInstanceApiError } from '../../../apis/workflow-instances.js'
 import type { InstanceDetail, InstanceErrorCode, InstanceSummary, TemplateCatalog } from '../../../../shared/types/workflow-instance.js'
 import type { WorkflowKey, WorkflowTranslate } from '../../../locales/index.js'
+import { LayoutNotices } from '../LayoutNotices.js'
 
 type Props = { t: WorkflowTranslate; useWorkspaces: <T>(selector: (snapshot: WorkspaceSnapshot) => T) => T; onSelect: (detail: InstanceDetail) => void; onOpenExisting: (id: string) => boolean; onDeleted: (id: string) => void }
 
@@ -223,6 +224,7 @@ function CreateInstanceForm({ workspaceId, workspaceTitle, trigger, rows, onClos
           </option>)}
         </select>
       </label>
+      <LayoutNotices key={templateId} report={catalog.templates.find(row => row.id === templateId)?.layout} t={t} surface="create" />
       {validTemplates.length === 0 && <div className="dsh-workflow-template-empty">
         <strong>{t('noTemplates')}</strong><code>{catalog.directory}</code>
       </div>}

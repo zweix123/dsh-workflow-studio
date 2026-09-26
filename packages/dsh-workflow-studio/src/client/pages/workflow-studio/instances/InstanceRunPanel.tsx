@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { InstanceDetail } from '../../../../shared/types/workflow-instance.js'
 import { completeNode, executeNode, getInstance, setDrawerWidth, WorkflowInstanceApiError } from '../../../apis/workflow-instances.js'
 import type { WorkflowTranslate } from '../../../locales/index.js'
 import { buildPositionNodeId, definitionAt } from './build-canvas-graph.js'
+import { inspectLayout } from '../../../../shared/layout.js'
+import { LayoutNotices } from '../LayoutNotices.js'
 import { DagCanvas, statusKeys } from './DagCanvas.js'
 
 function visibleWidth(preference: number, available: number): number {
@@ -131,10 +133,12 @@ export function InstanceRunPanel({ detail, t, onUpdate, onWidthUpdate, onOpenSes
   }
 
   const statusKey = statusKeys[inspection?.status ?? 'waiting']
+  const layoutReport = useMemo(() => inspectLayout(detail.definition), [detail.definition])
   return <section className="dsh-workflow-detail" aria-label={detail.name}>
     <header className="dsh-workflow-detail-header"><div><h2>{detail.name}</h2><p>{detail.templateId}</p></div></header>
     {error && <p className="dsh-workflow-run-error" role="alert">{error}</p>}
     {detail.incompatible && <p className="dsh-workflow-run-error" role="alert">{t('instanceIncompatible')} {detail.incompatible}</p>}
+    <LayoutNotices report={layoutReport} t={t} surface="instance" />
     <p className="dsh-workflow-run-note">{t('placeholderNotice')}</p>
     <div ref={runArea} className="dsh-workflow-run">
       <DagCanvas detail={detail} t={t} onExecute={id => void run(id)} onInspect={setSelected} pending={pending} active={active} inspectorWidth={inspection ? visibleWidth(dragWidth ?? detail.drawerWidth ?? 320, areaWidth) : 0} />

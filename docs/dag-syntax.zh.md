@@ -55,7 +55,7 @@ DAG 的内容由顶点和边组成。顶点分为节点（`node`）和 DAG（`da
 | 实体 | 必需标准字段 | 可选标准字段 |
 | --- | --- | --- |
 | `node` | `id`、`type` | `input_schema`、`output_schema` |
-| `dag` | `id`、`type`、`dag` | `input_schema`、`output_schema` |
+| `dag` | `id`、`type`、`dag` | `input_schema`、`output_schema`、`layout`（仅工坊画布） |
 | `edge` | `type`、`from`、`to` | `id`、`if`、`for` |
 
 | 字段 | 解析后的值与含义 |
@@ -110,6 +110,128 @@ dag:
 手动“执行”只启动选中的就绪节点实例；自动节点首次就绪后启动。bash 成功后自动完成，失败时保留错误并可用同一按钮再次尝试；chat 创建独立宿主对话，由用户在详情中手动标记任务完成。`for` 展开的每个 chat 实例各有自己的对话。详情只展示最后一次执行情况。已成功的业务动作若 DAG 提交失败，再次点击只重试占位结果提交，不重复执行命令。旧实例保留原模板快照；不合规的旧实例可查看，但需重新创建才能继续执行。
 
 真实业务执行已接入，但本期业务结果不进入 DAG：节点成功后仍按 `output_schema` 生成零值占位输出，`if`、`for` 和下游输入据此判定。命令输出及聊天内容只供用户查看。
+
+### 3.2 实例运行图排布 `layout`
+
+任意 DAG 定义可选配 `layout`，只影响该层实例画布的位置和连线方向。根 DAG、嵌套 DAG 及递归产生的每次 DAG 实例各用所引用定义的本层配置；父层不会覆盖子层。省略时沿用从左到右的横向画布，不显示排布提示。`layout` 不影响依赖、`if`、`for`、实例身份、输出、持久化和恢复。
+
+```yaml
+layout:
+  direction: vertical             # 必填：horizontal 或 vertical
+  segments:                      # 可选：按依赖顺序声明后续段
+    - start_at: publish           # 本层直接声明的 node 或 dag 的 id
+      direction: horizontal
+```
+
+`start_at` 从该顶点起切换方向，直到下一段或本层结束；它不是边的 `from`，也不能引用边 ID、子 DAG 内的顶点或递归虚拟位置。第一顶点不能设为转折点。并行位置没有确定的先后顺序，不能作为转折点。分叉、分支和汇合必须放在同一段：`A → B/C → M → N` 中 B、C、M 不能切段，N 可以。一个 `for` 执行位置展开的实例组及其聚合出口、一个嵌套 DAG 分组在父层都是整体。横向段的分支和逐项实例上下展开，纵向段左右展开。连续纵向段向右另开一列，列在整图高度内居中；混合方向也向右接续。
+
+以下纯横向示例可直接保存为 `workflow.yaml`：
+
+```yaml
+id: horizontal-flow
+type: dag
+layout: { direction: horizontal }
+dag:
+  - { id: plan, type: node, node_kind: bash, command: 'echo plan' }
+  - { id: build, type: node, node_kind: bash, command: 'echo build' }
+  - { type: edge, from: plan, to: build }
+```
+
+纯纵向示例：
+
+```yaml
+id: vertical-flow
+type: dag
+layout: { direction: vertical }
+dag:
+  - { id: plan, type: node, node_kind: bash, command: 'echo plan' }
+  - { id: build, type: node, node_kind: bash, command: 'echo build' }
+  - { type: edge, from: plan, to: build }
+```
+
+连续纵向列示例；`review` 开始第二列，`publish` 开始第三列：
+
+```yaml
+id: columns
+type: dag
+layout:
+  direction: vertical
+  segments:
+    - { start_at: review, direction: vertical }
+    - { start_at: publish, direction: vertical }
+dag:
+  - { id: plan, type: node, node_kind: bash, command: 'echo plan' }
+  - { id: build, type: node, node_kind: bash, command: 'echo build' }
+  - { id: review, type: node, node_kind: bash, command: 'echo review' }
+  - { id: test, type: node, node_kind: bash, command: 'echo test' }
+  - { id: publish, type: node, node_kind: bash, command: 'echo publish' }
+  - { type: edge, from: plan, to: build }
+  - { type: edge, from: build, to: review }
+  - { type: edge, from: review, to: test }
+  - { type: edge, from: test, to: publish }
+```
+
+混合方向示例，`build` 后转为纵向，再从 `publish` 恢复横向：
+
+```yaml
+id: mixed
+type: dag
+layout:
+  direction: horizontal
+  segments:
+    - { start_at: review, direction: vertical }
+    - { start_at: publish, direction: horizontal }
+dag:
+  - { id: plan, type: node, node_kind: bash, command: 'echo plan' }
+  - { id: build, type: node, node_kind: bash, command: 'echo build' }
+  - { id: review, type: node, node_kind: bash, command: 'echo review' }
+  - { id: test, type: node, node_kind: bash, command: 'echo test' }
+  - { id: publish, type: node, node_kind: bash, command: 'echo publish' }
+  - { type: edge, from: plan, to: build }
+  - { type: edge, from: build, to: review }
+  - { type: edge, from: review, to: test }
+  - { type: edge, from: test, to: publish }
+```
+
+嵌套示例中，外层把 `quality` 当一个顶点，内层自行纵向排布：
+
+```yaml
+id: nested-layout
+type: dag
+layout: { direction: horizontal }
+dag:
+  - id: quality
+    type: dag
+    layout: { direction: vertical }
+    dag:
+      - { id: lint, type: node, node_kind: bash, command: 'echo lint' }
+      - { id: test, type: node, node_kind: bash, command: 'echo test' }
+      - { type: edge, from: lint, to: test }
+  - { id: publish, type: node, node_kind: bash, command: 'echo publish' }
+  - { type: edge, from: quality, to: publish }
+```
+
+下例的 `review` 位于分叉与汇合之间，是无效转折；改为 `start_at: publish` 即可。排布警告不会使模板不可选，也不会阻止创建和执行。无效配置只使所在 DAG 层整体回退横向；创建对话框和已有实例画布可展开 WARN 查看 DAG 路径、起点、原因及建议。有效层显示 INFO；旧快照按其保存的定义诊断。
+
+```yaml
+id: unsafe-turn
+type: dag
+layout:
+  direction: horizontal
+  segments:
+    - { start_at: review, direction: vertical } # 无效：分支内部
+dag:
+  - { id: plan, type: node, node_kind: bash, command: 'echo plan' }
+  - { id: review, type: node, node_kind: bash, command: 'echo review' }
+  - { id: test, type: node, node_kind: bash, command: 'echo test' }
+  - { id: merge, type: node, node_kind: bash, command: 'echo merge' }
+  - { id: publish, type: node, node_kind: bash, command: 'echo publish' }
+  - { type: edge, from: plan, to: review }
+  - { type: edge, from: plan, to: test }
+  - { type: edge, from: review, to: merge }
+  - { type: edge, from: test, to: merge }
+  - { type: edge, from: merge, to: publish }
+```
 
 ## 4. 输入输出 Schema
 

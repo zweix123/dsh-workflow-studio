@@ -12,7 +12,7 @@ export const statusKeys = { ready: 'statusReady', completed: 'statusCompleted', 
 const WorkflowNode = memo(function WorkflowNode({ data: rawData }: NodeProps) {
   const data = rawData as GraphData
   return <div className="dsh-workflow-node" data-graph-node data-definition-id={data.label} data-status={data.displayStatus ?? data.status}>
-    <Handle type="target" position={Position.Left} />
+    <Handle id="left" type="target" position={Position.Left} /><Handle id="top" type="target" position={Position.Top} />
     <div className="dsh-workflow-node-top"><span className="dsh-workflow-node-kind">{data.kindLabel}</span><span className="dsh-workflow-node-status"><i aria-hidden="true" />{data.statusLabel}</span></div>
     <strong title={data.label}>{data.label}</strong>
     {data.forItem && <small title={data.forItem.key}>{data.forItem.key} #{data.forItem.index + 1}</small>}
@@ -20,30 +20,36 @@ const WorkflowNode = memo(function WorkflowNode({ data: rawData }: NodeProps) {
       {data.kind === 'node' && data.status === 'ready' && <button type="button" className="nodrag nopan" disabled={data.pending} aria-label={`${data.executeLabel} ${data.label}${data.forItem ? ` ${data.forItem.key}` : ''}`} onClick={event => { event.stopPropagation(); data.onExecute(data.id) }}>▶ {data.executeLabel}</button>}
       <button type="button" className="nodrag nopan" aria-label={`${data.detailsLabel} ${data.label}${data.forItem ? ` ${data.forItem.key}` : ''}`} onClick={event => { event.stopPropagation(); data.onInspect(data.id) }}>ⓘ {data.detailsLabel}</button>
     </div>
-    <Handle type="source" position={Position.Right} />
+    <Handle id="right" type="source" position={Position.Right} /><Handle id="bottom" type="source" position={Position.Bottom} />
   </div>
 })
 
 const DagGroupNode = memo(function DagGroupNode({ data: rawData }: NodeProps) {
   const data = rawData as GraphData
   return <div className="dsh-workflow-dag-group" data-graph-node data-definition-id={data.label} data-status={data.status}>
-    <Handle type="target" position={Position.Left} />
+    <Handle id="left" type="target" position={Position.Left} /><Handle id="top" type="target" position={Position.Top} />
     <div className="dsh-workflow-dag-heading">
       <strong title={data.label}>{data.label}</strong>
       <span className="dsh-workflow-node-status"><i aria-hidden="true" />{data.statusLabel}</span>
       <button type="button" className="nodrag nopan" aria-label={`${data.detailsLabel} ${data.label}`} onClick={event => { event.stopPropagation(); data.onInspect(data.id) }}>ⓘ {data.detailsLabel}</button>
     </div>
-    <Handle type="source" position={Position.Right} />
+    <Handle id="right" type="source" position={Position.Right} /><Handle id="bottom" type="source" position={Position.Bottom} />
   </div>
 })
 
 function AggregateNode({ data }: NodeProps) {
-  return <div className="dsh-workflow-aggregate" aria-label={String(data.label)}><Handle type="target" position={Position.Left} /><span>{String(data.label)}</span><Handle type="source" position={Position.Right} /></div>
+  return <div className="dsh-workflow-aggregate" aria-label={String(data.label)}><Handle id="left" type="target" position={Position.Left} /><Handle id="top" type="target" position={Position.Top} /><span>{String(data.label)}</span><Handle id="right" type="source" position={Position.Right} /><Handle id="bottom" type="source" position={Position.Bottom} /></div>
 }
 
 function ExpressionEdge(props: EdgeProps) {
-  const data = props.data as Expression & { open?: (id: string, expression: Expression) => void; conditionLabel?: string; eachLabel?: string }
-  const [path, x, y] = getSmoothStepPath(props)
+  const data = props.data as Expression & { open?: (id: string, expression: Expression) => void; conditionLabel?: string; eachLabel?: string; routeY?: number; routeX?: number; routeTopY?: number }
+  const [smoothPath, smoothX, smoothY] = getSmoothStepPath(props)
+  const path = data.routeY === undefined ? smoothPath
+    : data.routeX !== undefined && data.routeTopY !== undefined
+      ? `M ${props.sourceX},${props.sourceY} L ${props.sourceX},${data.routeY} L ${data.routeX},${data.routeY} L ${data.routeX},${data.routeTopY} L ${props.targetX},${data.routeTopY} L ${props.targetX},${props.targetY}`
+      : `M ${props.sourceX},${props.sourceY} L ${props.sourceX + 24},${props.sourceY} L ${props.sourceX + 24},${data.routeY} L ${props.targetX - 24},${data.routeY} L ${props.targetX - 24},${props.targetY} L ${props.targetX},${props.targetY}`
+  const x = data.routeY === undefined ? smoothX : data.routeX ?? (props.sourceX + props.targetX) / 2
+  const y = data.routeY === undefined ? smoothY : data.routeY
   const label = [data.condition && data.conditionLabel, data.each && data.eachLabel].filter(Boolean).join(' / ')
   return <><BaseEdge path={path} markerEnd={props.markerEnd} />{label && <EdgeLabelRenderer><button type="button" className="dsh-workflow-edge-label nodrag nopan" style={{ transform: `translate(-50%, -50%) translate(${x}px, ${y}px)` }}
     aria-label={`${label}: ${[data.condition, data.each].filter(Boolean).join('; ')}`} onFocus={() => data.open?.(props.id, data)} onClick={() => data.open?.(props.id, data)}>{label}</button></EdgeLabelRenderer>}</>
