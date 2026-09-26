@@ -4,7 +4,7 @@ import type { EntityDefinition, PositionSnapshot, RuntimeEdgeSnapshot } from '..
 import type { InstanceDetail } from '../../../../shared/types/workflow-instance.js'
 
 const NODE_WIDTH = 184
-const NODE_HEIGHT = 96
+const NODE_HEIGHT = 112
 const GAP = 20
 const GROUP_PADDING = 28
 const GROUP_HEADER = 40
@@ -26,11 +26,11 @@ export function definitionAt(root: InstanceDetail['definition'], path: readonly 
   return current
 }
 
-function edgeLabel(root: InstanceDetail['definition'], edge: RuntimeEdgeSnapshot): string | undefined {
+function edgeExpressions(root: InstanceDetail['definition'], edge: RuntimeEdgeSnapshot): { condition?: string; each?: string } | undefined {
   const definition = definitionAt(root, edge.definitionPath)
   if (definition?.type !== 'edge') return
-  const expressions = [definition.if && `if ${definition.if}`, definition.for && `for ${definition.for}`].filter(Boolean)
-  return expressions.length ? expressions.join(' · ') : undefined
+  if (!definition.if && !definition.for) return
+  return { ...(definition.if && { condition: definition.if }), ...(definition.for && { each: definition.for }) }
 }
 
 export function buildCanvasGraph(detail: InstanceDetail): { nodes: Node[]; edges: Edge[] } {
@@ -87,14 +87,16 @@ export function buildCanvasGraph(detail: InstanceDetail): { nodes: Node[]; edges
       positions.set(item.data.label, row)
     }
     const graph = new dagre.graphlib.Graph()
-    const longestLabel = Math.max(0, ...snapshot.edges.filter(edge => edge.parentInstanceId === frameId)
-      .map(edge => edgeLabel(detail.definition, edge)?.length ?? 0))
-    graph.setGraph({ rankdir: 'LR', ranksep: Math.max(88, Math.min(320, longestLabel * 7 + 32)), nodesep: 36, marginx: 0, marginy: 0 })
+    // Direction is fixed here: dependencies read left to right, repeated items stack vertically.
+    graph.setGraph({ rankdir: 'LR', ranksep: 88, nodesep: 36, marginx: 0, marginy: 0 })
     graph.setDefaultEdgeLabel(() => ({}))
     for (const [id, row] of positions) {
       row.sort((a, b) => (a.data.forItem?.index ?? 0) - (b.data.forItem?.index ?? 0) || a.id.localeCompare(b.id))
+      const needsOutlet = snapshot.edges.some(edge => edge.from.parentInstanceId === frameId && edge.from.definitionId === id)
+        && (row.length > 1 || row.some(item => item.data.forItem))
       graph.setNode(id, {
-        width: Math.max(...row.map(item => Number(item.style?.width) || NODE_WIDTH)),
+        // Reserve the aggregate outlet inside this rank, including nested group bounds.
+        width: Math.max(...row.map(item => Number(item.style?.width) || NODE_WIDTH)) + (needsOutlet ? 68 : 0),
         height: row.reduce((sum, item) => sum + (Number(item.style?.height) || NODE_HEIGHT), 0) + GAP * (row.length - 1),
       })
     }
@@ -116,7 +118,7 @@ export function buildCanvasGraph(detail: InstanceDetail): { nodes: Node[]; edges
       let top = position.y - position.height / 2
       for (const item of row) {
         item.position = { x: left, y: top }
-        width = Math.max(width, left + (Number(item.style?.width) || NODE_WIDTH))
+        width = Math.max(width, left + position.width)
         height = Math.max(height, top + (Number(item.style?.height) || NODE_HEIGHT))
         top += (Number(item.style?.height) || NODE_HEIGHT) + GAP
       }
@@ -164,7 +166,7 @@ export function buildCanvasGraph(detail: InstanceDetail): { nodes: Node[]; edges
   const edges: Edge[] = snapshot.edges.flatMap((edge, edgeIndex) => {
     const sources = byPosition.get(positionKey(edge.from.parentInstanceId, edge.from.definitionId)) ?? []
     const targets = byPosition.get(positionKey(edge.to.parentInstanceId, edge.to.definitionId)) ?? []
-    const label = edgeLabel(detail.definition, edge)
+    const expressions = edgeExpressions(detail.definition, edge)
     const connections = (snapshot.instanceConnections ?? []).filter(connection =>
       JSON.stringify(connection.edgeDefinitionPath) === JSON.stringify(edge.definitionPath)
       && connection.from.parentInstanceId === edge.parentInstanceId)
@@ -186,10 +188,9 @@ export function buildCanvasGraph(detail: InstanceDetail): { nodes: Node[]; edges
     return pairs.map(([source, target], pairIndex): Edge => ({
       id: `${edgeIndex}:${pairIndex}`,
       source, target,
-      ...(label && { label }),
-      data: { status: edge.status },
+      data: { status: edge.status, ...expressions },
       className: `dsh-workflow-edge-${edge.status}`,
-      type: 'smoothstep',
+      type: 'expression',
       markerEnd: { type: MarkerType.ArrowClosed, color: edge.status === 'active'
         ? 'var(--dsw-alias-state-business-primary)'
         : edge.status === 'inactive' ? 'var(--dsw-alias-label-tertiary)' : 'var(--dsw-alias-label-secondary)' },

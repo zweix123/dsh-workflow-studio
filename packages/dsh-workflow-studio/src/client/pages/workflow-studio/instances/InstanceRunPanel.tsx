@@ -11,7 +11,7 @@ function visibleWidth(preference: number, available: number): number {
   return Math.min(Math.max(300, preference), Math.max(300, Math.floor(available * 0.7)))
 }
 
-export function InstanceRunPanel({ detail, t, onUpdate, onWidthUpdate, onOpenSession }: { detail: InstanceDetail; t: WorkflowTranslate; onUpdate: (detail: InstanceDetail) => void; onWidthUpdate: (width: number) => void; onOpenSession: (sessionId: string) => void }) {
+export function InstanceRunPanel({ detail, t, onUpdate, onWidthUpdate, onOpenSession, active = true }: { detail: InstanceDetail; t: WorkflowTranslate; onUpdate: (detail: InstanceDetail) => void; onWidthUpdate: (width: number) => void; onOpenSession: (sessionId: string) => void; active?: boolean }) {
   const [selected, setSelected] = useState<string | null>(null)
   const [pending, setPending] = useState<string[]>([])
   const [error, setError] = useState<string>()
@@ -137,7 +137,7 @@ export function InstanceRunPanel({ detail, t, onUpdate, onWidthUpdate, onOpenSes
     {detail.incompatible && <p className="dsh-workflow-run-error" role="alert">{t('instanceIncompatible')} {detail.incompatible}</p>}
     <p className="dsh-workflow-run-note">{t('placeholderNotice')}</p>
     <div ref={runArea} className="dsh-workflow-run">
-      <DagCanvas detail={detail} t={t} onExecute={id => void run(id)} onInspect={setSelected} pending={pending} />
+      <DagCanvas detail={detail} t={t} onExecute={id => void run(id)} onInspect={setSelected} pending={pending} active={active} inspectorWidth={inspection ? visibleWidth(dragWidth ?? detail.drawerWidth ?? 320, areaWidth) : 0} />
       {inspection && <aside className="dsh-workflow-inspector" aria-label={`${t('nodeDetails')} ${inspection.definitionId}`} style={{ width: `${visibleWidth(dragWidth ?? detail.drawerWidth ?? 320, areaWidth)}px` }}>
         <div className="dsh-workflow-inspector-resize" role="separator" tabIndex={0} aria-label={t('resizeNodeDetails')} aria-orientation="vertical" aria-valuemin={areaWidth ? Math.min(300, areaWidth) : undefined} aria-valuemax={areaWidth ? Math.max(Math.min(300, areaWidth), Math.floor(areaWidth * 0.7)) : undefined} aria-valuenow={visibleWidth(dragWidth ?? detail.drawerWidth ?? 320, areaWidth)} onPointerDown={startResize} onKeyDown={resizeByKeyboard} />
         <header><div><h3>{inspection.definitionId}</h3><p>{execution?.status === 'running' ? t('statusRunning') : t(statusKey)}</p></div><button type="button" aria-label={t('closeNodeDetails')} onClick={() => setSelected(null)}>×</button></header>

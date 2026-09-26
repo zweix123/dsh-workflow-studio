@@ -320,7 +320,7 @@ test('instance cards and creation dialog preserve drafts, then open details only
     assert.equal(recursive.length, 2)
     assert.ok(container.querySelector('.react-flow__controls-zoomin'))
     assert.ok(container.querySelector('.react-flow__controls-zoomout'))
-    assert.ok(container.querySelector('.react-flow__controls-fitview'))
+    assert.match(container.querySelector('.dsh-workflow-view-tools')!.textContent!, /查看全图.*缩放重置.*聚焦当前/)
     const canvas = container.querySelector('.react-flow')
     await act(async () => detailTabs[0]!.click())
     assert.equal(overview.scrollTop, 73)

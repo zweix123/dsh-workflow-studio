@@ -15,13 +15,14 @@ test('browser artifact uses dsh factory and host React, registers panel and side
       assert.equal(id, 'dsh-workflow-studio')
       plugin = factory(name => {
         modules.push(name)
-        assert.ok(['react', 'react/jsx-runtime'].includes(name), `unexpected browser import: ${name}`)
+        assert.ok(['react', 'react/jsx-runtime', 'react-dom', 'react-dom/client'].includes(name), `unexpected browser import: ${name}`)
         return require(name)
       })
     } } },
   })
   assert.equal(plugin!.name, 'dsh-workflow-studio')
   assert.ok(modules.includes('react'))
+  assert.ok(modules.includes('react-dom'))
   assert.deepEqual(Array.from(plugin!.inject), ['slots', 'locale', 'uiWorkspace'])
   const entries: Record<string, unknown>[] = []
   let dictionaries: Record<string, Record<string, string>> = {}

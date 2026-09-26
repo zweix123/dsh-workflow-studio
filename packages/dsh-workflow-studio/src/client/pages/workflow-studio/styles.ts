@@ -390,7 +390,7 @@ ${reactFlowCss}
 .dsh-workflow-inspector-body button { padding: 6px 10px; margin: 0 8px 8px 0; border: 1px solid var(--dsw-alias-border-l2); font-size: 12px; }
 .dsh-workflow-inspector-body button:disabled { opacity: .5; cursor: default; }
 .dsh-workflow-inspector-body pre { overflow-wrap: anywhere; white-space: pre-wrap; font: inherit; }
-.dsh-workflow-graph { flex: 1; min-height: 0; min-width: 0; background: var(--dsw-alias-bg-module-platform); }
+.dsh-workflow-graph { position: relative; flex: 1; min-height: 0; min-width: 0; background: var(--dsw-alias-bg-module-platform); }
 .dsh-workflow-graph .react-flow { width: 100%; height: 100%; }
 .dsh-workflow-graph .react-flow__node { cursor: default; }
 .dsh-workflow-graph .react-flow__handle { width: 1px; height: 1px; border: 0; opacity: 0; pointer-events: none; }
@@ -404,6 +404,24 @@ ${reactFlowCss}
 .dsh-workflow-graph .react-flow__controls-button { background: var(--dsw-alias-bg-layer-1); border-bottom-color: var(--dsw-alias-border-l2); color: var(--dsw-alias-label-primary); fill: currentColor; }
 .dsh-workflow-graph .react-flow__controls-button:hover { background: var(--dsw-alias-interactive-bg-hover); }
 .dsh-workflow-graph .react-flow__controls-button svg { fill: currentColor; }
+.dsh-workflow-canvas-overlay { position: absolute; inset: 0; z-index: 4; pointer-events: none; }
+.dsh-workflow-view-tools { position: absolute; top: 12px; left: 12px; display: flex; flex-wrap: wrap; gap: 4px; max-width: calc(100% - 24px); pointer-events: auto; }
+.dsh-workflow-view-tools > button, .dsh-workflow-locate-list button, .dsh-workflow-expression button, .dsh-workflow-edge-label { border: .5px solid var(--dsw-alias-border-l2); border-radius: 6px; background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; cursor: pointer; }
+.dsh-workflow-view-tools > button { min-height: 30px; padding: 4px 9px; }
+.dsh-workflow-view-tools button:hover, .dsh-workflow-expression button:hover, .dsh-workflow-edge-label:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.dsh-workflow-locate-list { position: absolute; top: 38px; left: 0; width: min(330px, calc(100vw - 40px)); max-height: min(330px, 55vh); overflow: auto; padding: 6px; border: .5px solid var(--dsw-alias-border-l2); border-radius: 8px; background: var(--dsw-alias-bg-layer-1); box-shadow: var(--dsw-elevation-prominent); }
+.dsh-workflow-locate-head { display: flex; align-items: center; justify-content: space-between; padding: 4px 6px 7px; font-size: 12px; }
+.dsh-workflow-locate-head button { border: 0; font-size: 18px; }
+.dsh-workflow-locate-list > button { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; width: 100%; padding: 7px; border: 0; text-align: left; white-space: normal; }
+.dsh-workflow-locate-list > button small { color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
+.dsh-workflow-locate-list p, .dsh-workflow-view-feedback { margin: 7px; color: var(--dsw-alias-label-secondary); font-size: 12px; }
+.dsh-workflow-edge-label { position: absolute; z-index: 2; pointer-events: all; padding: 2px 5px; white-space: nowrap; }
+.dsh-workflow-expression { position: absolute; z-index: 6; left: 12px; bottom: 12px; box-sizing: border-box; width: min(360px, calc(100% - 24px)); max-height: min(280px, 50%); overflow: auto; padding: 12px; border: .5px solid var(--dsw-alias-border-l2); border-radius: 8px; background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); box-shadow: var(--dsw-elevation-prominent); }
+.dsh-workflow-expression header { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 8px; }
+.dsh-workflow-expression button { padding: 1px 7px; font-size: 18px; }
+.dsh-workflow-expression span { color: var(--dsw-alias-label-secondary); font-size: 11px; }
+.dsh-workflow-expression pre { margin: 4px 0 12px; font: inherit; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+.dsh-workflow-graph .dsh-workflow-empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--dsw-alias-label-secondary); font-size: 13px; }
 .dsh-workflow-graph .react-flow__node-dagGroup { border: 0.5px solid var(--dsw-alias-border-l2); border-radius: 10px; background: var(--dsw-alias-bg-layer-2); }
 .dsh-workflow-graph .react-flow__node-aggregate { border: 0; background: transparent; }
 .dsh-workflow-aggregate { display: grid; place-items: center; width: 60px; height: 22px; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: 11px; background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-secondary); font-size: 10px; white-space: nowrap; }
@@ -413,14 +431,14 @@ ${reactFlowCss}
 .dsh-workflow-dag-heading .dsh-workflow-node-status { margin-left: auto; white-space: nowrap; }
 .dsh-workflow-dag-heading button { border: 0; border-radius: 4px; padding: 3px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
 .dsh-workflow-dag-heading button:hover { background: var(--dsw-alias-interactive-bg-hover); }
-.dsh-workflow-dag-heading strong { color: var(--dsw-alias-label-primary); font-weight: 600; }
+.dsh-workflow-dag-heading strong { min-width: 0; overflow: hidden; color: var(--dsw-alias-label-primary); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .dsh-workflow-node {
   box-sizing: border-box;
   display: grid;
   width: 100%;
   height: 100%;
   grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-rows: 16px 1fr auto;
+  grid-template-rows: 16px minmax(0, 1fr) auto auto;
   gap: 4px 8px;
   padding: 10px 12px;
   border: 0.5px solid var(--dsw-alias-border-l2);
@@ -428,7 +446,9 @@ ${reactFlowCss}
   background: var(--dsw-alias-bg-layer-1);
   color: var(--dsw-alias-label-primary);
 }
-.dsh-workflow-node strong { grid-column: 1 / -1; overflow: hidden; font-size: 13px; line-height: 18px; text-overflow: ellipsis; white-space: nowrap; }
+.dsh-workflow-node-top { display: flex; grid-column: 1 / -1; justify-content: space-between; gap: 6px; min-width: 0; }
+.dsh-workflow-node strong { grid-column: 1 / -1; overflow: hidden; font-size: 13px; line-height: 17px; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.dsh-workflow-node small { grid-column: 1 / -1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dsh-workflow-node { cursor: default; }
 .dsh-workflow-node-actions { display: flex; grid-column: 1 / -1; align-items: center; justify-content: space-between; gap: 4px; }
 .dsh-workflow-node-actions button { border: 0; border-radius: 5px; padding: 2px 4px; background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; font-size: 11px; white-space: nowrap; cursor: pointer; }
@@ -446,6 +466,9 @@ ${reactFlowCss}
 .dsh-workflow-dag-group[data-status='running'] .dsh-workflow-node-status i { background: var(--dsw-alias-state-business-primary); }
 .dsh-workflow-node[data-status='completed'] .dsh-workflow-node-status i,
 .dsh-workflow-dag-group[data-status='completed'] .dsh-workflow-node-status i { background: var(--dsw-alias-state-success-primary); }
+.dsh-workflow-node[data-status='error'] .dsh-workflow-node-status { color: var(--dsw-alias-label-error); }
+.dsh-workflow-node[data-status='error'] .dsh-workflow-node-status i { background: var(--dsw-alias-label-error); }
+.dsh-workflow-node[data-status='unknown'] .dsh-workflow-node-status i { background: var(--dsw-alias-label-secondary); }
 .dsh-workflow-node[data-status='waiting'] { border-style: dashed; }
 .dsh-workflow-node[data-status='skipped'] { opacity: .55; }
 .dsh-workflow-add:focus-visible,
@@ -461,6 +484,7 @@ ${reactFlowCss}
 .dsh-workflow-dag-heading button:focus-visible,
 .dsh-workflow-inspector-resize:focus-visible,
 .dsh-workflow-inspector button:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 1px; }
+.dsh-workflow-view-tools button:focus-visible, .dsh-workflow-edge-label:focus-visible, .dsh-workflow-expression button:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 1px; }
 @container (max-width: 760px) {
   .dsh-workflow-card-grid { grid-template-columns: 1fr; }
 }
