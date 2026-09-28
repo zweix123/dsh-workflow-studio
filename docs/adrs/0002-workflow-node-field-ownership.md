@@ -4,6 +4,8 @@ status: accepted
 
 # 工作流节点的字段归属与校验边界
 
+本文的全局字段排他与跨节点类型字段误用检查决定，已由 [ADR 0004](./0004-node-config-scoped-by-kind.md) 替代；节点模块组织与契约归属以 [ADR 0003](./0003-node-packages-and-contract.md) 为准，生命周期和控制权分工以 [ADR 0005](./0005-node-owned-business-state.md) 为准。下文保留原始决策背景；新决定尚未实施到代码。新阶段范围见[节点模块契约与表单节点规格](../specs/node-modules.zh.md)。
+
 chat 和 bash 是工作流内置节点族，不提供脱离工作流的独立执行能力。节点定义共享基础字段，各节点族声明自己的专属字段；这里的继承表达字段归属，不要求执行过程沿类继承链调用。
 
 DAG 编排字段保持原有含义：`type` 区分 `node`、`dag` 和 `edge`，`id` 标识定义。工作流节点以显式必填的 `node_kind` 区分 `chat` 和 `bash`，未来可以增加节点族；`is_auto_start` 是控制自动启动的公共字段。`prompt` 归 chat，`command` 归 bash。DAG 引擎继续解释编排字段，工作流模块负责选择内置节点能力并管理执行状态。
