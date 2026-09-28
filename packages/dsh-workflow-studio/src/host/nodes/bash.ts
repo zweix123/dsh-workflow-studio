@@ -36,7 +36,7 @@ export async function runBashNode({ command, workspaceId, workspaceRegistry, she
   if (!shell.sandboxMode || policy.mode === 'danger-full-access') throw new Error('Sandbox execution is unavailable')
   const spec = shell.resolve({ command, workdir: workspace.path, sandboxPolicy: policy })
   if (!spec.sandboxPolicy || spec.sandboxPolicy.mode === 'danger-full-access') throw new Error('Sandbox execution is unavailable')
-  const outcome = await shell.run(spec)
+  const outcome = await (await shell.execute(spec)).result()
   const result = { stdout: outcome.stdout.text, stderr: outcome.stderr.text, exitCode: outcome.exitCode }
   if (outcome.exitCode !== 0 || outcome.signal || outcome.timedOut || outcome.aborted || outcome.sandbox?.denied || outcome.sandbox?.runnerFailed || !outcome.sandbox || outcome.sandbox.mode === 'danger-full-access') {
     const reason = outcome.sandbox?.denied ? 'Sandbox denied the command' : outcome.sandbox?.runnerFailed ? 'Sandbox runner failed'

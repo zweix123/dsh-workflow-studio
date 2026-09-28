@@ -63,8 +63,8 @@
 
 - DAG 格式、输入校验和初始展开行为遵循 [DAG 语法文档](../dag-syntax.zh.md)，参考项目的旧模板语法不自动成为本项目标准。
 - 参考 `references/dsh-workflow-ui` 的工作区与实例关系，以及该项目和 `references/yak-lang/playground` 的 DAG 可视化实现；界面可以独立设计。
-- 保持与宿主 `@deepseek-ai/dsh@0.1.6-alpha.2` 对齐，并兼顾浅色/深色主题、中英文和窄屏。
-- 参考项目通过宿主官方 `@deepseek-ai/dsh-storage-domain` 保存实例，使用 `defineDomain`、`ctx.storageDomain.open` 和领域存储的读写接口。本机安装的 `0.1.6-alpha.2` 已核实提供该能力；本次实现已按该能力接入。
+- 保持与宿主 `@deepseek-ai/dsh@0.2.0-rc.1` 对齐，并兼顾浅色/深色主题、中英文和窄屏。
+- 参考项目通过宿主官方 `@deepseek-ai/dsh-storage-domain` 保存实例，使用 `defineDomain`、`ctx.storageDomain.open` 和领域存储的读写接口。本机安装的 `0.2.0-rc.1` 已核实提供该能力；本次实现已按该能力接入。
 - 当前宿主默认存储根为 `${DSH_HOME}/storages`，未设置 `DSH_HOME` 时为 `~/.dsh/storages`，可由宿主配置覆盖；不自动按 profile 隔离。参考项目文档中的“当前 profile”不能作为本项目的默认存储承诺。
 
 ## 模板发现与创建规则

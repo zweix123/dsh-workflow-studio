@@ -132,11 +132,11 @@ test('bash executes through the host sandbox and only a successful outcome advan
   const f = await fixture({ shell: {
     get sandboxMode() { return sandboxMode },
     resolve: (request: { command: string; workdir: string; sandboxPolicy: { workspaceRoot: string } }) => request,
-    run: async (request: { command: string; workdir: string; sandboxPolicy: { workspaceRoot: string } }) => {
+    execute: async (request: { command: string; workdir: string; sandboxPolicy: { workspaceRoot: string } }) => {
       calls.push(request)
-      return { exitCode, signal: null, timedOut: false, aborted: false,
+      return { result: async () => ({ exitCode, signal: null, timedOut: false, aborted: false,
         stdout: { text: 'real output', truncated: false }, stderr: { text: 'failed', truncated: false },
-        sandbox: { mode: 'workspace-write', denied: false } }
+        sandbox: { mode: 'workspace-write', denied: false } }) }
     },
   } })
   await putTemplate(f.templateRoot, 'command', `id: root\ntype: dag\ndag:\n  - id: build\n    type: node\n    node_kind: bash\n    command: 'printf hello'\n    output_schema:\n      result: string\n`)
@@ -170,10 +170,10 @@ test('independent automatic bash nodes run together, reject duplicate starts and
   const f = await fixture({ shell: {
     sandboxMode: 'workspace-write',
     resolve: (request: unknown) => request,
-    run: (request: { command: string }) => new Promise(resolve => {
+    execute: async (request: { command: string }) => ({ result: () => new Promise(resolve => {
       calls.push({ command: request.command, finish: code => resolve({ exitCode: code, signal: null, timedOut: false, aborted: false,
         stdout: { text: request.command, truncated: false }, stderr: { text: '', truncated: false }, sandbox: { mode: 'workspace-write', denied: false } }) })
-    }),
+    }) }),
   } })
   await putTemplate(f.templateRoot, 'parallel', `id: root\ntype: dag\ndag:\n  - id: left\n    type: node\n    node_kind: bash\n    command: left\n    is_auto_start: true\n  - id: right\n    type: node\n    node_kind: bash\n    command: right\n    is_auto_start: true\n`)
   const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Parallel', templateId: 'parallel' })).json() as any
@@ -311,11 +311,11 @@ test('restart preserves a successful command awaiting DAG submission and exposes
   const services = { shell: {
     sandboxMode: 'workspace-write',
     resolve: (request: unknown) => request,
-    run: (request: { command: string }) => new Promise(resolve => {
+    execute: async (request: { command: string }) => ({ result: () => new Promise(resolve => {
       calls.push(request.command)
       pending.push(code => resolve({ exitCode: code, signal: null, timedOut: false, aborted: false,
         stdout: { text: 'real', truncated: false }, stderr: { text: '', truncated: false }, sandbox: { mode: 'workspace-write', denied: false } }))
-    }),
+    }) }),
   } }
   const f = await fixture(services)
   await putTemplate(f.templateRoot, 'reject-real', `id: root\ntype: dag\noutput_schema:\n  result: string\ndag:\n  - id: run\n    type: node\n    node_kind: bash\n    command: success\n    output_schema:\n      enabled: boolean\n  - id: end\n    type: node\n    node_kind: bash\n    command: ''\n    output_schema:\n      result: string\n  - type: edge\n    from: run\n    to: end\n    if: $.enabled\n`)

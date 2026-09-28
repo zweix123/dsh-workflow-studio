@@ -1,7 +1,7 @@
 declare const __REACT_FLOW_CSS__: string
 const reactFlowCss = typeof __REACT_FLOW_CSS__ === 'undefined' ? '' : __REACT_FLOW_CSS__
 
-// Match the conversation header in dsh 0.1.6-alpha.2 without importing its
+// Match the host conversation header without importing its
 // session runtime or private CSS classes. Page styles ship with the browser factory.
 export const styles = `
 ${reactFlowCss}

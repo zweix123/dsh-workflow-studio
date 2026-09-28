@@ -67,5 +67,5 @@ test('browser artifact uses dsh factory and host React, registers panel and side
   assert.ok(disposed)
   const manifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
   assert.ok(manifest.dsh.client.inject.includes('@deepseek-ai/dsh-client-locale'))
-  assert.equal(manifest.devDependencies['@deepseek-ai/dsh-client-locale'], '0.1.6-alpha.2')
+  assert.equal(manifest.devDependencies['@deepseek-ai/dsh-client-locale'], '0.2.0-rc.1')
 })
