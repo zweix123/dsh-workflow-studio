@@ -7,17 +7,21 @@
     "node": "^22.19.0 || >=24.0.0"
   },
   "main": "lib/index.js",
-  "types": "lib/types/index.d.ts",
+  "types": "lib/types/packages/dsh-workflow-studio/src/index.d.ts",
   "exports": {
     ".": {
-      "types": "./lib/types/index.d.ts",
+      "types": "./lib/types/packages/dsh-workflow-studio/src/index.d.ts",
       "default": "./lib/index.js"
     },
     "./client": {
-      "types": "./lib/types/client/index.d.ts",
+      "types": "./lib/types/packages/dsh-workflow-studio/src/client/index.d.ts",
       "default": "./lib/client.js"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./contract/node": {
+      "types": "./lib/types/packages/dsh-workflow-studio/src/contract/node/index.d.ts",
+      "default": "./lib/contract/node/index.js"
+    }
   },
   "dsh": {
     "bundle": {

@@ -15,16 +15,15 @@ test('workflow node fields are validated at the template boundary without droppi
     assert.equal('definition' in valid && (valid.definition.dag[0] as any).custom_note, 'keep')
     await writeFile(join(root, 'workflow.yaml'), validYaml.replace('node_kind: bash\n    command: ""', 'node_kind: chat\n    prompt: ""'))
     assert.equal('definition' in await validateTemplateDirectory(root), true)
+    await writeFile(join(root, 'workflow.yaml'), validYaml.replace('command: ""', 'command: ""\n    prompt: nope'))
+    assert.equal('definition' in await validateTemplateDirectory(root), true)
     for (const [fragment, expected] of [
-      ['command: ""', /node_kind/],
       ['node_kind: unknown\n    command: ""', /node_kind/],
       ['node_kind: bash', /command/],
       ['node_kind: bash\n    command: null', /command/],
-      ['node_kind: bash\n    command: ""\n    prompt: nope', /prompt/],
       ['node_kind: bash\n    command: ""\n    is_auto_start: yes', /is_auto_start/],
       ['node_kind: chat', /prompt/],
       ['node_kind: chat\n    prompt: 42', /prompt/],
-      ['node_kind: chat\n    prompt: ""\n    command: bad', /command/],
     ] as const) {
       const yaml = validYaml.replace('node_kind: bash\n    command: ""', fragment)
       await writeFile(join(root, 'workflow.yaml'), yaml)

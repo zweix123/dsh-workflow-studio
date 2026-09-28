@@ -475,6 +475,13 @@ ${reactFlowCss}
 .dsh-workflow-node-status,
 .dsh-workflow-node small { color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 14px; }
 .dsh-workflow-node-status { display: inline-flex; align-items: center; gap: 5px; }
+.dsh-workflow-form { display: grid; gap: 14px; }
+.dsh-workflow-form-field { display: grid; gap: 5px; min-width: 0; }
+.dsh-workflow-form-field label { font-weight: 600; }
+.dsh-workflow-form-field small { color: var(--dsw-alias-label-secondary); }
+.dsh-workflow-form-field input:not([type='checkbox']), .dsh-workflow-form-field select, .dsh-workflow-form-field textarea { width: 100%; box-sizing: border-box; min-width: 0; padding: 7px 9px; color: inherit; background: var(--dsw-alias-bg-layer-2); border: 1px solid var(--dsw-alias-border-l2); border-radius: 6px; font: inherit; }
+.dsh-workflow-form-field textarea { min-height: 88px; resize: vertical; }
+.dsh-workflow-form-field input:focus-visible, .dsh-workflow-form-field select:focus-visible, .dsh-workflow-form-field textarea:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 1px; }
 .dsh-workflow-node-status { text-transform: capitalize; }
 .dsh-workflow-node-status i { width: 6px; height: 6px; border-radius: 50%; background: var(--dsw-alias-state-idle-primary); }
 .dsh-workflow-node[data-status='ready'] .dsh-workflow-node-status i,

@@ -1,0 +1,12 @@
+{
+  "name": "@dsh-workflow/node-bash",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": { "./server": "./src/server.ts", "./client": "./src/client.tsx" },
+  "devDependencies": {
+    "@deepseek-ai/dsh-shell": "0.2.0-rc.1",
+    "@deepseek-ai/dsh-sandbox-policy": "0.2.0-rc.1",
+    "@deepseek-ai/dsh-workspace": "0.2.0-rc.1"
+  }
+}

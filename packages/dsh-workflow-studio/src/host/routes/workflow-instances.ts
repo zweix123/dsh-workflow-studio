@@ -49,15 +49,10 @@ export function createWorkflowInstancesRoute(service: WorkflowInstanceService): 
             if (request.method !== 'POST') return json(response, 405, { error: { code: 'method-not-allowed', message: 'Method not allowed' } })
             return json(response, 200, await service.setDrawerWidth(decodeURIComponent(drawer[1]!), await body(request)))
           }
-          const execution = path.match(new RegExp(`^${INSTANCES_PATH}/([^/]+)/nodes/([^/]+)/execute$`))
-          if (execution) {
+          const action = path.match(new RegExp(`^${INSTANCES_PATH}/([^/]+)/nodes/([^/]+)/actions/([^/]+)$`))
+          if (action) {
             if (request.method !== 'POST') return json(response, 405, { error: { code: 'method-not-allowed', message: 'Method not allowed' } })
-            return json(response, 200, await service.executeNode(decodeURIComponent(execution[1]!), decodeURIComponent(execution[2]!), await body(request)))
-          }
-          const completion = path.match(new RegExp(`^${INSTANCES_PATH}/([^/]+)/nodes/([^/]+)/complete$`))
-          if (completion) {
-            if (request.method !== 'POST') return json(response, 405, { error: { code: 'method-not-allowed', message: 'Method not allowed' } })
-            return json(response, 200, await service.completeNode(decodeURIComponent(completion[1]!), decodeURIComponent(completion[2]!), await body(request)))
+            return json(response, 200, await service.actionNode(decodeURIComponent(action[1]!), decodeURIComponent(action[2]!), decodeURIComponent(action[3]!), await body(request)))
           }
           const id = decodeURIComponent(path.slice(INSTANCES_PATH.length + 1))
           if (request.method === 'GET') return json(response, 200, service.getInstance(id))

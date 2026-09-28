@@ -31,8 +31,9 @@ export interface InstanceDetail extends InstanceSummary {
 }
 
 export interface NodeExecution {
-  kind: 'chat' | 'bash'
-  status: 'running' | 'chat' | 'succeeded' | 'failed' | 'unknown'
+  kind: string
+  status: 'running' | 'waiting' | 'succeeded' | 'failed' | 'unknown' | 'cancelled'
+  output?: JsonObject
   sessionId?: string
   requestId?: string
   sessionCreated?: boolean
@@ -64,6 +65,7 @@ export type InstanceErrorCode =
   | 'instance-running'
   | 'node-running'
   | 'node-kind-invalid'
+  | 'node-input-invalid'
 
 export interface ErrorResponse {
   error: { code: InstanceErrorCode; message: string }

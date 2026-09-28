@@ -33,7 +33,7 @@ function detail(value: unknown): value is InstanceDetail {
   const snapshot = row.snapshot
   if (row.incompatible !== undefined && typeof row.incompatible !== 'string') return false
   if (row.executions !== undefined && (!object(row.executions) || Object.values(row.executions).some(item => !object(item)
-    || !['chat', 'bash'].includes(String(item.kind)) || !['running', 'chat', 'succeeded', 'failed', 'unknown'].includes(String(item.status))))) return false
+    || typeof item.kind !== 'string' || !['running', 'waiting', 'succeeded', 'failed', 'unknown', 'cancelled'].includes(String(item.status))))) return false
   return typeof snapshot.rootInstanceId === 'string'
     && ['instances', 'waitingPositions', 'skippedPositions', 'edges'].every(key => Array.isArray(snapshot[key]))
 }
@@ -95,17 +95,9 @@ export async function getInstance(id: string): Promise<InstanceDetail> {
   return value
 }
 
-export async function executeNode(id: string, nodeInstanceId: string): Promise<InstanceDetail> {
-  const value = await request(`${INSTANCES_PATH}/${encodeURIComponent(id)}/nodes/${encodeURIComponent(nodeInstanceId)}/execute`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
-  })
-  if (!detail(value)) throw new Error('Unexpected workflow instance')
-  return value
-}
-
-export async function completeNode(id: string, nodeInstanceId: string): Promise<InstanceDetail> {
-  const value = await request(`${INSTANCES_PATH}/${encodeURIComponent(id)}/nodes/${encodeURIComponent(nodeInstanceId)}/complete`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+export async function nodeAction(id: string, nodeInstanceId: string, action: string, payload: unknown): Promise<InstanceDetail> {
+  const value = await request(`${INSTANCES_PATH}/${encodeURIComponent(id)}/nodes/${encodeURIComponent(nodeInstanceId)}/actions/${encodeURIComponent(action)}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
   })
   if (!detail(value)) throw new Error('Unexpected workflow instance')
   return value

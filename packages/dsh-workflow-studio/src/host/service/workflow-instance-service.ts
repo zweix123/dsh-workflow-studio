@@ -11,6 +11,8 @@ import { WorkflowInstanceStore, workflowInstanceDomain } from '../storage/workfl
 import { validateTemplateDirectory } from '../template-directory.js'
 import type { CreateInstanceInput, InstanceDetail, InstanceSummary, TemplateCatalog, TemplateRow } from '../../shared/types/workflow-instance.js'
 import { inspectLayout } from '../../shared/layout.js'
+import { serverNodes } from '../nodes/registry.js'
+import type { ServerNode } from '../../contract/node/index.js'
 
 export { WorkflowInstanceError, workflowInstanceDomain }
 
@@ -23,16 +25,18 @@ export class WorkflowInstanceService {
     private readonly workspaceRegistry: Context['workspaceRegistry'],
     private readonly engine: WorkflowEngine,
     private readonly templateDirectory: string,
+    private readonly nodes: ReadonlyMap<string, ServerNode>,
   ) {}
 
-  static async create(ctx: Context, templateRoot: string, templateDirectory = join(templateRoot, '<template-id>', 'workflow.yaml')): Promise<WorkflowInstanceService> {
+  static async create(ctx: Context, templateRoot: string, templateDirectory = join(templateRoot, '<template-id>', 'workflow.yaml'), nodes: ReadonlyMap<string, ServerNode> = serverNodes): Promise<WorkflowInstanceService> {
     const store = new WorkflowInstanceStore(await ctx.storageDomain.open(workflowInstanceDomain))
-    const engine = new WorkflowEngine(store, ctx.workspaceRegistry, ctx.shell, ctx.sandboxPolicy, ctx.sessionController)
-    const service = new WorkflowInstanceService(store, templateRoot, ctx.workspaceRegistry, engine, templateDirectory)
+    const engine = new WorkflowEngine(store, ctx, nodes)
+    const service = new WorkflowInstanceService(store, templateRoot, ctx.workspaceRegistry, engine, templateDirectory, nodes)
     for (const [, row] of store.entries()) {
       try {
-        validateWorkflowNodes(row.definition as DagDefinition)
-        engine.scheduleAuto(row.id)
+        validateWorkflowNodes(row.definition as DagDefinition, nodes)
+        await engine.recoverInstance(row.id)
+        engine.scheduleReady(row.id)
       } catch { /* Old instance definitions stay readable but cannot run. */ }
     }
     return service
@@ -70,14 +74,14 @@ export class WorkflowInstanceService {
     const input = this.parseRequest(value)
     return this.store.serial(async () => {
       const detail = await this.create(input)
-      this.engine.scheduleAuto(detail.id)
+      this.engine.scheduleReady(detail.id)
       return detail
     })
   }
 
   deleteInstance(id: string): Promise<void> {
     return this.store.serial(async () => {
-      if (this.engine.isBashRunning(id)) {
+      if (this.engine.isDeletionBlocked(id)) {
         throw new WorkflowInstanceError('instance-running', 'A bash command is still running')
       }
       if (!await this.store.delete(id)) {
@@ -86,18 +90,8 @@ export class WorkflowInstanceService {
     })
   }
 
-  executeNode(id: string, nodeInstanceId: string, value: unknown): Promise<InstanceDetail> {
-    if (value === null || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).length) {
-      throw new WorkflowInstanceError('invalid-request', 'Execution request must be an empty object')
-    }
-    return this.engine.executeNode(id, nodeInstanceId)
-  }
-
-  completeNode(id: string, nodeInstanceId: string, value: unknown): Promise<InstanceDetail> {
-    if (value === null || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).length) {
-      throw new WorkflowInstanceError('invalid-request', 'Completion request must be an empty object')
-    }
-    return this.engine.completeNode(id, nodeInstanceId)
+  actionNode(id: string, nodeInstanceId: string, action: string, value: unknown): Promise<InstanceDetail> {
+    return this.engine.actionNode(id, nodeInstanceId, action, value)
   }
 
   setDrawerWidth(id: string, value: unknown): Promise<InstanceDetail> {
@@ -118,7 +112,7 @@ export class WorkflowInstanceService {
   }
 
   private async readTemplate(id: string): Promise<ScannedTemplate> {
-    const result = await validateTemplateDirectory(join(this.templateRoot, id))
+    const result = await validateTemplateDirectory(join(this.templateRoot, id), this.nodes)
     if (!('definition' in result)) return { id, error: result.error }
     const layout = inspectLayout(result.definition)
     return { id, definition: result.definition, ...(layout.layers.length ? { layout } : {}) }

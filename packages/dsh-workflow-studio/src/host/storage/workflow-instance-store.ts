@@ -2,16 +2,11 @@ import { defineDomain, domainTable, type Domain } from '@deepseek-ai/dsh-storage
 import { z } from 'zod'
 
 const executionSchema = z.object({
-  kind: z.enum(['chat', 'bash']),
-  status: z.enum(['running', 'chat', 'succeeded', 'failed', 'unknown']),
-  sessionId: z.string().optional(),
-  requestId: z.string().optional(),
-  sessionCreated: z.boolean().optional(),
-  promptStarted: z.boolean().optional(),
+  kind: z.string(),
+  status: z.enum(['running', 'waiting', 'succeeded', 'failed', 'unknown', 'cancelled']),
+  business: z.json().optional(),
+  output: z.record(z.string(), z.json()).optional(),
   error: z.string().optional(),
-  stdout: z.string().optional(),
-  stderr: z.string().optional(),
-  exitCode: z.number().nullable().optional(),
 }).strict()
 
 const instanceSchema = z.object({

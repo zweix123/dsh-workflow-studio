@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { InstanceDetail } from '../../../../shared/types/workflow-instance.js'
-import { completeNode, executeNode, getInstance, setDrawerWidth, WorkflowInstanceApiError } from '../../../apis/workflow-instances.js'
-import type { WorkflowTranslate } from '../../../locales/index.js'
+import { getInstance, nodeAction, setDrawerWidth, WorkflowInstanceApiError } from '../../../apis/workflow-instances.js'
+import type { WorkflowKey, WorkflowTranslate } from '../../../locales/index.js'
 import { buildPositionNodeId, definitionAt } from './build-canvas-graph.js'
 import { inspectLayout } from '../../../../shared/layout.js'
 import { LayoutNotices } from '../LayoutNotices.js'
 import { DagCanvas, statusKeys } from './DagCanvas.js'
+import { clientNodes } from '../../../nodes.js'
+import type { NodeViewProps } from '../../../../contract/node/client.js'
+import type { NodeData, NodeDefinition } from '../../../../contract/node/index.js'
 
 function visibleWidth(preference: number, available: number): number {
   if (!available) return preference
@@ -16,7 +19,8 @@ function visibleWidth(preference: number, available: number): number {
 export function InstanceRunPanel({ detail, t, onUpdate, onWidthUpdate, onOpenSession, active = true }: { detail: InstanceDetail; t: WorkflowTranslate; onUpdate: (detail: InstanceDetail) => void; onWidthUpdate: (width: number) => void; onOpenSession: (sessionId: string) => void; active?: boolean }) {
   const [selected, setSelected] = useState<string | null>(null)
   const [pending, setPending] = useState<string[]>([])
-  const [error, setError] = useState<string>()
+  const [error, setError] = useState<{ key: WorkflowKey; message?: string }>()
+  const [drafts, setDrafts] = useState<Record<string, NodeData>>({})
   const busy = useRef(new Set<string>())
   const runArea = useRef<HTMLDivElement>(null)
   const dragCleanup = useRef<() => void>(() => {})
@@ -67,7 +71,7 @@ export function InstanceRunPanel({ detail, t, onUpdate, onWidthUpdate, onOpenSes
       setError(undefined)
     } catch {
       setDragWidth(undefined)
-      setError(t('requestFailed'))
+      setError({ key: 'requestFailed' })
     }
   }
 
@@ -113,19 +117,19 @@ export function InstanceRunPanel({ detail, t, onUpdate, onWidthUpdate, onOpenSes
     void saveWidth(width)
   }
 
-  async function run(nodeId: string, completion = false) {
+  async function run(nodeId: string, action: string, payload: unknown) {
     if (busy.current.has(nodeId)) return
     busy.current.add(nodeId)
     setPending(current => [...current, nodeId])
     setError(undefined)
     try {
-      onUpdate(await (completion ? completeNode(detail.id, nodeId) : executeNode(detail.id, nodeId)))
+      onUpdate(await nodeAction(detail.id, nodeId, action, payload))
     } catch (failure) {
       if (failure instanceof WorkflowInstanceApiError) {
         if (failure.latest) onUpdate(failure.latest)
-        const key = failure.code === 'node-not-ready' ? 'nodeNotReady' : failure.code === 'submission-failed' ? 'submissionFailed' : 'requestFailed'
-        setError(`${t(key)} ${failure.message}`)
-      } else setError(t('requestFailed'))
+        const key = failure.code === 'node-not-ready' ? 'nodeNotReady' : failure.code === 'submission-failed' ? 'submissionFailed' : failure.code === 'node-input-invalid' ? 'nodeInputInvalid' : 'requestFailed'
+        setError({ key, message: failure.message })
+      } else setError({ key: 'requestFailed' })
     } finally {
       busy.current.delete(nodeId)
       setPending(current => current.filter(id => id !== nodeId))
@@ -136,29 +140,26 @@ export function InstanceRunPanel({ detail, t, onUpdate, onWidthUpdate, onOpenSes
   const layoutReport = useMemo(() => inspectLayout(detail.definition), [detail.definition])
   return <section className="dsh-workflow-detail" aria-label={detail.name}>
     <header className="dsh-workflow-detail-header"><div><h2>{detail.name}</h2><p>{detail.templateId}</p></div></header>
-    {error && <p className="dsh-workflow-run-error" role="alert">{error}</p>}
+    {error && <p className="dsh-workflow-run-error" role="alert">{t(error.key)} {error.message}</p>}
     {detail.incompatible && <p className="dsh-workflow-run-error" role="alert">{t('instanceIncompatible')} {detail.incompatible}</p>}
     <LayoutNotices report={layoutReport} t={t} surface="instance" />
     <p className="dsh-workflow-run-note">{t('placeholderNotice')}</p>
     <div ref={runArea} className="dsh-workflow-run">
-      <DagCanvas detail={detail} t={t} onExecute={id => void run(id)} onInspect={setSelected} pending={pending} active={active} inspectorWidth={inspection ? visibleWidth(dragWidth ?? detail.drawerWidth ?? 320, areaWidth) : 0} />
+      <DagCanvas detail={detail} t={t} onAction={(id, name, payload) => void run(id, name, payload)} onInspect={setSelected} pending={pending} active={active} inspectorWidth={inspection ? visibleWidth(dragWidth ?? detail.drawerWidth ?? 320, areaWidth) : 0} />
       {inspection && <aside className="dsh-workflow-inspector" aria-label={`${t('nodeDetails')} ${inspection.definitionId}`} style={{ width: `${visibleWidth(dragWidth ?? detail.drawerWidth ?? 320, areaWidth)}px` }}>
         <div className="dsh-workflow-inspector-resize" role="separator" tabIndex={0} aria-label={t('resizeNodeDetails')} aria-orientation="vertical" aria-valuemin={areaWidth ? Math.min(300, areaWidth) : undefined} aria-valuemax={areaWidth ? Math.max(Math.min(300, areaWidth), Math.floor(areaWidth * 0.7)) : undefined} aria-valuenow={visibleWidth(dragWidth ?? detail.drawerWidth ?? 320, areaWidth)} onPointerDown={startResize} onKeyDown={resizeByKeyboard} />
         <header><div><h3>{inspection.definitionId}</h3><p>{execution?.status === 'running' ? t('statusRunning') : t(statusKey)}</p></div><button type="button" aria-label={t('closeNodeDetails')} onClick={() => setSelected(null)}>×</button></header>
         <div className="dsh-workflow-inspector-body">
-          {item?.type === 'node' && definition?.node_kind === 'chat' && <>
-            {execution?.sessionId && execution.sessionCreated && <button type="button" onClick={() => onOpenSession(execution.sessionId!)}>{t('openChat')}</button>}
-            {item.status === 'ready' && execution?.sessionCreated && !detail.incompatible && <button type="button" disabled={pending.includes(item.instanceId)} onClick={() => void run(item.instanceId, true)}>{t('completeChat')}</button>}
-            {execution?.error && <p role="alert">{execution.error}</p>}
-          </>}
-          {item?.type === 'node' && definition?.node_kind === 'bash' && <>
-            <strong>{t('command')}</strong><pre>{typeof definition.command === 'string' ? definition.command : ''}</pre>
-            {execution?.status === 'running' && <p role="status">{t('executing')}</p>}
-            {execution?.status === 'unknown' && <p role="alert">{t('resultUnknown')}</p>}
-            {execution?.stdout && <><strong>{t('commandOutput')}</strong><pre>{execution.stdout}</pre></>}
-            {execution?.stderr && <><strong>{t('commandError')}</strong><pre>{execution.stderr}</pre></>}
-            {execution?.error && <p role="alert">{execution.error}</p>}
-          </>}
+          {item?.type === 'node' && definition && (() => {
+            const Panel = clientNodes.get(String(definition.node_kind))?.Panel
+            if (!Panel) return null
+            const props: NodeViewProps = { label: item.definitionId, definition: definition as NodeDefinition, input: item.input as NodeData, output: item.status === 'completed' ? item.output as NodeData : execution?.status === 'succeeded' ? execution.output : undefined,
+              execution: execution as NodeViewProps['execution'], ready: item.status === 'ready', pending: Boolean(detail.incompatible) || pending.includes(item.instanceId),
+              t: key => t(key as Parameters<WorkflowTranslate>[0]), action: (name, payload) => void run(item.instanceId, name, payload),
+              openSession: onOpenSession, draft: drafts[item.instanceId],
+              setDraft: value => setDrafts(current => ({ ...current, [item.instanceId]: value })) }
+            return <Panel {...props} />
+          })()}
         </div>
       </aside>}
     </div>

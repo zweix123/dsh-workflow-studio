@@ -15,6 +15,7 @@ const errorStatuses: Record<InstanceErrorCode, number> = {
   'instance-running': 409,
   'node-running': 409,
   'node-kind-invalid': 409,
+  'node-input-invalid': 422,
 }
 
 export class WorkflowInstanceError extends Error {

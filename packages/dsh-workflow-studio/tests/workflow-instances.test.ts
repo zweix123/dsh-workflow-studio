@@ -12,18 +12,19 @@ import { WorkflowInstanceService, workflowInstanceDomain } from '../src/host/ser
 import { compile, type SavedExecution } from '../src/host/dag/index.js'
 import { createWorkflowInstancesRoute } from '../src/host/routes/workflow-instances.js'
 import { INSTANCES_PATH, TEMPLATES_PATH } from '../src/shared/constants.js'
+import { nodeRegistry, type ServerNode } from '../src/contract/node/index.js'
 
 const cleanups: Array<() => Promise<void>> = []
 afterEach(async () => {
   while (cleanups.length) await cleanups.pop()!()
 })
 
-async function fixture(services: Record<string, unknown> = {}) {
+async function fixture(services: Record<string, unknown> = {}, nodes?: ReadonlyMap<string, ServerNode>) {
   const root = await mkdtemp(join(tmpdir(), 'dsh-workflow-studio-'))
   const templateRoot = join(root, 'home', 'dsh-workflow-studio', 'templates')
   const storageRoot = join(root, 'storage')
   await mkdir(templateRoot, { recursive: true })
-  const host = await openHost(storageRoot, templateRoot, root, services)
+  const host = await openHost(storageRoot, templateRoot, root, services, nodes)
   cleanups.push(async () => {
     await host.close()
     await rm(root, { recursive: true, force: true })
@@ -37,7 +38,7 @@ async function fixture(services: Record<string, unknown> = {}) {
   }
 }
 
-async function openHost(storageRoot: string, templateRoot: string, workspacePath: string, services: Record<string, unknown> = {}) {
+async function openHost(storageRoot: string, templateRoot: string, workspacePath: string, services: Record<string, unknown> = {}, nodes?: ReadonlyMap<string, ServerNode>) {
   const ctx = new Context()
   await ctx.plugin(WebServer, { host: '127.0.0.1', port: 0 })
   await ctx.plugin(Storage)
@@ -47,8 +48,9 @@ async function openHost(storageRoot: string, templateRoot: string, workspacePath
     get: (id: string) => id === 'workspace-a' ? { id, path: workspacePath, title: 'Workspace A' } : undefined,
   } as never)
   ctx.provide('sandboxPolicy', { resolve: () => ({ mode: 'workspace-write', workspaceRoot: '/fallback' }) } as never)
+  if (!Object.hasOwn(services, 'shell')) ctx.provide('shell', { sandboxMode: true } as never)
   for (const [name, service] of Object.entries(services)) ctx.provide(name as never, service as never)
-  const service = await WorkflowInstanceService.create(ctx, templateRoot)
+  const service = await WorkflowInstanceService.create(ctx, templateRoot, undefined, nodes)
   const unregister = ctx.webServer.register(createWorkflowInstancesRoute(service))
   let active = true
   const close = async () => {
@@ -125,6 +127,119 @@ dag:
     to: finish
 `
 
+test('form accepts validated input once and sends its real result downstream', async () => {
+  const f = await fixture()
+  await putTemplate(f.templateRoot, 'form', `id: root\ntype: dag\ndag:\n  - id: answer\n    type: node\n    node_kind: form\n    output_schema:\n      choice: string\n      count: number\n      approved: boolean\n    schema:\n      properties:\n        choice:\n          enum: [yes, no]\n  - id: next\n    type: node\n    node_kind: bash\n    command: ''\n    input_schema:\n      choice: string\n      count: number\n      approved: boolean\n  - type: edge\n    from: answer\n    to: next\n`)
+  const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Form', templateId: 'form' })).json() as any
+  const nodeId = created.snapshot.instances.find((item: any) => item.definitionId === 'answer').instanceId
+  const path = `${INSTANCES_PATH}/${created.id}`
+  assert.equal((await postJson(f.url(`${path}/nodes/${nodeId}/actions/submit`), { choice: 'invalid', count: 0, approved: false })).status, 422)
+  assert.equal((await postJson(f.url(`${path}/nodes/${nodeId}/actions/submit`), { choice: 'yes', count: 0, approved: false })).status, 200)
+  const done = await (await fetch(f.url(path))).json() as any
+  assert.deepEqual(done.snapshot.instances.find((item: any) => item.instanceId === nodeId).output, { choice: 'yes', count: 0, approved: false })
+  assert.deepEqual(done.snapshot.instances.find((item: any) => item.definitionId === 'next').input, { choice: 'yes', count: 0, approved: false })
+  assert.equal((await postJson(f.url(`${path}/nodes/${nodeId}/actions/submit`), { choice: 'no', count: 1, approved: true })).status, 409)
+})
+
+test('form preserves upstream zero, false and empty text over defaults', async () => {
+  const f = await fixture()
+  await putTemplate(f.templateRoot, 'prefill', `id: root\ntype: dag\ndag:\n  - id: first\n    type: node\n    node_kind: form\n    output_schema:\n      text: string\n      count: number\n      enabled: boolean\n  - id: second\n    type: node\n    node_kind: form\n    input_schema:\n      text: string\n      count: number\n      enabled: boolean\n    output_schema:\n      text: string\n      count: number\n      enabled: boolean\n    schema:\n      properties:\n        text:\n          default: fallback\n        count:\n          default: 9\n        enabled:\n          default: true\n  - type: edge\n    from: first\n    to: second\n`)
+  const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Prefill', templateId: 'prefill' })).json() as any
+  const first = created.snapshot.instances.find((item: any) => item.definitionId === 'first').instanceId
+  const path = `${INSTANCES_PATH}/${created.id}`
+  assert.equal((await postJson(f.url(`${path}/nodes/${first}/actions/submit`), { text: '', count: 0, enabled: false })).status, 200)
+  const current = await (await fetch(f.url(path))).json() as any
+  const second = current.snapshot.instances.find((item: any) => item.definitionId === 'second')
+  assert.deepEqual(second.input, { text: '', count: 0, enabled: false })
+  assert.equal((await postJson(f.url(`${path}/nodes/${second.instanceId}/actions/submit`), second.input)).status, 200)
+  const done = await (await fetch(f.url(path))).json() as any
+  assert.deepEqual(done.snapshot.instances.find((item: any) => item.instanceId === first).output, { text: '', count: 0, enabled: false })
+})
+
+test('form keeps its accepted result when DAG submission fails and rejects changed input', async () => {
+  const f = await fixture()
+  await putTemplate(f.templateRoot, 'rejected-form', `id: root\ntype: dag\noutput_schema:\n  result: string\ndag:\n  - id: answer\n    type: node\n    node_kind: form\n    output_schema:\n      enabled: boolean\n  - id: finish\n    type: node\n    node_kind: bash\n    command: ''\n    output_schema:\n      result: string\n  - type: edge\n    from: answer\n    to: finish\n    if: $.enabled\n`)
+  const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Rejected form', templateId: 'rejected-form' })).json() as any
+  const nodeId = created.snapshot.instances.find((item: any) => item.definitionId === 'answer').instanceId
+  const path = `${INSTANCES_PATH}/${created.id}`
+  assert.equal((await postJson(f.url(`${path}/nodes/${nodeId}/actions/submit`), { enabled: false })).status, 422)
+  const accepted = await (await fetch(f.url(path))).json() as any
+  assert.equal(accepted.executions[nodeId].status, 'succeeded')
+  assert.deepEqual(accepted.executions[nodeId].output, { enabled: false })
+  assert.equal(accepted.snapshot.instances.find((item: any) => item.instanceId === nodeId).status, 'ready')
+  assert.equal((await postJson(f.url(`${path}/nodes/${nodeId}/actions/submit`), { enabled: true })).status, 409)
+  assert.equal((await postJson(f.url(`${path}/nodes/${nodeId}/actions/start`), {})).status, 409)
+  assert.equal((await postJson(f.url(`${path}/nodes/${nodeId}/actions/retry`), {})).status, 422)
+  const retained = await (await fetch(f.url(path))).json() as any
+  assert.deepEqual(retained.executions[nodeId].output, { enabled: false })
+})
+
+test('only the selected kind validates its fields and form rejects unsupported controls', async () => {
+  const f = await fixture()
+  await putTemplate(f.templateRoot, 'same-field', `id: root\ntype: dag\ndag:\n  - id: a\n    type: node\n    node_kind: chat\n    prompt: ''\n    command: 42\n  - id: b\n    type: node\n    node_kind: bash\n    command: ''\n    prompt: false\n`)
+  const accepted = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Same field', templateId: 'same-field' })).json() as any
+  assert.equal(accepted.definition.dag[0].command, 42)
+  assert.equal(accepted.definition.dag[1].prompt, false)
+  await putTemplate(f.templateRoot, 'bad-control', `id: root\ntype: dag\ndag:\n  - id: answer\n    type: node\n    node_kind: form\n    output_schema:\n      value: string\n    uiSchema:\n      value:\n        ui:widget: file\n`)
+  const catalog = await (await fetch(f.url(TEMPLATES_PATH))).json() as any
+  assert.match(catalog.templates.find((row: any) => row.id === 'bad-control').error, /unsupported widget/)
+})
+
+test('an assembled node owns its actions and cancellation never submits a success result', async () => {
+  const testNode: ServerNode = { kind: 'test', requires: [], validate(node) { if (typeof node.note !== 'string') throw new Error('note must be string') }, ready() { return undefined },
+    action(_context, name) {
+      if (name === 'cancel') return { fact: { kind: 'test', status: 'cancelled' } }
+      if (name === 'finish') return { fact: { kind: 'test', status: 'succeeded', output: { done: true } } }
+      throw new Error('Action denied')
+    }, recover(fact) { return fact }, project() { return {} } }
+  assert.throws(() => nodeRegistry([testNode, testNode]), /Duplicate node kind/)
+  const f = await fixture({}, nodeRegistry([testNode]))
+  await putTemplate(f.templateRoot, 'test', `id: root\ntype: dag\ndag:\n  - id: task\n    type: node\n    node_kind: test\n    note: ready\n    output_schema:\n      done: boolean\n`)
+  const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Custom', templateId: 'test' })).json() as any
+  const nodeId = created.snapshot.instances.find((item: any) => item.definitionId === 'task').instanceId
+  const path = `${INSTANCES_PATH}/${created.id}`
+  assert.equal((await postJson(f.url(`${path}/nodes/${nodeId}/actions/start`), {})).status, 409)
+  assert.equal((await postJson(f.url(`${path}/nodes/${nodeId}/actions/cancel`), {})).status, 200)
+  const cancelled = await (await fetch(f.url(path))).json() as any
+  assert.equal(cancelled.snapshot.instances.find((item: any) => item.instanceId === nodeId).status, 'ready')
+  assert.equal(cancelled.executions[nodeId].status, 'cancelled')
+  assert.equal((await postJson(f.url(`${path}/nodes/${nodeId}/actions/finish`), {})).status, 200)
+  const done = await (await fetch(f.url(path))).json() as any
+  assert.deepEqual(done.snapshot.instances.find((item: any) => item.instanceId === nodeId).output, { done: true })
+})
+
+test('startup persists node recovery instead of projecting it only for a read', async () => {
+  let resumed = 0
+  const recoverable: ServerNode = {
+    kind: 'recoverable', requires: [], validate() {}, ready() { return undefined },
+    action(_context, name) {
+      if (name !== 'start') throw new Error('Action denied')
+      return { fact: { kind: 'recoverable', status: 'running' } }
+    },
+    recover(fact) {
+      if (fact.status !== 'running') return fact
+      resumed += 1
+      return { ...fact, status: 'unknown' }
+    },
+    project() { return {} },
+  }
+  const nodes = nodeRegistry([recoverable])
+  const f = await fixture({}, nodes)
+  await putTemplate(f.templateRoot, 'recovery', `id: root\ntype: dag\ndag:\n  - id: task\n    type: node\n    node_kind: recoverable\n`)
+  const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Recovery', templateId: 'recovery' })).json() as any
+  const nodeId = created.snapshot.instances.find((item: any) => item.definitionId === 'task').instanceId
+  const path = `${INSTANCES_PATH}/${created.id}`
+  assert.equal((await postJson(f.url(`${path}/nodes/${nodeId}/actions/start`), {})).status, 200)
+  await f.close()
+  const first = await openHost(f.storageRoot, f.templateRoot, f.root, {}, nodes)
+  assert.equal((await (await fetch(first.url(path))).json() as any).executions[nodeId].status, 'unknown')
+  await first.close()
+  const second = await openHost(f.storageRoot, f.templateRoot, f.root, {}, nodes)
+  cleanups.push(second.close)
+  assert.equal((await (await fetch(second.url(path))).json() as any).executions[nodeId].status, 'unknown')
+  assert.equal(resumed, 1)
+})
+
 test('bash executes through the host sandbox and only a successful outcome advances the graph', async () => {
   const calls: Array<{ command: string; workdir: string; sandboxPolicy: { workspaceRoot: string } }> = []
   let exitCode = 7
@@ -143,12 +258,12 @@ test('bash executes through the host sandbox and only a successful outcome advan
   const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Command', templateId: 'command' })).json() as any
   const path = `${INSTANCES_PATH}/${created.id}`
   const nodeId = created.snapshot.instances.find((item: any) => item.definitionId === 'build').instanceId
-  assert.equal((await postJson(f.url(`${path}/nodes/${nodeId}/execute`), {})).status, 200)
+  assert.equal((await postJson(f.url(`${path}/nodes/${nodeId}/actions/start`), {})).status, 200)
   const failed = await untilDetail(f.url(path), detail => detail.executions?.[nodeId]?.status === 'failed')
   assert.equal(failed.snapshot.instances.find((item: any) => item.instanceId === nodeId).status, 'ready')
   assert.match(failed.executions[nodeId].error, /7/)
   exitCode = 0
-  assert.equal((await postJson(f.url(`${path}/nodes/${nodeId}/execute`), {})).status, 200)
+  assert.equal((await postJson(f.url(`${path}/nodes/${nodeId}/actions/start`), {})).status, 200)
   const complete = await untilDetail(f.url(path), detail => detail.snapshot.instances.find((item: any) => item.instanceId === nodeId).status === 'completed')
   assert.deepEqual(complete.snapshot.instances.find((item: any) => item.instanceId === nodeId).output, { result: '' })
   assert.equal(complete.executions[nodeId].stdout, 'real output')
@@ -159,7 +274,7 @@ test('bash executes through the host sandbox and only a successful outcome advan
   const unsafe = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'No sandbox', templateId: 'command' })).json() as any
   const unsafeNode = unsafe.snapshot.instances.find((item: any) => item.definitionId === 'build').instanceId
   const unsafePath = `${INSTANCES_PATH}/${unsafe.id}`
-  assert.equal((await postJson(f.url(`${unsafePath}/nodes/${unsafeNode}/execute`), {})).status, 200)
+  assert.equal((await postJson(f.url(`${unsafePath}/nodes/${unsafeNode}/actions/start`), {})).status, 200)
   const blocked = await untilDetail(f.url(unsafePath), detail => detail.executions?.[unsafeNode]?.status === 'failed')
   assert.match(blocked.executions[unsafeNode].error, /Sandbox execution is unavailable/)
   assert.equal(calls.length, 2)
@@ -182,7 +297,7 @@ test('independent automatic bash nodes run together, reject duplicate starts and
   assert.deepEqual(calls.map(call => call.command).sort(), ['left', 'right'])
   const leftId = created.snapshot.instances.find((item: any) => item.definitionId === 'left').instanceId
   const rightId = created.snapshot.instances.find((item: any) => item.definitionId === 'right').instanceId
-  assert.equal((await postJson(f.url(`${path}/nodes/${leftId}/execute`), {})).status, 409)
+  assert.equal((await postJson(f.url(`${path}/nodes/${leftId}/actions/start`), {})).status, 409)
   assert.equal((await fetch(f.url(path), { method: 'DELETE' })).status, 409)
   assert.equal((await postJson(f.url(`${path}/drawer-width`), { width: 460 })).status, 200)
   calls.find(call => call.command === 'left')!.finish(0)
@@ -192,7 +307,7 @@ test('independent automatic bash nodes run together, reject duplicate starts and
   assert.equal(settled.snapshot.instances.find((item: any) => item.instanceId === rightId).status, 'ready')
   assert.equal(settled.drawerWidth, 460)
   assert.equal(calls.length, 2)
-  assert.equal((await postJson(f.url(`${path}/nodes/${rightId}/execute`), {})).status, 200)
+  assert.equal((await postJson(f.url(`${path}/nodes/${rightId}/actions/start`), {})).status, 200)
   await untilDetail(f.url(path), detail => detail.executions?.[rightId]?.status === 'running')
   assert.equal(calls.length, 3)
   calls[2]!.finish(0)
@@ -212,17 +327,17 @@ test('chat creates one durable conversation, sends only a nonblank prompt, and c
   const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Chats', templateId: 'chat' })).json() as any
   const path = `${INSTANCES_PATH}/${created.id}`
   const [first, blank] = created.snapshot.instances.filter((item: any) => item.type === 'node')
-  assert.equal((await postJson(f.url(`${path}/nodes/${first.instanceId}/execute`), {})).status, 200)
-  assert.equal((await postJson(f.url(`${path}/nodes/${blank.instanceId}/execute`), {})).status, 200)
-  const ready = await untilDetail(f.url(path), detail => detail.executions?.[first.instanceId]?.status === 'chat' && detail.executions?.[blank.instanceId]?.status === 'chat')
+  assert.equal((await postJson(f.url(`${path}/nodes/${first.instanceId}/actions/start`), {})).status, 200)
+  assert.equal((await postJson(f.url(`${path}/nodes/${blank.instanceId}/actions/start`), {})).status, 200)
+  const ready = await untilDetail(f.url(path), detail => detail.executions?.[first.instanceId]?.status === 'waiting' && detail.executions?.[blank.instanceId]?.status === 'waiting')
   assert.equal(createdSessions.length, 2)
   assert.deepEqual(createdSessions.map(row => row.workspaceId), ['workspace-a', 'workspace-a'])
   assert.notEqual(createdSessions[0]!.sessionId, createdSessions[1]!.sessionId)
   assert.deepEqual(prompts, [{ sessionId: ready.executions[first.instanceId].sessionId, text: 'Write a draft' }])
   assert.equal(ready.snapshot.instances.find((item: any) => item.instanceId === first.instanceId).status, 'ready')
-  assert.equal((await postJson(f.url(`${path}/nodes/${first.instanceId}/execute`), {})).status, 200)
+  assert.equal((await postJson(f.url(`${path}/nodes/${first.instanceId}/actions/start`), {})).status, 200)
   assert.equal(createdSessions.length, 2)
-  assert.equal((await postJson(f.url(`${path}/nodes/${first.instanceId}/complete`), {})).status, 200)
+  assert.equal((await postJson(f.url(`${path}/nodes/${first.instanceId}/actions/complete`), {})).status, 200)
   const completed = await (await fetch(f.url(path))).json() as any
   assert.equal(completed.snapshot.instances.find((item: any) => item.instanceId === first.instanceId).status, 'completed')
   assert.equal(completed.snapshot.instances.find((item: any) => item.instanceId === blank.instanceId).status, 'ready')
@@ -254,7 +369,7 @@ test('a rejected chat prompt can be resumed after restart with the same session 
   const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Retry chat', templateId: 'retry-chat' })).json() as any
   const nodeId = created.snapshot.instances.find((item: any) => item.definitionId === 'task').instanceId
   const path = `${INSTANCES_PATH}/${created.id}`
-  assert.equal((await postJson(f.url(`${path}/nodes/${nodeId}/execute`), {})).status, 200)
+  assert.equal((await postJson(f.url(`${path}/nodes/${nodeId}/actions/start`), {})).status, 200)
   const failed = await untilDetail(f.url(path), detail => detail.executions?.[nodeId]?.status === 'failed')
   assert.match(failed.executions[nodeId].error, /not accepted/)
   assert.equal(failed.executions[nodeId].promptStarted, undefined)
@@ -262,8 +377,8 @@ test('a rejected chat prompt can be resumed after restart with the same session 
   reject = false
   const restarted = await openHost(f.storageRoot, f.templateRoot, f.root, services)
   cleanups.push(restarted.close)
-  assert.equal((await postJson(restarted.url(`${path}/nodes/${nodeId}/execute`), {})).status, 200)
-  const resumed = await untilDetail(restarted.url(path), detail => detail.executions?.[nodeId]?.status === 'chat')
+  assert.equal((await postJson(restarted.url(`${path}/nodes/${nodeId}/actions/start`), {})).status, 200)
+  const resumed = await untilDetail(restarted.url(path), detail => detail.executions?.[nodeId]?.status === 'waiting')
   assert.equal(resumed.executions[nodeId].promptStarted, true)
   assert.deepEqual(sessions, [requests[0]!.sessionId])
   assert.deepEqual(requests, [requests[0], requests[0]])
@@ -295,11 +410,11 @@ test('for-expanded chat instances keep separate host conversations', async () =>
   const detail = await (await fetch(host.url(path))).json() as any
   const items = detail.snapshot.instances.filter((item: any) => item.definitionId === 'each')
   assert.equal(items.length, 2)
-  for (const item of items) assert.equal((await postJson(host.url(`${path}/nodes/${item.instanceId}/execute`), {})).status, 200)
-  const started = await untilDetail(host.url(path), value => items.every((item: any) => value.executions?.[item.instanceId]?.status === 'chat'))
+  for (const item of items) assert.equal((await postJson(host.url(`${path}/nodes/${item.instanceId}/actions/start`), {})).status, 200)
+  const started = await untilDetail(host.url(path), value => items.every((item: any) => value.executions?.[item.instanceId]?.status === 'waiting'))
   assert.equal(sessions.length, 2)
   assert.notEqual(started.executions[items[0].instanceId].sessionId, started.executions[items[1].instanceId].sessionId)
-  assert.equal((await postJson(host.url(`${path}/nodes/${items[0].instanceId}/complete`), {})).status, 200)
+  assert.equal((await postJson(host.url(`${path}/nodes/${items[0].instanceId}/actions/complete`), {})).status, 200)
   const partial = await (await fetch(host.url(path))).json() as any
   assert.equal(partial.snapshot.instances.find((item: any) => item.instanceId === items[0].instanceId).status, 'completed')
   assert.equal(partial.snapshot.instances.find((item: any) => item.instanceId === items[1].instanceId).status, 'ready')
@@ -323,7 +438,7 @@ test('restart preserves a successful command awaiting DAG submission and exposes
   const first = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Reject real', templateId: 'reject-real' })).json() as any
   const firstPath = `${INSTANCES_PATH}/${first.id}`
   const firstNode = first.snapshot.instances.find((item: any) => item.definitionId === 'run').instanceId
-  assert.equal((await postJson(f.url(`${firstPath}/nodes/${firstNode}/execute`), {})).status, 200)
+  assert.equal((await postJson(f.url(`${firstPath}/nodes/${firstNode}/actions/start`), {})).status, 200)
   pending[0]!(0)
   await untilDetail(f.url(firstPath), detail => detail.executions?.[firstNode]?.status === 'succeeded' && Boolean(detail.executions[firstNode].error))
   const second = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Uncertain', templateId: 'uncertain' })).json() as any
@@ -337,9 +452,9 @@ test('restart preserves a successful command awaiting DAG submission and exposes
   const restored = await (await fetch(restarted.url(secondPath))).json() as any
   assert.equal(restored.executions[secondNode].status, 'unknown')
   assert.match(restored.executions[secondNode].error, /unknown/)
-  assert.equal((await postJson(restarted.url(`${firstPath}/nodes/${firstNode}/execute`), {})).status, 422)
+  assert.equal((await postJson(restarted.url(`${firstPath}/nodes/${firstNode}/actions/start`), {})).status, 422)
   assert.deepEqual(calls, ['success', 'uncertain'])
-  assert.equal((await postJson(restarted.url(`${secondPath}/nodes/${secondNode}/execute`), {})).status, 200)
+  assert.equal((await postJson(restarted.url(`${secondPath}/nodes/${secondNode}/actions/start`), {})).status, 200)
   assert.deepEqual(calls, ['success', 'uncertain', 'uncertain'])
   pending[2]!(0)
   await untilDetail(restarted.url(secondPath), detail => detail.snapshot.instances.find((item: any) => item.instanceId === secondNode).status === 'completed')
@@ -370,7 +485,7 @@ test('an old incompatible instance keeps its snapshot visible but cannot execute
   assert.equal(visible.definition.dag[0].node_kind, undefined)
   assert.match(visible.incompatible, /node_kind/)
   const node = created.snapshot.instances.find((item: any) => item.definitionId === 'task')
-  const blocked = await postJson(restarted.url(`${path}/nodes/${node.instanceId}/execute`), {})
+  const blocked = await postJson(restarted.url(`${path}/nodes/${node.instanceId}/actions/start`), {})
   assert.equal(blocked.status, 409)
   assert.equal((await blocked.json() as any).error.code, 'instance-incompatible')
   assert.equal((await fetch(restarted.url(path), { method: 'DELETE' })).status, 200)
@@ -513,13 +628,13 @@ test('execute advances one ready node, keeps its identity after restart, and rej
   const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Step', templateId: 'writer' })).json() as any
   const draft = created.snapshot.instances.find((item: any) => item.definitionId === 'draft')
   const path = `${INSTANCES_PATH}/${created.id}`
-  const executed = await postJson(f.url(`${path}/nodes/${draft.instanceId}/execute`), {})
+  const executed = await postJson(f.url(`${path}/nodes/${draft.instanceId}/actions/start`), {})
   assert.equal(executed.status, 200)
   const advanced = await executed.json() as any
   assert.deepEqual(advanced.snapshot.instances.find((item: any) => item.instanceId === draft.instanceId).output, { result: '' })
   const finish = advanced.snapshot.instances.find((item: any) => item.definitionId === 'finish')
   assert.equal(finish.status, 'ready')
-  const stale = await postJson(f.url(`${path}/nodes/${draft.instanceId}/execute`), {})
+  const stale = await postJson(f.url(`${path}/nodes/${draft.instanceId}/actions/start`), {})
   assert.equal(stale.status, 409)
   assert.deepEqual((await stale.json() as any).latest, advanced)
   assert.deepEqual(await (await fetch(f.url(path))).json(), advanced)
@@ -528,7 +643,7 @@ test('execute advances one ready node, keeps its identity after restart, and rej
   const restarted = await openHost(f.storageRoot, f.templateRoot, f.root)
   cleanups.push(restarted.close)
   assert.deepEqual(await (await fetch(restarted.url(path))).json(), advanced)
-  const completed = await postJson(restarted.url(`${path}/nodes/${finish.instanceId}/execute`), {})
+  const completed = await postJson(restarted.url(`${path}/nodes/${finish.instanceId}/actions/start`), {})
   assert.equal(completed.status, 200)
   assert.equal((await completed.json() as any).snapshot.instances.find((item: any) => item.instanceId === finish.instanceId).status, 'completed')
 })
@@ -582,7 +697,7 @@ dag:
 `)
   const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Branches', templateId: 'branches' })).json() as any
   const emit = created.snapshot.instances.find((item: any) => item.definitionId === 'emit')
-  const response = await postJson(f.url(`${INSTANCES_PATH}/${created.id}/nodes/${emit.instanceId}/execute`), {})
+  const response = await postJson(f.url(`${INSTANCES_PATH}/${created.id}/nodes/${emit.instanceId}/actions/start`), {})
   assert.equal(response.status, 200)
   const updated = await response.json() as any
   assert.deepEqual(updated.snapshot.instances.find((item: any) => item.instanceId === emit.instanceId).output,
@@ -659,7 +774,7 @@ dag:
   assert.deepEqual(items.map((item: any) => item.status), ['ready', 'ready'])
   assert.deepEqual(initial.snapshot.instanceConnections.map((edge: any) => edge.toInstanceId), items.map((item: any) => item.instanceId))
 
-  const first = await postJson(host.url(`${path}/nodes/${items[0].instanceId}/execute`), {})
+  const first = await postJson(host.url(`${path}/nodes/${items[0].instanceId}/actions/start`), {})
   assert.equal(first.status, 200)
   const partial = await first.json() as any
   assert.equal(partial.snapshot.instances.find((item: any) => item.instanceId === items[0].instanceId).status, 'completed')
@@ -670,7 +785,7 @@ dag:
   cleanups.push(host.close)
   assert.deepEqual(await (await fetch(host.url(path))).json(), partial)
 
-  const second = await postJson(host.url(`${path}/nodes/${items[1].instanceId}/execute`), {})
+  const second = await postJson(host.url(`${path}/nodes/${items[1].instanceId}/actions/start`), {})
   assert.equal(second.status, 200)
   const complete = await second.json() as any
   const finish = complete.snapshot.instances.find((item: any) => item.definitionId === 'finish')
@@ -714,14 +829,14 @@ dag:
   const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Reject', templateId: 'reject' })).json() as any
   const start = created.snapshot.instances.find((item: any) => item.definitionId === 'start')
   const path = `${INSTANCES_PATH}/${created.id}`
-  const failed = await postJson(f.url(`${path}/nodes/${start.instanceId}/execute`), {})
+  const failed = await postJson(f.url(`${path}/nodes/${start.instanceId}/actions/start`), {})
   assert.equal(failed.status, 422)
   assert.equal((await failed.json() as any).error.code, 'submission-failed')
   const persisted = await (await fetch(f.url(path))).json() as any
   assert.deepEqual(persisted.snapshot, created.snapshot)
   assert.equal(persisted.executions[start.instanceId].status, 'succeeded')
   assert.match(persisted.executions[start.instanceId].error, /MISSING_OUTPUT_FIELD/)
-  assert.equal((await postJson(f.url(`${path}/nodes/${start.instanceId}/execute`), {})).status, 422)
+  assert.equal((await postJson(f.url(`${path}/nodes/${start.instanceId}/actions/start`), {})).status, 422)
 })
 
 test('drawer width belongs to its instance and survives execution and host restart', async () => {
@@ -736,7 +851,7 @@ test('drawer width belongs to its instance and survives execution and host resta
   const saved = await (await fetch(f.url(path))).json() as any
   assert.equal(saved.drawerWidth, 410)
   const node = saved.snapshot.instances.find((item: any) => item.definitionId === 'draft')
-  const executed = await (await postJson(f.url(`${path}/nodes/${node.instanceId}/execute`), {})).json() as any
+  const executed = await (await postJson(f.url(`${path}/nodes/${node.instanceId}/actions/start`), {})).json() as any
   assert.equal(executed.drawerWidth, 410)
   assert.equal(executed.snapshot.instances.find((item: any) => item.instanceId === node.instanceId).status, 'completed')
   const resized = await (await postJson(f.url(`${path}/drawer-width`), { width: 390 })).json() as any

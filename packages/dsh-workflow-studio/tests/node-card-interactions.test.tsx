@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import React, { act } from 'react'
 import { createRoot } from 'react-dom/client'
+import { Simulate } from 'react-dom/test-utils'
 import { JSDOM } from 'jsdom'
 import type { WorkspaceSnapshot } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import { WorkflowStudioPanel } from '../src/client/pages/workflow-studio/WorkflowStudioPanel.js'
@@ -34,8 +35,8 @@ test('cards execute independently and the inspector follows the selected graph o
   const useWorkspaces = <T,>(selector: (snapshot: WorkspaceSnapshot) => T) => selector(workspace)
   const row = { id: 'run', workspaceId: 'w', name: 'Run', templateId: 'flow', createdAt: '2026-09-23T00:00:00Z' }
   const base = { ...row, definition: { id: 'root', type: 'dag', dag: [
-    { id: 'first', type: 'node' }, { id: 'other', type: 'node' }, { id: 'later', type: 'node' }, { id: 'closed', type: 'node' },
-    { id: 'nested', type: 'dag', dag: [{ id: 'inner', type: 'node' }] },
+    { id: 'first', type: 'node', node_kind: 'bash', command: '' }, { id: 'other', type: 'node', node_kind: 'bash', command: '' }, { id: 'later', type: 'node', node_kind: 'bash', command: '' }, { id: 'closed', type: 'node', node_kind: 'bash', command: '' },
+    { id: 'nested', type: 'dag', dag: [{ id: 'inner', type: 'node', node_kind: 'bash', command: '' }] },
   ] }, input: {}, snapshot: {
     rootInstanceId: 'i1', instances: [
       { instanceId: 'i1', definitionId: 'root', definitionPath: [], parentInstanceId: null, input: {}, type: 'dag', status: 'running' },
@@ -60,7 +61,7 @@ test('cards execute independently and the inspector follows the selected graph o
       current = { ...current, drawerWidth: JSON.parse(String(init.body)).width }
       return Response.json(current)
     }
-    const match = String(url).match(/\/nodes\/(i[234])\/execute$/)
+    const match = String(url).match(/\/nodes\/(i[234])\/actions\/start$/)
     if (match && init?.method === 'POST') {
       calls.push(match[1]!)
       current = structuredClone(current)
@@ -215,12 +216,12 @@ test('workflow node inspector opens the existing chat, completes it, and shows t
       { instanceId: 'chat-i', definitionId: 'chat', definitionPath: ['dag', 0], parentInstanceId: 'root-i', input: {}, type: 'node', status: 'ready' },
       { instanceId: 'bash-i', definitionId: 'bash', definitionPath: ['dag', 1], parentInstanceId: 'root-i', input: {}, type: 'node', status: 'ready' },
     ], waitingPositions: [], skippedPositions: [], edges: [], instanceConnections: [] },
-    executions: { 'chat-i': { kind: 'chat', status: 'chat', sessionId: 'session-one', sessionCreated: true }, 'bash-i': { kind: 'bash', status: 'failed', stdout: 'done', stderr: 'warning', exitCode: 2, error: 'Command exited with code 2' } } }
+    executions: { 'chat-i': { kind: 'chat', status: 'waiting', sessionId: 'session-one', sessionCreated: true }, 'bash-i': { kind: 'bash', status: 'failed', stdout: 'done', stderr: 'warning', exitCode: 2, error: 'Command exited with code 2' } } }
   let latest: any
   const opened: string[] = []
   let completed = 0
   globalThis.fetch = async (url, init) => {
-    if (String(url).endsWith('/nodes/chat-i/complete') && init?.method === 'POST') {
+    if (String(url).endsWith('/nodes/chat-i/actions/complete') && init?.method === 'POST') {
       completed++
       return Response.json({ ...base, snapshot: { ...base.snapshot, instances: base.snapshot.instances.map((item: any) => item.instanceId === 'chat-i' ? { ...item, status: 'completed', output: {} } : item) } })
     }
@@ -269,7 +270,7 @@ test('a late response from one branch cannot replace a newer parallel graph', as
   globalThis.fetch = async (url, init) => {
     if (url === '/api/dsh-workflow-studio/instances' && !init?.method) return Response.json([row])
     if (url === '/api/dsh-workflow-studio/instances/run' && !init?.method) return Response.json(base)
-    const node = String(url).match(/\/nodes\/(left-i|right-i)\/execute$/)?.[1]
+    const node = String(url).match(/\/nodes\/(left-i|right-i)\/actions\/start$/)?.[1]
     if (node) return new Promise<Response>(resolve => pending.set(node, resolve))
     return new Response('missing', { status: 404 })
   }
@@ -293,4 +294,51 @@ test('a late response from one branch cannot replace a newer parallel graph', as
     await act(async () => root.unmount())
     cleanup()
   }
+})
+
+test('form keeps a page draft, submits through the node action, then becomes read-only', async () => {
+  const { dom, cleanup } = testDom()
+  const base: any = { id: 'run', workspaceId: 'w', name: 'Form', templateId: 'flow', createdAt: '2026-09-24T00:00:00Z', input: {},
+    definition: { id: 'root', type: 'dag', dag: [{ id: 'answer', type: 'node', node_kind: 'form', output_schema: { name: 'string', count: 'number', yes: 'boolean' },
+      schema: { properties: { name: { title: 'Name', default: 'Ada' }, count: { default: 0 }, yes: { default: false } } }, uiSchema: { name: { 'ui:widget': 'textarea' } } }] },
+    snapshot: { rootInstanceId: 'root-i', instances: [
+      { instanceId: 'root-i', definitionId: 'root', definitionPath: [], parentInstanceId: null, input: {}, type: 'dag', status: 'running' },
+      { instanceId: 'form-i', definitionId: 'answer', definitionPath: ['dag', 0], parentInstanceId: 'root-i', input: {}, type: 'node', status: 'ready' },
+    ], waitingPositions: [], skippedPositions: [], edges: [], instanceConnections: [] } }
+  let requests = 0
+  let latest: any = base
+  globalThis.fetch = async (url, init) => {
+    if (String(url).endsWith('/nodes/form-i/actions/submit')) {
+      requests++
+      const value = JSON.parse(String(init?.body))
+      if (requests === 1) return Response.json({ error: { code: 'node-input-invalid', message: 'Try again' }, latest }, { status: 422 })
+      latest = { ...base, revision: 2, snapshot: { ...base.snapshot, instances: base.snapshot.instances.map((item: any) => item.instanceId === 'form-i' ? { ...item, status: 'completed', output: value } : item) }, executions: { 'form-i': { kind: 'form', status: 'succeeded', output: value } } }
+      return Response.json(latest)
+    }
+    return new Response('missing', { status: 404 })
+  }
+  const container = dom.window.document.getElementById('root')!
+  const root = createRoot(container)
+  const render = async () => act(async () => root.render(<InstanceRunPanel detail={latest} t={key => en[key]} onUpdate={value => { latest = value }} onWidthUpdate={() => {}} onOpenSession={() => {}} />))
+  try {
+    await render()
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Details answer"]')!.click())
+    const textarea = container.querySelector<HTMLTextAreaElement>('textarea')!
+    assert.equal(textarea.value, 'Ada')
+    assert.equal(container.querySelector<HTMLInputElement>('input[type="number"]')!.value, '0')
+    assert.equal(container.querySelector<HTMLInputElement>('input[type="checkbox"]')!.checked, false)
+    await act(async () => { Object.getOwnPropertyDescriptor(dom.window.HTMLTextAreaElement.prototype, 'value')!.set!.call(textarea, 'Grace'); Simulate.change(textarea) })
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Close details"]')!.click())
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Details answer"]')!.click())
+    assert.equal(container.querySelector<HTMLTextAreaElement>('textarea')!.value, 'Grace')
+    assert.equal(requests, 0)
+    await act(async () => container.querySelector<HTMLButtonElement>('button[type="submit"]')!.click())
+    assert.equal(requests, 1)
+    assert.equal(container.querySelector<HTMLTextAreaElement>('textarea')!.value, 'Grace')
+    await act(async () => container.querySelector<HTMLButtonElement>('button[type="submit"]')!.click())
+    await render()
+    assert.equal(requests, 2)
+    assert.equal(container.querySelector<HTMLTextAreaElement>('textarea')!.disabled, true)
+    assert.equal(container.querySelector<HTMLButtonElement>('button[type="submit"]'), null)
+  } finally { await act(async () => root.unmount()); cleanup() }
 })

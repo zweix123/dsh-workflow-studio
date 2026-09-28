@@ -10,6 +10,7 @@ await build({
   entryPoints: {
     index: 'src/index.ts',
     'host/dag/index': 'src/host/dag/index.ts',
+    'contract/node/index': 'src/contract/node/index.ts',
   },
   outdir: 'lib',
   bundle: true, platform: 'node', format: 'esm', target: 'es2022', packages: 'external',

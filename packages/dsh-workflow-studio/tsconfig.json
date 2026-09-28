@@ -9,7 +9,7 @@
     "skipLibCheck": true,
     "verbatimModuleSyntax": true,
     "declaration": true,
-    "rootDir": "src",
+    "rootDir": "../..",
     "outDir": "lib/types"
   },
   "include": ["src"]

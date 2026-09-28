@@ -4,8 +4,12 @@ import type { InstanceDetail } from '../../../../shared/types/workflow-instance.
 import type { WorkflowTranslate } from '../../../locales/index.js'
 import { buildCanvasGraph } from './build-canvas-graph.js'
 import { canvasPosition, flowStartNodeId, workCandidates, type WorkCandidate } from './graph-navigation.js'
+import { definitionAt } from './build-canvas-graph.js'
+import { clientNodes } from '../../../nodes.js'
+import type { NodeCardProps } from '../../../../contract/node/client.js'
+import type { NodeData, NodeDefinition } from '../../../../contract/node/index.js'
 
-type GraphData = { id: string; label: string; status: 'ready' | 'completed' | 'running' | 'waiting' | 'skipped'; displayStatus?: string; statusLabel: string; kind: 'node' | 'dag' | 'position'; kindLabel: string; forItem?: { key: string; index: number }; executeLabel: string; detailsLabel: string; pending: boolean; onExecute: (id: string) => void; onInspect: (id: string) => void }
+type GraphData = { id: string; label: string; status: 'ready' | 'completed' | 'running' | 'waiting' | 'skipped'; displayStatus?: string; statusLabel: string; kind: 'node' | 'dag' | 'position'; kindLabel: string; forItem?: { key: string; index: number }; detailsLabel: string; control?: React.ReactNode; onInspect: (id: string) => void }
 type Expression = { condition?: string; each?: string }
 export const statusKeys = { ready: 'statusReady', completed: 'statusCompleted', running: 'statusRunning', waiting: 'statusWaiting', skipped: 'statusSkipped' } as const
 
@@ -17,7 +21,7 @@ const WorkflowNode = memo(function WorkflowNode({ data: rawData }: NodeProps) {
     <strong title={data.label}>{data.label}</strong>
     {data.forItem && <small title={data.forItem.key}>{data.forItem.key} #{data.forItem.index + 1}</small>}
     <div className="dsh-workflow-node-actions">
-      {data.kind === 'node' && data.status === 'ready' && <button type="button" className="nodrag nopan" disabled={data.pending} aria-label={`${data.executeLabel} ${data.label}${data.forItem ? ` ${data.forItem.key}` : ''}`} onClick={event => { event.stopPropagation(); data.onExecute(data.id) }}>▶ {data.executeLabel}</button>}
+      {data.control}
       <button type="button" className="nodrag nopan" aria-label={`${data.detailsLabel} ${data.label}${data.forItem ? ` ${data.forItem.key}` : ''}`} onClick={event => { event.stopPropagation(); data.onInspect(data.id) }}>ⓘ {data.detailsLabel}</button>
     </div>
     <Handle id="right" type="source" position={Position.Right} /><Handle id="bottom" type="source" position={Position.Bottom} />
@@ -121,7 +125,7 @@ function CanvasNavigation({ nodes, candidates, active, ready, inspectorWidth, t 
   </div></div>
 }
 
-export function DagCanvas({ detail, t, onExecute, onInspect, pending, active = true, inspectorWidth = 0 }: { detail: InstanceDetail; t: WorkflowTranslate; onExecute: (id: string) => void; onInspect: (id: string) => void; pending?: string[]; active?: boolean; inspectorWidth?: number }) {
+export function DagCanvas({ detail, t, onAction, onInspect, pending, active = true, inspectorWidth = 0 }: { detail: InstanceDetail; t: WorkflowTranslate; onAction: (id: string, name: string, payload: unknown) => void; onInspect: (id: string) => void; pending?: string[]; active?: boolean; inspectorWidth?: number }) {
   const [expression, setExpression] = useState<{ id: string; value: Expression } | null>(null)
   const [ready, setReady] = useState(false)
   const graph = useMemo(() => buildCanvasGraph(detail), [detail])
@@ -133,8 +137,18 @@ export function DagCanvas({ detail, t, onExecute, onInspect, pending, active = t
     displayStatus: detail.executions?.[node.id]?.status === 'failed' ? 'error' : detail.executions?.[node.id]?.status === 'unknown' ? 'unknown' : detail.executions?.[node.id]?.status === 'running' ? 'running' : node.data.status,
     statusLabel: detail.executions?.[node.id]?.status === 'failed' ? t('executionError') : detail.executions?.[node.id]?.status === 'unknown' ? t('statusUnknown') : t(statusKeys[detail.executions?.[node.id]?.status === 'running' ? 'running' : node.data.status as keyof typeof statusKeys]),
     kindLabel: node.data.kind === 'dag' ? 'DAG' : node.data.kind === 'node' ? t('node') : '',
-    executeLabel: t('executeNode'), detailsLabel: t('nodeDetails'), onExecute, onInspect,
-    pending: Boolean(detail.incompatible) || Boolean(detail.executions?.[node.id]?.status === 'running') || Boolean(pending?.includes(node.id)),
+    detailsLabel: t('nodeDetails'), onInspect,
+    control: (() => {
+      const item = detail.snapshot.instances.find(row => row.instanceId === node.id)
+      const definition = item?.type === 'node' ? definitionAt(detail.definition, item.definitionPath) : undefined
+      const Client = clientNodes.get(String(definition?.node_kind))?.Card
+      if (!Client || !definition || item?.type !== 'node') return null
+      const props: NodeCardProps = { label: `${node.data.label}${item.forItem ? ` ${item.forItem.key}` : ''}`, definition: definition as NodeDefinition, input: item.input as NodeData, output: item.status === 'completed' ? item.output as NodeData : undefined,
+        execution: detail.executions?.[node.id] as NodeCardProps['execution'], ready: item.status === 'ready',
+        pending: Boolean(detail.incompatible) || Boolean(pending?.includes(node.id)), t: key => t(key as Parameters<WorkflowTranslate>[0]),
+        action: (name, payload) => onAction(node.id, name, payload), inspect: () => onInspect(node.id) }
+      return <Client {...props} />
+    })(),
   } }))
   const edges = graph.edges.map(edge => ({ ...edge, data: { ...edge.data, conditionLabel: t('conditionMark'), eachLabel: t('eachMark'), open: (id: string, value: Expression) => setExpression({ id, value }) } }))
   useEffect(() => {

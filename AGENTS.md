@@ -19,10 +19,11 @@ packages/dsh-workflow-studio/
 │   │   ├── apply.ts              # 服务装配和生命周期
 │   │   ├── dag/                  # DAG 编译、图状态与结果提交
 │   │   ├── workflow/             # 节点选择、执行状态与恢复
-│   │   ├── nodes/                # 独立的 chat 与 bash 节点能力
+│   │   ├── nodes/                # 节点服务端装配登记
 │   │   ├── routes/plugin-status.ts    # GET /api/dsh-workflow-studio/status
 │   │   ├── service/              # 模板与工作流实例管理
 │   │   └── storage/              # 工作流实例持久化与串行写入
+│   ├── contract/node/            # studio 提供的公共节点契约
 │   └── client/
 │       ├── index.tsx             # dsh 插槽注册
 │       ├── pages/                # 顶层页面，其他页面与工坊并列
@@ -39,4 +40,7 @@ packages/dsh-workflow-studio/
 ├── scripts/build.mjs
 ├── package.json
 └── cordis.patch.yml
+packages/dsh-workflow-node-chat/      # chat 节点服务端与前端
+packages/dsh-workflow-node-bash/      # bash 节点服务端与前端
+packages/dsh-workflow-node-form/      # form 节点服务端与前端
 ```
