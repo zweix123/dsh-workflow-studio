@@ -18,7 +18,7 @@ test('template tab rescans, shows invalid entries, and reuses and closes read-on
   globalThis.requestAnimationFrame = callback => setTimeout(() => callback(Date.now()), 0) as unknown as number
   globalThis.cancelAnimationFrame = handle => clearTimeout(handle)
   const definition = { id: 'root', type: 'dag', description: '原始描述', dag: [
-    { id: 'write', type: 'node', node_kind: 'chat', prompt: '完整提示词', output_schema: { answer: 'string' } },
+    { id: 'write', type: 'node', node_kind: 'chat', prompt: '完整提示词', dag: 'custom metadata', output_schema: { answer: 'string' } },
     { id: 'review', type: 'node', node_kind: 'bash', command: 'echo ok' },
     { type: 'edge', from: 'write', to: 'review', if: '$.answer == "yes"' },
   ] }
@@ -64,6 +64,7 @@ test('template tab rescans, shows invalid entries, and reuses and closes read-on
     assert.ok(writeDetails)
     await act(async () => writeDetails.click())
     assert.match(container.querySelector('.dsh-workflow-template-inspector')!.textContent!, /完整提示词/)
+    assert.match(container.querySelector('.dsh-workflow-template-inspector')!.textContent!, /dagcustom metadata/)
     assert.match(container.querySelector('.dsh-workflow-template-inspector')!.textContent!, /output_schema/)
     await act(async () => tabs()[1]!.click())
     assert.equal(catalogLoads, 2)

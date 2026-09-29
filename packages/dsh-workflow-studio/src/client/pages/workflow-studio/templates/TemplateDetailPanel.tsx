@@ -16,7 +16,7 @@ export function TemplateDetailPanel({ template, t, active }: { template: Templat
       {definition && <aside className="dsh-workflow-inspector dsh-workflow-template-inspector" aria-label={`${t('nodeDetails')} ${definition.id ?? template.definition.id}`}>
         <header><div><h3>{definition.id ?? template.definition.id}</h3></div><button type="button" aria-label={t('closeNodeDetails')} onClick={() => setSelected(null)}>×</button></header>
         <div className="dsh-workflow-inspector-body">
-          <dl>{Object.entries(definition).filter(([key]) => key !== 'dag').map(([key, value]) => <div key={key} className="dsh-workflow-template-field"><dt>{key}</dt><dd><pre>{typeof value === 'string' ? value : JSON.stringify(value, null, 2)}</pre></dd></div>)}</dl>
+          <dl>{Object.entries(definition).filter(([key]) => definition.type !== 'dag' || key !== 'dag').map(([key, value]) => <div key={key} className="dsh-workflow-template-field"><dt>{key}</dt><dd><pre>{typeof value === 'string' ? value : JSON.stringify(value, null, 2)}</pre></dd></div>)}</dl>
         </div>
       </aside>}
     </div>
