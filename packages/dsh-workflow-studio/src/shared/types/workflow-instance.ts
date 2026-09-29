@@ -12,6 +12,10 @@ export interface TemplateCatalog {
   templates: TemplateRow[]
 }
 
+export interface TemplateDetail extends TemplateRow {
+  definition: DagDefinition
+}
+
 export interface InstanceSummary {
   id: string
   workspaceId: string

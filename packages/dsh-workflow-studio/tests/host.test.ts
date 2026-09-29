@@ -45,8 +45,11 @@ test('built host plugin serves HTTP and removes its route on disposal', async ()
     const catalog = await (await fetch(`http://127.0.0.1:${ctx.webServer.port}${TEMPLATES_PATH}`)).json()
     assert.deepEqual(catalog.templates, [
       { id: 'github-spec-kit-workflow' },
+      { id: 'github-spec-kit-workflow.zh' },
       { id: 'matt-pocock-wayfinder-workflow' },
+      { id: 'matt-pocock-wayfinder-workflow.zh' },
       { id: 'openspec-workflow' },
+      { id: 'openspec-workflow.zh' },
     ])
     const builtin = join(home, 'dsh-workflow-studio', 'templates', 'matt-pocock-wayfinder-workflow', 'workflow.yaml')
     const bundled = await readFile(new URL('../templates/matt-pocock-wayfinder-workflow/workflow.yaml', import.meta.url), 'utf8')

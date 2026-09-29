@@ -6,6 +6,8 @@ A workflow plugin for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek
 
 Built for `@deepseek-ai/dsh@0.2.0-rc.1`. The plugin is currently installed from this repository; it is not published as a package.
 
+> `npm install -g @deepseek-ai/dsh@0.2.0-rc.1 --registry=https://registry.npmjs.org`
+
 ## What it does
 
 - Loads workflow templates from the local DSH home directory, with three bundled examples.
@@ -59,3 +61,7 @@ npm run check
 ```
 
 This runs type checking, the build, and tests. Product specifications live in [`docs/specs/`](docs/specs/), and repository conventions are in [`AGENTS.md`](AGENTS.md).
+
+```sh
+dsh plugin --profile web remove dsh-workflow-studio
+```

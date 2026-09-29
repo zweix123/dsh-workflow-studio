@@ -1,5 +1,5 @@
 import { INSTANCES_PATH, TEMPLATES_PATH } from '../../shared/constants.js'
-import type { CreateInstanceInput, ErrorResponse, InstanceDetail, InstanceErrorCode, InstanceSummary, TemplateCatalog } from '../../shared/types/workflow-instance.js'
+import type { CreateInstanceInput, ErrorResponse, InstanceDetail, InstanceErrorCode, InstanceSummary, TemplateCatalog, TemplateDetail } from '../../shared/types/workflow-instance.js'
 
 const object = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value)
 const strings = (value: unknown): value is string[] => Array.isArray(value) && value.every(item => typeof item === 'string')
@@ -71,6 +71,13 @@ export async function listTemplates(): Promise<TemplateCatalog> {
   const value = await request(TEMPLATES_PATH)
   if (!catalog(value)) throw new Error('Unexpected workflow template catalog')
   return value
+}
+
+export async function getTemplate(id: string): Promise<TemplateDetail> {
+  const value = await request(`${TEMPLATES_PATH}/${encodeURIComponent(id)}`)
+  if (!object(value) || value.id !== id || !object(value.definition) || value.definition.type !== 'dag' || !Array.isArray(value.definition.dag)
+    || (value.layout !== undefined && !layoutReport(value.layout))) throw new Error('Unexpected workflow template detail')
+  return value as unknown as TemplateDetail
 }
 
 export async function listInstances(): Promise<InstanceSummary[]> {

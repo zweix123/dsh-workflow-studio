@@ -3,12 +3,14 @@ type: dag
 input_schema:
   request: string
 output_schema: {}
-source: https://github.com/Fission-AI/OpenSpec
-references:
-  - https://github.com/Fission-AI/OpenSpec/blob/main/docs/workflows.md
-  - https://github.com/Fission-AI/OpenSpec/blob/main/docs/commands.md
-  - https://github.com/Fission-AI/OpenSpec/blob/main/docs/agent-contract.md
-description: 使用 OpenSpec 的 OPSX 工作流完成一次规格驱动变更：按需探索，生成并审阅规划产物，在计划修订、实现修复和一致性修订之间递归收敛，最后同步主规格并归档。
+# source: https://github.com/Fission-AI/OpenSpec
+# references:
+#   - https://github.com/Fission-AI/OpenSpec/blob/main/docs/workflows.md
+#   - https://github.com/Fission-AI/OpenSpec/blob/main/docs/commands.md
+#   - https://github.com/Fission-AI/OpenSpec/blob/main/docs/agent-contract.md
+description: "Use the OpenSpec OPSX workflow for a specification-driven change: explore when needed,
+  create and review planning artifacts, recursively converge through plan revisions, implementation
+  fixes, and consistency checks, then sync the main specs and archive the change."
 dag:
   - id: shape-change-request
     type: node
@@ -18,9 +20,13 @@ dag:
     output_schema:
       request: string
       exploration_used: boolean
-    prompt: 判断 request 是否已经足以界定一个具体变更。若问题仍模糊、需要调查代码库、比较方案或识别风险，调用
-      $.openspec-explore；探索阶段只读取和讨论，不编写产品代码，也不自动创建变更，除非用户明确同意保存探索结果。若需求已经清晰，则不调用该
-      skill。最终用中文整理出可供提案使用的 request，保留用户已经确认的范围、约束和验收目标，并返回 exploration_used 表示本次是否实际进行了探索。
+    prompt: Decide whether request already defines a concrete change. If it is still vague or requires
+      repository investigation, option comparison, or risk discovery, call $.openspec-explore.
+      During exploration, only read and discuss; do not write product code or create a change unless
+      the user explicitly agrees to save the exploration result. Skip the skill if the request is
+      already clear. Summarize a proposal-ready request in English, preserving the confirmed scope,
+      constraints, and acceptance goals. Return exploration_used to show whether exploration
+      actually occurred.
   - id: propose-openspec-change
     type: node
     node_kind: chat
@@ -28,16 +34,20 @@ dag:
       request: string
     output_schema:
       change_reference: string
-    prompt: 调用 $.openspec-propose，根据 request 创建一个 OpenSpec change。遵循当前项目实际启用的 schema 和 OpenSpec CLI
-      返回的依赖图、模板与路径，不硬编码产物集合；对于默认 spec-driven schema，通常需要形成 proposal、delta specs、design 和
-      tasks。这里只生成实现前所需的规划产物，不修改产品代码。完成后停止在规划边界，将 change 的稳定名称或 openspec/changes/<name> 路径作为
-      change_reference 返回。
+    prompt: Call $.openspec-propose to create an OpenSpec change from request. Follow the schema enabled
+      in this project and the dependency graph, templates, and paths returned by the OpenSpec CLI;
+      do not hard-code the artifact set. The default spec-driven schema usually calls for a
+      proposal, delta specs, design, and tasks. Generate only planning artifacts needed before
+      implementation; do not modify product code. Stop at the planning boundary and return the
+      stable change name or openspec/changes/<name> path as change_reference.
   - id: openspec-change-lifecycle
     type: dag
     input_schema:
       change_reference: string
     output_schema: {}
-    description: 审阅当前 change，并根据人类反馈或验证结果修订规划、实施和再次验证；存在缺口时递归开始下一轮，准备完成时同步并归档。
+    description: Review the current change; revise plans, implement, and verify again in response to
+      human feedback or verification results. Repeat when gaps remain, then sync and archive when
+      ready.
     dag:
       - id: review-planning-artifacts
         type: node
@@ -48,10 +58,14 @@ dag:
           change_reference: string
           planning_disposition: string
           revision_request: string
-        prompt: 读取 change_reference 对应 change 的当前状态和全部已有规划产物，路径与产物 ID 以 openspec status --change <name> --json
-          为准。用中文向用户概述变更动机、需求及场景、技术取舍、任务、风险和仍待决定的问题，并确认是否可以进入实现。若用户要求调整，返回
-          planning_disposition="revise_plan"，把经确认的修改要求写入 revision_request；若用户明确批准且所有 apply-required
-          产物已经就绪，返回 planning_disposition="implement" 和空的 revision_request。不得把沉默当作批准，也不得在本节点修改产物或代码。
+        prompt: Read the current state and all existing planning artifacts for change_reference. Use
+          openspec status --change <name> --json as the authority for paths and artifact IDs.
+          Summarize the motivation, requirements and scenarios, technical tradeoffs, tasks, risks,
+          and open decisions to the user in English, then ask whether implementation may begin. If
+          the user requests changes, return planning_disposition="revise_plan" with the confirmed
+          changes in revision_request. Return planning_disposition="implement" with an empty
+          revision_request only after explicit approval and when all apply-required artifacts are
+          ready. Do not treat silence as approval or modify artifacts or code in this node.
       - id: revise-planning-artifacts
         type: node
         node_kind: chat
@@ -60,10 +74,12 @@ dag:
           revision_request: string
         output_schema:
           planning_revision_reference: string
-        prompt: 调用 $.openspec-update-change，按照 revision_request 修订 change_reference
-          中已经存在的规划产物，并保持它们相互一致。逐个向用户确认拟议编辑，只写 openspec status
-          返回的现有产物路径；不要创建尚不存在的产物，也不要修改产品代码。若修改已经改变了变更的根本意图，应停止并建议新建 change，而不是强行改写当前
-          change。成功完成后将同一个稳定 change 引用作为 planning_revision_reference 返回。
+        prompt: Call $.openspec-update-change to revise existing planning artifacts for change_reference
+          according to revision_request, keeping them consistent. Confirm proposed edits with the
+          user one by one. Write only existing artifact paths returned by openspec status; do not
+          create missing artifacts or change product code. If the revision changes the fundamental
+          intent, stop and recommend a new change instead of forcing it into the current one. Return
+          the same stable change reference as planning_revision_reference after success.
       - id: apply-openspec-change
         type: node
         node_kind: chat
@@ -71,9 +87,13 @@ dag:
           change_reference: string
         output_schema:
           change_reference: string
-        prompt: 调用 $.openspec-apply-change 实施 change_reference。先通过 OpenSpec CLI 获取当前 schema 的 apply
-          指令、上下文文件和任务状态，再按依赖顺序处理尚未完成的任务；编写代码、运行与改动相称的测试和检查，只有真正完成后才勾选任务。实现中发现规划不准确时不要私自篡改意图，应如实记录并留给后续验证和
-          update 回环。遇到阻塞时保留真实状态并请求用户处理，不得虚报完成。返回原 change_reference。
+        prompt: Call $.openspec-apply-change for change_reference. First obtain the active schema's apply
+          instructions, context files, and task state from the OpenSpec CLI. Then handle unfinished
+          tasks in dependency order, write code, run checks and tests suited to the changes, and
+          mark tasks complete only after they are done. If implementation exposes an inaccurate
+          plan, record it honestly for the later verification and update loop; do not silently
+          change the intent. Preserve the real state and ask the user to handle blockers. Do not
+          claim unfinished work is complete. Return the original change_reference.
       - id: verify-openspec-change
         type: node
         node_kind: chat
@@ -83,10 +103,15 @@ dag:
           change_reference: string
           verification_disposition: string
           verification_summary: string
-        prompt: 调用 $.openspec-verify-change，对照 change_reference 的全部规划产物检查实现的 completeness、correctness 和
-          coherence，并在 verification_summary 中用中文记录证据、CRITICAL、WARNING 与建议。若代码或测试未满足已确认的产物，返回
-          verification_disposition="fix_implementation"；若实现揭示规划产物已经过时、互相矛盾或必须修订，返回
-          "revise_plan"；只有任务、需求场景和设计均有充分实现证据，且用户接受剩余非阻塞 warning 时，才返回 "ready"。本节点只验证和分类，不修改代码或规划产物。
+        prompt: Call $.openspec-verify-change and check implementation against every planning artifact for
+          change_reference for completeness, correctness, and coherence. Record evidence, CRITICAL
+          and WARNING findings, and recommendations in English in verification_summary. Return
+          verification_disposition="fix_implementation" if code or tests fail to satisfy confirmed
+          artifacts; return "revise_plan" if implementation reveals outdated, contradictory, or
+          otherwise necessary plan revisions. Return "ready" only when tasks, requirement scenarios,
+          and design have sufficient implementation evidence and the user accepts any remaining
+          non-blocking warnings. This node only verifies and classifies; it does not modify code or
+          planning artifacts.
       - id: fix-implementation-gaps
         type: node
         node_kind: chat
@@ -95,9 +120,12 @@ dag:
           verification_summary: string
         output_schema:
           implementation_fix_reference: string
-        prompt: 针对 verification_summary 中属于实现偏差、遗漏或测试覆盖不足的问题，再次调用 $.openspec-apply-change 处理
-          change_reference。严格以已经批准的规格、设计和任务为意图来源，补齐实现并运行相关验证；不要借修复之名改变需求或设计。处理完当前可执行缺口后，将同一个稳定
-          change 引用作为 implementation_fix_reference 返回，以便进入下一轮人工审阅和验证。
+        prompt: For implementation deviations, omissions, or test gaps in verification_summary, call
+          $.openspec-apply-change again for change_reference. Use only the approved specs, design,
+          and tasks as the source of intent. Complete the implementation and run relevant checks
+          without changing requirements or design under the guise of a fix. After resolving the
+          executable gaps, return the same stable change reference as implementation_fix_reference
+          for another human review and verification cycle.
       - id: reconcile-plan-after-implementation
         type: node
         node_kind: chat
@@ -106,10 +134,13 @@ dag:
           verification_summary: string
         output_schema:
           post_implementation_revision_reference: string
-        prompt: 调用 $.openspec-update-change，根据 verification_summary 修订 change_reference 中已经存在且与现实不一致的规划产物，确保
-          proposal、delta specs、design、tasks 或自定义 schema
-          产物重新一致。逐项取得用户确认，只修改规划产物，不修改代码；如果变化代表新的意图，应建议另建 change。完成后返回
-          post_implementation_revision_reference，后续必须重新审阅并再次 apply，使代码与修订后的计划一致。
+        prompt: Call $.openspec-update-change to revise existing planning artifacts for change_reference
+          that verification_summary shows are inconsistent with reality. Bring the proposal, delta
+          specs, design, tasks, or custom-schema artifacts back into agreement. Obtain user
+          confirmation for each edit. Change planning artifacts only, not code; recommend a new
+          change if the revision represents new intent. Return
+          post_implementation_revision_reference. The next cycle must review and apply the revised
+          plan again so the code matches it.
       - id: normalize-repeat-context
         type: node
         node_kind: chat
@@ -120,8 +151,11 @@ dag:
         output_schema:
           change_reference: string
           continue_lifecycle: boolean
-        prompt: 三个输入引用在运行时只会有一个存在。选择实际存在的引用并规范化为 change_reference，确认该 change 仍处于 active 状态，然后返回
-          continue_lifecycle=true 以启动下一轮审阅、实施和验证。若没有恰好一个引用、change 已被外部归档或状态损坏，不要提交结果；应报告异常并请求人工介入。
+        prompt: Exactly one of the three input references should exist at runtime. Select that reference,
+          normalize it to change_reference, confirm the change is still active, and return
+          continue_lifecycle=true to begin another review, implementation, and verification cycle.
+          If there is not exactly one reference, the change was archived externally, or its state is
+          damaged, do not submit a result; report the problem and request human intervention.
       - id: sync-main-specs
         type: node
         node_kind: chat
@@ -131,10 +165,13 @@ dag:
         output_schema:
           change_reference: string
           specs_synced: boolean
-        prompt: change_reference 已通过验证。对于长周期或并行变更、需要在归档前单独审阅合并结果等情况，先征得用户同意并调用 $.openspec-sync-specs，把 delta
-          specs 智能合并到主 openspec/specs 后返回 specs_synced=true。若无需单独同步，则不调用该 skill，返回
-          specs_synced=false，并把同步选择留给 archive；不得用复制文件代替 OpenSpec 的 ADDED、MODIFIED、REMOVED、RENAMED
-          合并规则。保持 change 仍为 active 并返回原引用。
+        prompt: change_reference has passed verification. For a long-running or parallel change, or when the
+          merged result needs separate review before archiving, obtain user consent and call
+          $.openspec-sync-specs to merge delta specs intelligently into the main openspec/specs;
+          then return specs_synced=true. If separate syncing is unnecessary, skip the skill, return
+          specs_synced=false, and leave the sync choice to archive. Do not replace OpenSpec's ADDED,
+          MODIFIED, REMOVED, and RENAMED merge rules with file copying. Keep the change active and
+          return its original reference.
       - id: archive-openspec-change
         type: node
         node_kind: chat
@@ -142,10 +179,13 @@ dag:
           change_reference: string
           specs_synced: boolean
         output_schema: {}
-        prompt: 调用 $.openspec-archive-change 完成 change_reference。重新检查产物和任务状态；如果 specs_synced=false 且存在 delta
-          specs，向用户展示差异并取得是否同步的明确选择，通常建议同步。使用 OpenSpec 的归档流程执行验证、必要的规格合并和移动，保留完整审计历史到
-          openspec/changes/archive/YYYY-MM-DD-<name>/。出现验证、同步、目标冲突或文件移动失败时不得声称成功；只有归档确实完成后才返回空对象 {}
-          并结束 workflow。
+        prompt: Call $.openspec-archive-change to complete change_reference. Recheck artifact and task
+          state. If specs_synced=false and delta specs exist, show the differences and obtain an
+          explicit choice about syncing; normally recommend syncing. Use OpenSpec's archive flow for
+          validation, any required spec merge, and movement to
+          openspec/changes/archive/YYYY-MM-DD-<name>/, preserving the audit history. Do not claim
+          success if validation, syncing, target conflict, or file movement fails. Return an empty
+          object {} and finish the workflow only after archiving actually succeeds.
       - id: review-to-planning-revision
         type: edge
         from: review-planning-artifacts

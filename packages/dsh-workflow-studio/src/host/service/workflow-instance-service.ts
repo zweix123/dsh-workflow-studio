@@ -1,4 +1,4 @@
-import { readdir } from 'node:fs/promises'
+import { readdir, realpath } from 'node:fs/promises'
 import type { Dirent } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
@@ -9,7 +9,7 @@ import type { DagDefinition, JsonObject } from '../dag/index.js'
 import { WorkflowEngine, WorkflowInstanceError, initializeWorkflow, validateWorkflowNodes } from '../workflow/index.js'
 import { WorkflowInstanceStore, workflowInstanceDomain } from '../storage/workflow-instance-store.js'
 import { validateTemplateDirectory } from '../template-directory.js'
-import type { CreateInstanceInput, InstanceDetail, InstanceSummary, TemplateCatalog, TemplateRow } from '../../shared/types/workflow-instance.js'
+import type { CreateInstanceInput, InstanceDetail, InstanceSummary, TemplateCatalog, TemplateDetail, TemplateRow } from '../../shared/types/workflow-instance.js'
 import { inspectLayout } from '../../shared/layout.js'
 import { serverNodes } from '../nodes/registry.js'
 import type { ServerNode } from '../../contract/node/index.js'
@@ -56,6 +56,29 @@ export class WorkflowInstanceService {
       templates: (await Promise.all(directories.map(entry => this.readTemplate(entry.name))))
         .map(({ definition: _definition, ...row }) => row),
     }
+  }
+
+  async getTemplate(id: string): Promise<TemplateDetail> {
+    if (!id || id === '.' || id === '..' || id.includes('/') || id.includes('\\') || id.includes('\0')) {
+      throw new WorkflowInstanceError('invalid-request', 'Invalid template ID')
+    }
+    const entries = await readdir(this.templateRoot, { withFileTypes: true }).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') return []
+      throw error
+    })
+    if (!entries.some(entry => entry.isDirectory() && entry.name === id)) {
+      throw new WorkflowInstanceError('template-missing', 'Workflow template not found')
+    }
+    const directory = await realpath(join(this.templateRoot, id))
+    const path = join(directory, 'workflow.yaml')
+    const resolved = await realpath(path).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') return path
+      throw error
+    })
+    if (resolved !== path) throw new WorkflowInstanceError('invalid-request', 'Template definition must stay in its directory')
+    const result = await this.readTemplate(id)
+    if (!result.definition) throw new WorkflowInstanceError('template-invalid', result.error ?? 'Workflow template is invalid')
+    return { id, definition: result.definition, ...(result.layout && { layout: result.layout }) }
   }
 
   listInstances(): InstanceSummary[] {

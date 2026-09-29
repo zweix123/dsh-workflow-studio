@@ -62,7 +62,7 @@
 ## 约束与参考
 
 - DAG 格式、输入校验和初始展开行为遵循 [DAG 语法文档](../dag-syntax.zh.md)，参考项目的旧模板语法不自动成为本项目标准。
-- 参考 `references/dsh-workflow-ui` 的工作区与实例关系，以及该项目和 `references/yak-lang/playground` 的 DAG 可视化实现；界面可以独立设计。
+- 参考 `references/dsh-workflow-ui` 的工作区与实例关系及 DAG 可视化实现；界面可以独立设计。
 - 保持与宿主 `@deepseek-ai/dsh@0.2.0-rc.1` 对齐，并兼顾浅色/深色主题、中英文和窄屏。
 - 参考项目通过宿主官方 `@deepseek-ai/dsh-storage-domain` 保存实例，使用 `defineDomain`、`ctx.storageDomain.open` 和领域存储的读写接口。本机安装的 `0.2.0-rc.1` 已核实提供该能力；本次实现已按该能力接入。
 - 当前宿主默认存储根为 `${DSH_HOME}/storages`，未设置 `DSH_HOME` 时为 `~/.dsh/storages`，可由宿主配置覆盖；不自动按 profile 隔离。参考项目文档中的“当前 profile”不能作为本项目的默认存储承诺。
@@ -70,7 +70,7 @@
 ## 模板发现与创建规则
 
 1. 模板路径为 `${DSH_HOME}/dsh-workflow-studio/templates/<模板ID>/workflow.yaml`，默认 DSH home 为 `~/.dsh`；目录名作为模板 ID 和本期选择器的展示名称。打开创建表单时重新读取模板目录。没有可用模板时展示放置路径；非法模板只标记为不可用并禁止选择，本期不分析或展示具体原因。
-   插件随包提供 `openspec-workflow`、`github-spec-kit-workflow` 和 `matt-pocock-wayfinder-workflow` 三个内置示例，取自 `references/yak-lang/examples/` 中对应的 code agent workflow（Wayfinder 使用 v2 内容，名称去掉 v2）。宿主每次加载时遍历包内 `templates/` 下的模板目录，把整个目录复制到上述目录；同名内置模板目录整体替换，其他用户模板目录不受影响。目录格式校验作为独立函数，读取 `workflow.yaml`、解析 YAML 并编译 DAG 定义，供模板发现和实例创建复用。
+   插件随包提供 `openspec-workflow`、`github-spec-kit-workflow` 和 `matt-pocock-wayfinder-workflow` 三个内置示例。每个示例以原目录提供英文版、以同名 `.zh` 目录提供中文版，共六个可选模板。宿主每次加载时遍历包内 `templates/` 下的模板目录，把整个目录复制到上述目录；同名内置模板目录整体替换，其他用户模板目录不受影响。目录格式校验作为独立函数，读取 `workflow.yaml`、解析 YAML 并编译 DAG 定义，供模板发现和实例创建复用。
 2. 创建表单包含实例名称和模板。名称默认由模板名称加时间生成，允许修改，同一工作区内不得重名。编译、运行时根输入生成和 DAG 初始化全部成功才保存实例；失败保留表单中的名称、模板选择并给出错误反馈，其中模板无效只提示状态，不展示解析或编译原因。成功后关闭表单，将实例加入所属工作区卡片；用户点击实例时打开 DAG 图。
 
 ## 本期验收范围

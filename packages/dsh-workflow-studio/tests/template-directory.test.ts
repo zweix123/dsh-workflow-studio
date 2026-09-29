@@ -3,9 +3,43 @@ import { test } from 'node:test'
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { parse } from 'yaml'
 import { copyBuiltinTemplates, validateTemplateDirectory } from '../src/host/template-directory.js'
 
 const validYaml = 'id: example\ntype: dag\ndag:\n  - id: start\n    type: node\n    node_kind: bash\n    command: ""\n'
+
+test('bundled templates have valid English and Chinese counterparts', async () => {
+  const root = fileURLToPath(new URL('../templates/', import.meta.url))
+  const names = (await readdir(root)).sort()
+  assert.deepEqual(names, [
+    'github-spec-kit-workflow', 'github-spec-kit-workflow.zh',
+    'matt-pocock-wayfinder-workflow', 'matt-pocock-wayfinder-workflow.zh',
+    'openspec-workflow', 'openspec-workflow.zh',
+  ])
+  for (const name of names) {
+    const result = await validateTemplateDirectory(join(root, name))
+    assert.equal('definition' in result, true, `${name}: ${'error' in result ? result.error : ''}`)
+    if ('definition' in result) for (const key of ['source', 'references', 'playground']) assert.equal(Object.hasOwn(result.definition, key), false, `${name}: ${key}`)
+  }
+  const localized = new Set(['id', 'from', 'to', 'definition_id', 'title', 'description', 'prompt', 'caption', 'request'])
+  const invariant = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(invariant)
+    if (value && typeof value === 'object') return Object.fromEntries(
+      Object.entries(value).map(([key, child]) => [key, localized.has(key) && typeof child === 'string' ? '<localized>' : invariant(child)]),
+    )
+    return value
+  }
+  for (const name of names.filter(name => !name.endsWith('.zh'))) {
+    const englishSource = await readFile(join(root, name, 'workflow.yaml'), 'utf8')
+    const chineseSource = await readFile(join(root, `${name}.zh`, 'workflow.yaml'), 'utf8')
+    assert.doesNotMatch(englishSource, /[\u3400-\u9fff]/u, name)
+    assert.match(chineseSource, /[\u3400-\u9fff]/u, name)
+    const english = parse(englishSource)
+    const chinese = parse(chineseSource)
+    assert.deepEqual(invariant(english), invariant(chinese), name)
+  }
+})
 
 test('workflow node fields are validated at the template boundary without dropping unknown fields', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dsh-business-fields-'))

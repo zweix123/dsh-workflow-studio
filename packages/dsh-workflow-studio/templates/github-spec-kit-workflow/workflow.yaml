@@ -1,275 +1,200 @@
-id: Spec-Kit规格驱动开发工作流
+id: Spec Kit specification-driven development workflow
 type: dag
 input_schema:
   request: string
 output_schema: {}
-source: https://github.com/github/spec-kit
-description: 使用 GitHub Spec Kit 的推荐流程，从项目原则开始，依次完成需求规格、技术方案、任务拆解、实现与收敛检查。
-playground:
-  version: 1
-  scenarios:
-    - id: full-sdd-with-convergence
-      title: 登录功能完整 SDD 与收敛回环
-      description: 从项目宪章和功能规格开始，经过两次人工审批、任务实施，并在首次收敛发现遗漏后追加任务再完成一次实现。
-      input:
-        request: 为现有 Web 应用增加基于邮箱和密码的用户登录
-      steps:
-        - target:
-            definition_id: 建立项目宪章
-          expect_input:
-            request: 为现有 Web 应用增加基于邮箱和密码的用户登录
-          output:
-            request: 为现有 Web 应用增加基于邮箱和密码的用户登录
-          presentation:
-            caption: 复用已有项目宪章，为后续规格、方案和实现提供统一约束。
-        - target:
-            definition_id: 编写功能规格
-          expect_input:
-            request: 为现有 Web 应用增加基于邮箱和密码的用户登录
-          output: {}
-          presentation:
-            caption: 生成登录功能的 spec.md 与内置需求质量清单。
-        - target:
-            definition_id: 澄清功能规格
-          expect_input: {}
-          output: {}
-          presentation:
-            caption: 澄清会影响范围和验收的登录需求，并更新功能规格。
-        - target:
-            definition_id: 评审功能规格
-          expect_input: {}
-          output:
-            spec_approved: true
-          presentation:
-            caption: 用户批准功能规格，条件边激活并进入技术规划。
-        - target:
-            definition_id: 制定技术方案
-          expect_input:
-            spec_approved: true
-          output: {}
-          presentation:
-            caption: 生成符合项目宪章的技术方案及相关设计产物。
-        - target:
-            definition_id: 评审技术方案
-          expect_input: {}
-          output:
-            plan_approved: true
-          presentation:
-            caption: 用户批准技术方案，继续进行质量检查和任务拆解。
-        - target:
-            definition_id: 评审需求质量
-          expect_input:
-            plan_approved: true
-          output: {}
-          presentation:
-            caption: 复核登录功能的安全性等需求质量关注点。
-        - target:
-            definition_id: 生成实施任务
-          expect_input: {}
-          output: {}
-          presentation:
-            caption: 把已批准的规格和方案拆解为可执行的 tasks.md。
-        - target:
-            definition_id: 分析产物一致性
-          expect_input: {}
-          output:
-            implementation_approved: true
-          presentation:
-            caption: 跨产物分析通过且用户批准，实施阶段被激活。
-        - target:
-            path:
-              - definition_id: Spec-Kit规格驱动开发工作流
-              - definition_id: 交付收敛循环
-              - definition_id: 执行任务计划
-          expect_input:
-            implementation_approved: true
-          output: {}
-          presentation:
-            caption: 执行首轮任务计划并完成相应验证。
-        - target:
-            path:
-              - definition_id: Spec-Kit规格驱动开发工作流
-              - definition_id: 交付收敛循环
-              - definition_id: 评估交付收敛
-          expect_input: {}
-          output:
-            continue_delivery: true
-          presentation:
-            caption: 首次收敛检查发现仍有构建缺口，追加任务并激活下一轮递归。
-        - target:
-            path:
-              - definition_id: Spec-Kit规格驱动开发工作流
-              - definition_id: 交付收敛循环
-              - definition_id: 交付收敛循环
-              - definition_id: 执行任务计划
-          expect_input:
-            continue_delivery: true
-          output: {}
-          presentation:
-            caption: 执行收敛阶段追加的任务，补齐首轮实现遗漏。
-        - target:
-            path:
-              - definition_id: Spec-Kit规格驱动开发工作流
-              - definition_id: 交付收敛循环
-              - definition_id: 交付收敛循环
-              - definition_id: 评估交付收敛
-          expect_input: {}
-          output:
-            continue_delivery: false
-          presentation:
-            caption: 第二次收敛检查确认代码已满足全部产物，workflow 完成。
-      expect_result: {}
+# source: https://github.com/github/spec-kit
+description: Follow the GitHub Spec Kit process from project principles through requirements,
+  technical planning, task breakdown, implementation, and convergence checks.
 dag:
-  - id: 建立项目宪章
+  - id: Establish project constitution
     type: node
     node_kind: chat
     input_schema:
       request: string
     output_schema:
       request: string
-    prompt: 检查仓库中是否已经存在有效的 Spec Kit 项目宪章，并遵循当前安装版本约定的默认存放位置。如果宪章已完整存在且用户没有要求调整治理原则，直接复用；否则调用
-      $speckit-constitution，根据用户提供的原则创建或更新项目宪章，对无法安全推断的关键原则再向用户提问。后续 Spec Kit Skill
-      会按自身约定读取默认宪章，不要把宪章路径作为业务参数传递。保持原始需求 request 不变并返回。本节点不要编写功能规格，也不要实现代码。
-  - id: 编写功能规格
+    prompt: Check whether the repository already has a valid Spec Kit project constitution at the
+      default location for the installed version. Reuse a complete constitution unless the user
+      requests governance changes. Otherwise call $speckit-constitution to create or update it from
+      the user's principles, asking about any essential principle that cannot be safely inferred.
+      Later Spec Kit skills will read the default constitution themselves; do not pass its path as a
+      business parameter. Return the original request unchanged. Do not write a feature
+      specification or implement code in this node.
+  - id: Write feature specification
     type: node
     node_kind: chat
     input_schema:
       request: string
     output_schema: {}
-    prompt: 调用 $speckit-specify，将 request 作为功能描述；该 Skill 应按 Spec Kit 约定自行读取项目默认宪章并应用其中的治理约束。只创建一个功能目录及其
-      spec.md，重点描述用户需要什么以及为什么需要，不要混入实现方案。遵循当前生效的 Spec Kit
-      模板，记录合理假设，仅保留真正影响范围或体验的待澄清问题，并执行内置的规格质量检查，直到通过或达到该 Skill 规定的重试上限。功能目录由 Spec Kit 记录为当前活动功能，后续
-      Skill 按自身约定解析，不要把目录路径作为业务参数传递。本节点不要制定技术方案或实现代码。
-  - id: 澄清功能规格
+    prompt: Call $speckit-specify with request as the feature description. The skill must read the
+      default project constitution under Spec Kit's conventions and apply its governance
+      constraints. Create only one feature directory and its spec.md, focusing on what the user
+      needs and why, without implementation details. Follow the active Spec Kit template, record
+      reasonable assumptions, keep only clarification questions that materially affect scope or
+      experience, and run the built-in specification quality check until it passes or reaches the
+      skill's retry limit. Spec Kit records the directory as the active feature; later skills
+      resolve it themselves, so do not pass the directory path as a business parameter. Do not
+      create a technical plan or implement code in this node.
+  - id: Clarify feature specification
     type: node
     node_kind: chat
     input_schema: {}
     output_schema: {}
-    prompt: 调用 $speckit-clarify，按 Spec Kit 的活动功能上下文找到当前功能规格，检查是否存在会实质影响实现或验收的歧义与缺失决策。按照该 Skill
-      的限制，只提出少量最高优先级问题，逐个取得用户答案，并把确认后的澄清内容写回 spec.md
-      和规格质量检查清单。如果规格已经足够清晰，不要编造问题，也不要无意义改写。本节点不要决定技术方案或实现代码。
-  - id: 评审功能规格
+    prompt: Call $speckit-clarify and locate the current specification through Spec Kit's active-feature
+      context. Check for ambiguity or missing decisions that materially affect implementation or
+      acceptance. Within the skill's limits, ask only a few highest-priority questions, obtain
+      answers one at a time, and write confirmed clarifications back to spec.md and the
+      specification quality checklist. If the specification is already clear, do not invent
+      questions or make pointless edits. Do not choose a technical plan or implement code in this
+      node.
+  - id: Review feature specification
     type: node
     node_kind: chat
     input_schema: {}
     output_schema:
       spec_approved: boolean
-    prompt: 按 Spec Kit 的活动功能上下文读取由 $speckit-specify 和 $speckit-clarify 生成的 spec.md
-      与需求质量清单，向用户展示范围、用户故事、可度量成功标准、假设以及仍存在的警告，请用户决定是否进入技术规划。只有获得用户明确批准时才返回
-      spec_approved=true；用户拒绝或仍需重新执行 $speckit-specify、$speckit-clarify 时返回 false。本节点不要制定方案或实现代码。
-  - id: 制定技术方案
+    prompt: Using Spec Kit's active-feature context, read spec.md and the requirements quality checklist
+      produced by $speckit-specify and $speckit-clarify. Show the user the scope, user stories,
+      measurable success criteria, assumptions, and remaining warnings, then ask whether technical
+      planning may begin. Return spec_approved=true only after explicit user approval; return false
+      if the user rejects the specification or $speckit-specify or $speckit-clarify must run again.
+      Do not plan or implement code in this node.
+  - id: Create technical plan
     type: node
     node_kind: chat
     input_schema: {}
     output_schema: {}
-    prompt: 调用 $speckit-plan，按 Spec Kit 的活动功能上下文处理当前功能。读取已批准的 spec.md 和项目宪章，解析当前生效的方案模板，研究尚未解决的技术问题，生成
-      plan.md，并按需生成 research.md、data-model.md、contracts/、quickstart.md
-      等辅助产物。设计前后都要执行宪章门禁，结合真实仓库与技术上下文，并确保方案能够追溯到功能规格。本节点不要生成任务或应用代码。
-  - id: 评审技术方案
+    prompt: Call $speckit-plan for the current active feature. Read the approved spec.md and project
+      constitution, resolve the active plan template, research unresolved technical questions, and
+      create plan.md. Add research.md, data-model.md, contracts/, quickstart.md, or other supporting
+      artifacts only as needed. Run constitution gates before and after design, use the real
+      repository and technical context, and keep the plan traceable to the feature specification. Do
+      not create tasks or application code in this node.
+  - id: Review technical plan
     type: node
     node_kind: chat
     input_schema: {}
     output_schema:
       plan_approved: boolean
-    prompt: 按 Spec Kit 的活动功能上下文读取由 $speckit-plan 生成的 plan.md
-      及其辅助设计产物，向用户展示架构、技术选型、接口、数据模型、宪章门禁结果、风险和明确的取舍，请用户决定是否进入任务拆解。只有获得用户明确批准时才返回
-      plan_approved=true；方案被拒绝或需要再次调用 $speckit-plan 修订时返回 false。本节点不要生成任务或实现代码。
-  - id: 评审需求质量
+    prompt: Using Spec Kit's active-feature context, read plan.md and supporting design artifacts
+      produced by $speckit-plan. Present the architecture, technology choices, interfaces, data
+      model, constitution gate results, risks, and explicit tradeoffs, then ask whether task
+      breakdown may begin. Return plan_approved=true only after explicit user approval; return false
+      if the plan is rejected or needs another $speckit-plan revision. Do not generate tasks or
+      implement code in this node.
+  - id: Review requirements quality
     type: node
     node_kind: chat
     input_schema: {}
     output_schema: {}
-    prompt: 与用户确认当前活动功能是否需要针对安全、可访问性、性能、用户体验等领域增加需求质量清单。需要时，针对每个确认的关注领域调用一次
-      $speckit-checklist；这些清单用于检验需求文本的完整性、清晰度与一致性，不是实现测试。引导人工评审未完成条目，未经评审者确认不得代替其勾选。无需自定义清单时保留内置
-      requirements 清单并继续。本节点不要创建实现任务或代码。
-  - id: 生成实施任务
+    prompt: Ask whether the active feature needs additional requirements quality checklists for
+      security, accessibility, performance, user experience, or other domains. If so, call
+      $speckit-checklist once for each confirmed concern. These checklists test the completeness,
+      clarity, and consistency of requirements text; they are not implementation tests. Guide human
+      review of unfinished items, and never check an item on the reviewer's behalf without
+      confirmation. If no custom checklist is needed, retain the built-in requirements checklist and
+      continue. Do not create implementation tasks or code in this node.
+  - id: Generate implementation tasks
     type: node
     node_kind: chat
     input_schema: {}
     output_schema: {}
-    prompt: 调用 $speckit-tasks，按 Spec Kit 的活动功能上下文处理当前功能。读取 spec.md、plan.md、全部可用的辅助设计产物和项目宪章，生成完整的
-      tasks.md。任务应按可独立交付的用户故事组织，先安排初始化与基础工作，写明准确文件路径和连续任务编号，体现真实依赖关系，并且只对能够安全并行的任务添加并行标记。规格、宪章或用户明确要求
-      TDD 时加入测试任务。本节点不要执行任何任务。
-  - id: 分析产物一致性
+    prompt: Call $speckit-tasks for the current active feature. Read spec.md, plan.md, all available
+      supporting design artifacts, and the project constitution, then generate a complete tasks.md.
+      Organize tasks by independently deliverable user stories; place setup and foundational work
+      first; specify exact file paths and consecutive task numbers; represent actual dependencies;
+      and mark only safely parallel tasks as parallel. Include test tasks when the specification,
+      constitution, or user explicitly requires TDD. Do not execute tasks in this node.
+  - id: Analyze artifact consistency
     type: node
     node_kind: chat
     input_schema: {}
     output_schema:
       implementation_approved: boolean
-    prompt: 在当前活动功能的 tasks.md 已生成后调用 $speckit-analyze，对 spec.md、plan.md、tasks.md
-      和项目宪章执行严格只读的跨产物一致性分析，按严重程度和可追溯位置报告不一致、重复、歧义、覆盖缺口与宪章冲突，不要静默修改任何产物。存在关键问题或用户不接受剩余问题时，返回
-      implementation_approved=false，并明确建议应重新调用哪个上游 Skill 或进行何种人工修订。只有产物足够一致且用户明确批准进入实现时才返回
-      implementation_approved=true。
-  - id: 交付收敛循环
+    prompt: After tasks.md exists for the active feature, call $speckit-analyze for a strictly read-only
+      consistency analysis across spec.md, plan.md, tasks.md, and the project constitution. Report
+      inconsistencies, duplication, ambiguity, coverage gaps, and constitution conflicts by severity
+      with traceable locations. Do not silently edit artifacts. Return implementation_approved=false
+      for critical issues or if the user rejects remaining issues, and recommend the upstream skill
+      or manual revision needed. Return implementation_approved=true only when the artifacts are
+      sufficiently consistent and the user explicitly approves implementation.
+  - id: Delivery convergence loop
     type: dag
     input_schema: {}
     output_schema: {}
-    description: 实现当前任务集，对照规格与方案检查代码，追加遗漏工作并重复执行，直到不存在仍需构建的缺口。
+    description: Implement the current task set, compare code with the specification and plan, append
+      missing work, and repeat until no buildable gap remains.
     dag:
-      - id: 执行任务计划
+      - id: Execute task plan
         type: node
         node_kind: chat
         input_schema: {}
         output_schema: {}
-        prompt: 调用 $speckit-implement，按 Spec Kit 的活动功能上下文处理当前功能。首先严格执行 Spec Kit
-          定义的清单门禁；任何由评审者负责的清单尚未完成时，必须先询问用户是否继续。加载
-          tasks.md、plan.md、可用的设计产物和项目宪章，检查或创建适用的忽略文件，然后按照依赖顺序分阶段执行任务，只对标记为可并行的任务采用安全并行。任务成功完成后才能勾选，执行相应验证，并如实报告进展与阻塞。
-      - id: 评估交付收敛
+        prompt: Call $speckit-implement for the current active feature. Enforce Spec Kit's checklist gate
+          first; if any reviewer-owned checklist remains unfinished, ask the user whether to
+          continue. Load tasks.md, plan.md, available design artifacts, and the constitution; check
+          or create appropriate ignore files; then execute tasks in dependency order and phases,
+          parallelizing only tasks marked as safe. Check off tasks only after success, run relevant
+          verification, and report progress and blockers honestly.
+      - id: Evaluate delivery convergence
         type: node
         node_kind: chat
         input_schema: {}
         output_schema:
           continue_delivery: boolean
-        prompt: 实现完成后调用 $speckit-converge，按 Spec Kit 的活动功能上下文处理当前功能。仅以 spec.md、plan.md、tasks.md
-          和项目宪章作为意图来源，检查当前代码库中缺失、仅部分完成、与意图冲突或未经要求的工作。严格遵守该 Skill
-          的只追加规则：本节点不得重写已有任务或修改应用代码；只有仍存在可执行缺口时，才在 tasks.md 末尾追加可追溯的 Convergence
-          阶段。若追加了必须完成的新任务并需要再次实现，返回 continue_delivery=true；若代码已经满足全部产物且 tasks.md 无需变化，则返回
-          continue_delivery=false。
-      - id: 实施完成后进入收敛检查
+        prompt: "After implementation, call $speckit-converge for the current active feature. Use only
+          spec.md, plan.md, tasks.md, and the constitution as sources of intent. Check the codebase
+          for missing, partial, conflicting, or unrequested work. Follow the skill's append-only
+          rule: do not rewrite existing tasks or modify application code in this node. Append a
+          traceable Convergence phase to tasks.md only when executable gaps remain. Return
+          continue_delivery=true if newly appended work must be implemented in another pass; return
+          false if the code satisfies all artifacts and tasks.md needs no change."
+      - id: Check convergence after implementation
         type: edge
-        from: 执行任务计划
-        to: 评估交付收敛
-      - id: 存在缺口时重复交付
+        from: Execute task plan
+        to: Evaluate delivery convergence
+      - id: Repeat delivery when gaps remain
         type: edge
-        from: 评估交付收敛
-        to: 交付收敛循环
+        from: Evaluate delivery convergence
+        to: Delivery convergence loop
         if: $.continue_delivery
-  - id: 宪章完成后编写规格
+  - id: Write specification after constitution
     type: edge
-    from: 建立项目宪章
-    to: 编写功能规格
-  - id: 规格完成后进行澄清
+    from: Establish project constitution
+    to: Write feature specification
+  - id: Clarify after specification
     type: edge
-    from: 编写功能规格
-    to: 澄清功能规格
-  - id: 澄清完成后评审规格
+    from: Write feature specification
+    to: Clarify feature specification
+  - id: Review after clarification
     type: edge
-    from: 澄清功能规格
-    to: 评审功能规格
-  - id: 规格批准后制定方案
+    from: Clarify feature specification
+    to: Review feature specification
+  - id: Plan after specification approval
     type: edge
-    from: 评审功能规格
-    to: 制定技术方案
+    from: Review feature specification
+    to: Create technical plan
     if: $.spec_approved
-  - id: 方案完成后进行评审
+  - id: Review after planning
     type: edge
-    from: 制定技术方案
-    to: 评审技术方案
-  - id: 方案批准后评审需求质量
+    from: Create technical plan
+    to: Review technical plan
+  - id: Review requirements quality after plan approval
     type: edge
-    from: 评审技术方案
-    to: 评审需求质量
+    from: Review technical plan
+    to: Review requirements quality
     if: $.plan_approved
-  - id: 质量评审后生成任务
+  - id: Generate tasks after quality review
     type: edge
-    from: 评审需求质量
-    to: 生成实施任务
-  - id: 任务生成后分析一致性
+    from: Review requirements quality
+    to: Generate implementation tasks
+  - id: Analyze consistency after task generation
     type: edge
-    from: 生成实施任务
-    to: 分析产物一致性
-  - id: 分析批准后进入交付
+    from: Generate implementation tasks
+    to: Analyze artifact consistency
+  - id: Begin delivery after analysis approval
     type: edge
-    from: 分析产物一致性
-    to: 交付收敛循环
+    from: Analyze artifact consistency
+    to: Delivery convergence loop
     if: $.implementation_approved

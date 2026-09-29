@@ -9,15 +9,15 @@ import { clientNodes } from '../../../nodes.js'
 import type { NodeCardProps } from '../../../../contract/node/client.js'
 import type { NodeData, NodeDefinition } from '../../../../contract/node/index.js'
 
-type GraphData = { id: string; label: string; status: 'ready' | 'completed' | 'running' | 'waiting' | 'skipped'; displayStatus?: string; statusLabel: string; kind: 'node' | 'dag' | 'position'; kindLabel: string; forItem?: { key: string; index: number }; detailsLabel: string; control?: React.ReactNode; onInspect: (id: string) => void }
-type Expression = { condition?: string; each?: string }
+type GraphData = { id: string; label: string; status?: 'ready' | 'completed' | 'running' | 'waiting' | 'skipped'; displayStatus?: string; statusLabel?: string; kind: 'node' | 'dag' | 'position'; kindLabel: string; forItem?: { key: string; index: number }; detailsLabel: string; control?: React.ReactNode; onInspect: (id: string) => void; template?: boolean }
+export type Expression = { condition?: string; each?: string }
 export const statusKeys = { ready: 'statusReady', completed: 'statusCompleted', running: 'statusRunning', waiting: 'statusWaiting', skipped: 'statusSkipped' } as const
 
 const WorkflowNode = memo(function WorkflowNode({ data: rawData }: NodeProps) {
   const data = rawData as GraphData
   return <div className="dsh-workflow-node" data-graph-node data-definition-id={data.label} data-status={data.displayStatus ?? data.status}>
     <Handle id="left" type="target" position={Position.Left} /><Handle id="top" type="target" position={Position.Top} />
-    <div className="dsh-workflow-node-top"><span className="dsh-workflow-node-kind">{data.kindLabel}</span><span className="dsh-workflow-node-status"><i aria-hidden="true" />{data.statusLabel}</span></div>
+    <div className="dsh-workflow-node-top"><span className="dsh-workflow-node-kind">{data.kindLabel}</span>{!data.template && <span className="dsh-workflow-node-status"><i aria-hidden="true" />{data.statusLabel}</span>}</div>
     <strong title={data.label}>{data.label}</strong>
     {data.forItem && <small title={data.forItem.key}>{data.forItem.key} #{data.forItem.index + 1}</small>}
     <div className="dsh-workflow-node-actions">
@@ -34,7 +34,7 @@ const DagGroupNode = memo(function DagGroupNode({ data: rawData }: NodeProps) {
     <Handle id="left" type="target" position={Position.Left} /><Handle id="top" type="target" position={Position.Top} />
     <div className="dsh-workflow-dag-heading">
       <strong title={data.label}>{data.label}</strong>
-      <span className="dsh-workflow-node-status"><i aria-hidden="true" />{data.statusLabel}</span>
+      {!data.template && <span className="dsh-workflow-node-status"><i aria-hidden="true" />{data.statusLabel}</span>}
       <button type="button" className="nodrag nopan" aria-label={`${data.detailsLabel} ${data.label}`} onClick={event => { event.stopPropagation(); data.onInspect(data.id) }}>ⓘ {data.detailsLabel}</button>
     </div>
     <Handle id="right" type="source" position={Position.Right} /><Handle id="bottom" type="source" position={Position.Bottom} />
@@ -58,10 +58,10 @@ function ExpressionEdge(props: EdgeProps) {
   return <><BaseEdge path={path} markerEnd={props.markerEnd} />{label && <EdgeLabelRenderer><button type="button" className="dsh-workflow-edge-label nodrag nopan" style={{ transform: `translate(-50%, -50%) translate(${x}px, ${y}px)` }}
     aria-label={`${label}: ${[data.condition, data.each].filter(Boolean).join('; ')}`} onFocus={() => data.open?.(props.id, data)} onClick={() => data.open?.(props.id, data)}>{label}</button></EdgeLabelRenderer>}</>
 }
-const nodeTypes = { workflow: WorkflowNode, dagGroup: DagGroupNode, aggregate: AggregateNode }
-const edgeTypes = { expression: ExpressionEdge }
+export const nodeTypes = { workflow: WorkflowNode, dagGroup: DagGroupNode, aggregate: AggregateNode }
+export const edgeTypes = { expression: ExpressionEdge }
 
-function CanvasNavigation({ nodes, candidates, active, ready, inspectorWidth, t }: { nodes: ReturnType<typeof buildCanvasGraph>['nodes']; candidates: WorkCandidate[]; active: boolean; ready: boolean; inspectorWidth: number; t: WorkflowTranslate }) {
+export function CanvasNavigation({ nodes, candidates, active, ready, inspectorWidth, t, template = false }: { nodes: ReturnType<typeof buildCanvasGraph>['nodes']; candidates: WorkCandidate[]; active: boolean; ready: boolean; inspectorWidth: number; t: WorkflowTranslate; template?: boolean }) {
   const { setViewport, zoomTo } = useReactFlow()
   const element = useRef<HTMLDivElement>(null)
   const first = useRef(false)
@@ -113,10 +113,10 @@ function CanvasNavigation({ nodes, candidates, active, ready, inspectorWidth, t 
   return <div ref={element} className="dsh-workflow-canvas-overlay"><div className="dsh-workflow-view-tools">
     <button type="button" onClick={() => fit()}>{t('fitGraph')}</button>
     <button type="button" onClick={() => { void zoomTo(1, { duration: 180 }); setFeedback('') }}>{t('resetZoom')}</button>
-    <button type="button" aria-expanded={listOpen} onClick={() => {
+    {!template && <button type="button" aria-expanded={listOpen} onClick={() => {
       if (candidates.length === 1) { locate(candidates[0].id); setListOpen(false); setFeedback('') }
       else { setListOpen(value => !value); setFeedback(candidates.length ? '' : t('noPendingNodes')) }
-    }}>{t('locateWork')}{candidates.length > 1 ? ` (${candidates.length})` : ''}</button>
+    }}>{t('locateWork')}{candidates.length > 1 ? ` (${candidates.length})` : ''}</button>}
     {listOpen && <div className="dsh-workflow-locate-list" role="dialog" aria-label={t('locateWork')}>
       <div className="dsh-workflow-locate-head"><strong>{t('locateWork')}</strong><button type="button" aria-label={t('closeList')} onClick={() => setListOpen(false)}>×</button></div>
         {candidates.length ? candidates.map(item => <button type="button" key={item.id} onClick={() => { locate(item.id); setListOpen(false); setFeedback('') }}><span>{item.label}{item.item ? ` · ${item.item}` : ''}</span><small>{item.path ? `${item.path} · ` : ''}{item.status === 'error' ? t('executionError') : item.status === 'unknown' ? t('statusUnknown') : item.status === 'running' ? t('statusRunning') : t('statusReady')}</small></button>) : <p>{t('noPendingNodes')}</p>}

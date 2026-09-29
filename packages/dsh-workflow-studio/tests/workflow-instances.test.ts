@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, test } from 'node:test'
@@ -522,6 +522,28 @@ test('template route rescans the configured directory and reports invalid templa
 
   assert.equal((await fetch(f.url(TEMPLATES_PATH), { method: 'POST' })).status, 405)
   assert.equal((await fetch(f.url(INSTANCES_PATH))).status, 200)
+})
+
+test('template detail is validated on read and confined to a direct template directory', async () => {
+  const f = await fixture()
+  await putTemplate(f.templateRoot, 'good', 'id: root\ntype: dag\ndescription: Original\ndag:\n  - id: step\n    type: node\n    node_kind: bash\n    command: echo hi\n')
+  await putTemplate(f.templateRoot, 'bad', 'type: dag\ndag: []\n')
+  const url = (id: string) => f.url(`${TEMPLATES_PATH}/${id}`)
+  assert.equal((await fetch(url('good'))).status, 200)
+  const first = await (await fetch(url('good'))).json() as any
+  assert.equal(first.id, 'good')
+  assert.equal(first.definition.description, 'Original')
+  assert.equal(first.definition.dag[0].command, 'echo hi')
+  await putTemplate(f.templateRoot, 'good', 'id: root\ntype: dag\ndescription: Updated\ndag:\n  - id: step\n    type: node\n    node_kind: bash\n    command: echo hi\n')
+  assert.equal((await (await fetch(url('good'))).json() as any).definition.description, 'Updated')
+  assert.equal((await fetch(url('bad'))).status, 422)
+  assert.equal((await fetch(url('gone'))).status, 404)
+  assert.equal((await fetch(url('..%2f..%2foutside'))).status, 400)
+  await mkdir(join(f.templateRoot, 'linked'))
+  await writeFile(join(f.root, 'outside.yaml'), 'id: outside\ntype: dag\ndag: []\n')
+  await symlink(join(f.root, 'outside.yaml'), join(f.templateRoot, 'linked', 'workflow.yaml'))
+  assert.equal((await fetch(url('linked'))).status, 400)
+  assert.equal((await fetch(url('good'), { method: 'POST' })).status, 405)
 })
 
 test('instance route validates and initializes before one durable create', async () => {

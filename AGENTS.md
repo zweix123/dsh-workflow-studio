@@ -7,6 +7,7 @@
 - 安装与分发：仅开发插件，不内置或安装 dsh CLI；用户自行安装本机 dsh，再通过本地目录添加插件。当前不维护分发或发布流程。
 - 按需建设：没有实现需求时，不创建预留目录或增加抽象。
 - 模块依赖：`workflow/` 选择并调用 `nodes/` 中的节点能力，负责工作流执行状态与持久化协调；`nodes/` 不依赖 `workflow/`、`dag/` 或工作流实例状态类型。
+- 模板 i18n：`packages/dsh-workflow-studio/templates/<name>/workflow.yaml` 为英文版，`packages/dsh-workflow-studio/templates/<name>.zh/workflow.yaml` 为对应中文版；两版使用相同的 DAG 结构、字段和外部能力，中文模板迭代时同步落实到英文版。目录名中的 `.zh` 是语言后缀，`<name>` 保持一致。
 
 ## 项目结构
 

@@ -27,6 +27,7 @@ for (const [language, initial, other] of [['zh', zh, en], ['en', en, zh]] as con
     let requests = 0
     globalThis.fetch = async url => {
       requests++
+      if (url === '/api/dsh-workflow-studio/templates') return Response.json({ directory: '/templates/<template-id>/workflow.yaml', templates: [] })
       assert.equal(url, '/api/dsh-workflow-studio/instances')
       return Response.json([])
     }
@@ -47,7 +48,7 @@ for (const [language, initial, other] of [['zh', zh, en], ['en', en, zh]] as con
         assert.equal(tab.getAttribute('aria-controls'), panel.id)
         assert.equal(panel.getAttribute('aria-labelledby'), tab.id)
         assert.equal(panel.hidden, index !== selected)
-        if (index === 1) assert.equal(panel.childNodes.length, 0)
+        if (index === 1) assert.ok(panel.querySelector('.dsh-workflow-template-list'))
       })
     }
     const press = async (key: string, selected: number) => {
@@ -72,7 +73,7 @@ for (const [language, initial, other] of [['zh', zh, en], ['en', en, zh]] as con
       const originalPanels = panels()
       dictionary = other
       await act(async () => render())
-      assert.equal(requests, initialRequests)
+      assert.equal(requests, initialRequests + 1)
       assert.equal(container.querySelector('h1')!.textContent, other.title)
       assert.equal(container.querySelector('.dsh-workflow-overview-heading h2')!.textContent, other.overviewTitle)
       assert.deepEqual(tabs().map(tab => tab.textContent), [other.instanceManagement, other.templateManagement])
@@ -372,7 +373,7 @@ test('instance cards and creation dialog preserve drafts, then open details only
     await act(async () => more.click())
     await act(async () => oldItem.querySelector<HTMLButtonElement>('[role="menuitem"]')!.click())
     await act(async () => dom.window.document.querySelector<HTMLButtonElement>('.dsh-workflow-delete-confirm')!.click())
-    assert.equal(dom.window.document.querySelector('[role="alert"]')?.textContent, '操作失败，请重试。 try again')
+    assert.equal(dom.window.document.querySelector('.dsh-workflow-delete-dialog [role="alert"]')?.textContent, '操作失败，请重试。 try again')
     assert.ok(oldRow.isConnected)
     await act(async () => dom.window.document.querySelector<HTMLButtonElement>('.dsh-workflow-delete-confirm')!.click())
     assert.equal(deleteAttempts, 2)

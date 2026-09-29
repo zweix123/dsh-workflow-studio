@@ -1,0 +1,144 @@
+id: Matt-Pocock-工程工作流
+type: dag
+input_schema:
+  request: string
+output_schema: {}
+# source: https://github.com/mattpocock/skills
+description: Wayfinder：一次选择地图中的全部开放 decision tickets，并让每个 ticket 在发现新前置决策时独立分裂和递归。
+dag:
+  - id: 绘制-Wayfinder-地图
+    type: node
+    node_kind: chat
+    input_schema:
+      request: string
+    output_schema:
+      map_reference: string
+      requires_wayfinding: boolean
+    prompt: 调用 $.wayfinder，使用“Chart the map”模式处理输入中的工程需求。确定 destination，创建唯一归属于当前 workflow 的 Wayfinder
+      map，并创建当前能够明确描述的 decision tickets 及其阻塞关系。返回 map_reference 和
+      requires_wayfinding=true。如果路线已经清晰且工作不需要 Wayfinder map，返回稳定的当前规划上下文引用并将 requires_wayfinding 设为
+      false。本节点不得实现产品代码。
+  - id: 选择全部决策票
+    type: node
+    node_kind: chat
+    input_schema:
+      map_reference: string
+    output_schema:
+      map_reference: string
+      tickets:
+        type: array
+        items:
+          type: object
+          properties:
+            key: string
+            map_reference: string
+            ticket_reference: string
+    prompt: 调用 $.wayfinder，读取 map_reference 指向的完整地图，一次返回当前全部开放 decision tickets，不在此处按 blocker 过滤。当前 map
+      只由本 workflow 创建和处理，不需要 claim、assignee 或跨 workflow 并发控制。tickets 中每一项使用稳定且唯一的 key，并携带
+      map_reference 和 ticket_reference。只返回严格符合 output_schema 的结果，不要开始讨论任何 ticket。
+  - id: 决策票递归树
+    type: dag
+    input_schema:
+      map_reference: string
+      ticket_reference: string
+    output_schema: {}
+    description: 处理一个 decision ticket；发现新的前置决策时，递归分裂出 blocker tickets 和当前 ticket 的 continuation。
+    dag:
+      - id: 处理单个决策票
+        type: node
+        node_kind: chat
+        input_schema:
+          map_reference: string
+          ticket_reference: string
+        output_schema:
+          continue_decision: boolean
+          next_tickets:
+            type: array
+            items:
+              type: object
+              properties:
+                key: string
+                map_reference: string
+                ticket_reference: string
+        prompt: 调用 $.wayfinder，使用“Work through the map”模式处理 ticket_reference 指向的单个 decision ticket。如果 tracker
+          显示该 ticket 仍被其他 ticket 阻塞，不要提交节点结果，也不要绕过 blocker；等待同一 workflow 中的 blocker
+          完成后重新检查，或者请求人工介入，并在当前 chat 中继续。ticket 可处理时，根据类型调用 $.research、$.prototype，或同时调用 $.grilling
+          和 $.domain-modeling。若决策已经解决，记录 resolution、关闭或重新划定 ticket 范围、更新 map，并返回 next_tickets=[] 和
+          continue_decision=false。若讨论发现新的前置决策，创建新的 blocker tickets 并写入 tracker，同时保持当前 ticket
+          open；返回的 next_tickets 必须包含每个新 blocker，还必须包含一个指向当前 ticket 的 continuation 项，并返回
+          continue_decision=true。continuation 使用新的唯一 key，但 ticket_reference 仍指向当前
+          ticket；它启动后应按照前述规则等待 blocker 完成。不得实现 destination 本身。
+      - id: 分裂决策票
+        type: edge
+        from: 处理单个决策票
+        to: 决策票递归树
+        if: $.continue_decision
+        for: $.next_tickets
+  - id: 发布规格
+    type: node
+    node_kind: chat
+    input_schema:
+      map_reference: string
+    output_schema:
+      spec_reference: string
+    prompt: 调用 $.to-spec。将 map_reference 指向的已完成 Wayfinder map、已解决 decision tickets、当前对话、仓库领域词汇和相关 ADR
+      作为规划上下文。确认测试 seam 后，使用该 skill 的模板综合并发布 spec。不要重新打开已经确定的决策，也不要实现代码。返回已发布 spec 的稳定
+      spec_reference。
+  - id: 发布实现票
+    type: node
+    node_kind: chat
+    input_schema:
+      spec_reference: string
+    output_schema:
+      ticket_set_reference: string
+    prompt: 调用 $.to-tickets 处理 spec_reference 指向的 spec。将工作拆分为 tracer-bullet
+      垂直切片，设置真实阻塞关系，并与用户迭代直到粒度和依赖获得确认。发布 tickets 后返回能够稳定恢复实现 frontier 的
+      ticket_set_reference。本节点不得实现代码。
+  - id: 实现循环
+    type: dag
+    input_schema:
+      ticket_set_reference: string
+    output_schema: {}
+    dag:
+      - id: 实现下一张票
+        type: node
+        node_kind: chat
+        input_schema:
+          ticket_set_reference: string
+        output_schema:
+          ticket_set_reference: string
+          continue_implementation: boolean
+        prompt: 检查 ticket_set_reference 并选择下一个 blocker 均已完成的开放实现 ticket，针对且仅针对该 ticket 调用 $.implement。按约定使用
+          TDD，持续运行类型检查和测试，最终运行完整测试套件，调用 $.code-review，处理必须修复的问题，提交工作并更新 tracker。仍有必要 ticket 时返回
+          continue_implementation=true；全部完成时返回 false。被外部操作或非法依赖阻塞时应请求介入，不得错误地返回完成。
+      - id: 继续实现循环
+        type: edge
+        from: 实现下一张票
+        to: 实现循环
+        if: $.continue_implementation
+  - id: 开始选择决策票
+    type: edge
+    from: 绘制-Wayfinder-地图
+    to: 选择全部决策票
+    if: $.requires_wayfinding
+  - id: 分发全部决策票
+    type: edge
+    from: 选择全部决策票
+    to: 决策票递归树
+    for: $.tickets
+  - id: 规划上下文进入规格
+    type: edge
+    from: 绘制-Wayfinder-地图
+    to: 发布规格
+  - id: 等待决策森林
+    type: edge
+    from: 决策票递归树
+    to: 发布规格
+  - id: 规格转实现票
+    type: edge
+    from: 发布规格
+    to: 发布实现票
+  - id: 实现票转实现循环
+    type: edge
+    from: 发布实现票
+    to: 实现循环

@@ -3,9 +3,12 @@ import type { KeyboardEvent } from 'react'
 import type { WorkspaceSnapshot } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import type { InstanceDetail } from '../../../shared/types/workflow-instance.js'
+import type { TemplateDetail } from '../../../shared/types/workflow-instance.js'
 import type { WorkflowTranslate } from '../../locales/index.js'
 import { InstanceRunPanel } from './instances/InstanceRunPanel.js'
 import { InstancesPanel } from './instances/InstancesPanel.js'
+import { TemplatesPanel } from './templates/TemplatesPanel.js'
+import { TemplateDetailPanel } from './templates/TemplateDetailPanel.js'
 import { styles } from './styles.js'
 
 type UseWorkspaces = <T>(selector: (snapshot: WorkspaceSnapshot) => T) => T
@@ -14,15 +17,17 @@ export function WorkflowStudioPanel({ t, useWorkspaces, onOpenSession }: { t: Wo
   const id = useId()
   const [activeTab, setActiveTab] = useState('instances')
   const [opened, setOpened] = useState<InstanceDetail[]>([])
+  const [openedTemplates, setOpenedTemplates] = useState<TemplateDetail[]>([])
   const buttons = useRef<Record<string, HTMLButtonElement | null>>({})
-  const tabs: { id: string; label: string; detail?: InstanceDetail }[] = [
+  const tabs: { id: string; label: string; detail?: InstanceDetail; template?: TemplateDetail }[] = [
     { id: 'instances', label: t('instanceManagement') },
     { id: 'templates', label: t('templateManagement') },
     ...opened.map(detail => ({ id: `instance-${detail.id}`, label: detail.name, detail })),
+    ...openedTemplates.map(template => ({ id: `template-${encodeURIComponent(template.id)}`, label: template.id, template })),
   ]
 
   useEffect(() => {
-    if (activeTab.startsWith('instance-')) buttons.current[activeTab]?.focus()
+    if (activeTab.startsWith('instance-') || activeTab.startsWith('template-')) buttons.current[activeTab]?.focus()
   }, [activeTab])
 
   function openDetail(detail: InstanceDetail) {
@@ -36,11 +41,23 @@ export function WorkflowStudioPanel({ t, useWorkspaces, onOpenSession }: { t: Wo
     return true
   }
 
+  function openTemplate(template: TemplateDetail) {
+    setOpenedTemplates(current => current.some(item => item.id === template.id) ? current : [...current, template])
+    setActiveTab(`template-${encodeURIComponent(template.id)}`)
+  }
+
+  function openExistingTemplate(id: string) {
+    if (!openedTemplates.some(item => item.id === id)) return false
+    setActiveTab(`template-${encodeURIComponent(id)}`)
+    return true
+  }
+
   function closeDetail(tabId: string) {
     const index = tabs.findIndex(tab => tab.id === tabId)
     const next = tabs[index + 1]?.id ?? tabs[index - 1]?.id ?? 'instances'
     const focused = activeTab === tabId ? next : activeTab
     setOpened(current => current.filter(detail => `instance-${detail.id}` !== tabId))
+    setOpenedTemplates(current => current.filter(template => `template-${encodeURIComponent(template.id)}` !== tabId))
     if (activeTab === tabId) setActiveTab(next)
     buttons.current[focused]?.focus()
   }
@@ -80,7 +97,7 @@ export function WorkflowStudioPanel({ t, useWorkspaces, onOpenSession }: { t: Wo
             onClick={() => setActiveTab(tab.id)}
             onKeyDown={event => handleKeyDown(event, tab.id)}
           >{tab.label}</button>
-          {tab.detail && <button type="button" className="dsh-workflow-tab-close" aria-label={`${t('closeInstanceTab')} ${tab.label}`} onClick={() => closeDetail(tab.id)}>×</button>}
+          {(tab.detail || tab.template) && <button type="button" className="dsh-workflow-tab-close" aria-label={`${t(tab.template ? 'closeTemplateTab' : 'closeInstanceTab')} ${tab.label}`} onClick={() => closeDetail(tab.id)}>×</button>}
         </div>)}
       </div>
     </header>
@@ -97,6 +114,10 @@ export function WorkflowStudioPanel({ t, useWorkspaces, onOpenSession }: { t: Wo
         setOpened(current => current.filter(detail => detail.id !== instanceId))
         if (activeTab === `instance-${instanceId}`) setActiveTab('instances')
       }} />
+      : tab.id === 'templates'
+        ? <TemplatesPanel t={t} active={activeTab === 'templates'} onSelect={openTemplate} onOpenExisting={openExistingTemplate} />
+      : tab.template
+        ? <TemplateDetailPanel template={tab.template} t={t} active={activeTab === tab.id} />
       : tab.detail
         ? <InstanceRunPanel detail={tab.detail} t={t} active={activeTab === tab.id} onOpenSession={onOpenSession}
           onUpdate={updated => setOpened(current => current.map(item => item.id === updated.id && (updated.revision ?? 0) >= (item.revision ?? 0) ? { ...updated, drawerWidth: item.drawerWidth ?? updated.drawerWidth } : item))}

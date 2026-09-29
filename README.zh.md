@@ -6,6 +6,8 @@
 
 固定适配 `@deepseek-ai/dsh@0.2.0-rc.1`。目前从本仓库安装，尚未发布为软件包。
 
+> `npm install -g @deepseek-ai/dsh@0.2.0-rc.1 --registry=https://registry.npmjs.org`
+
 ## 功能
 
 - 从本机 DSH 用户目录加载工作流模板，并附带三个示例模板。
@@ -59,3 +61,7 @@ npm run check
 ```
 
 该命令执行类型检查、构建和测试。产品规格见 [`docs/specs/`](docs/specs/)，仓库约定见 [`AGENTS.md`](AGENTS.md)。
+
+```sh
+dsh plugin --profile web remove dsh-workflow-studio
+```

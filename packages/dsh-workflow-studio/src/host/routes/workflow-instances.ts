@@ -38,6 +38,13 @@ export function createWorkflowInstancesRoute(service: WorkflowInstanceService): 
           if (request.method !== 'GET') return json(response, 405, { error: { code: 'method-not-allowed', message: 'Method not allowed' } })
           return json(response, 200, await service.listTemplates())
         }
+        if (path.startsWith(`${TEMPLATES_PATH}/`)) {
+          if (request.method !== 'GET') return json(response, 405, { error: { code: 'method-not-allowed', message: 'Method not allowed' } })
+          let id: string
+          try { id = decodeURIComponent(path.slice(TEMPLATES_PATH.length + 1)) }
+          catch { throw new WorkflowInstanceError('invalid-request', 'Invalid template ID') }
+          return json(response, 200, await service.getTemplate(id))
+        }
         if (path === INSTANCES_PATH) {
           if (request.method === 'GET') return json(response, 200, service.listInstances())
           if (request.method === 'POST') return json(response, 201, await service.createInstance(await body(request)))

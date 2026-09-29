@@ -112,6 +112,28 @@ ${reactFlowCss}
   min-width: 0;
   overflow: auto;
 }
+.dsh-workflow-template-list { box-sizing: border-box; min-width: 0; padding: 28px 20px 80px; }
+.dsh-workflow-template-list ul { list-style: none; padding: 0; margin: 20px 0 0; display: grid; gap: 10px; max-width: 800px; }
+.dsh-workflow-template-item { padding: 12px 14px; border: .5px solid var(--dsw-alias-border-l2); border-radius: 9px; background: var(--dsw-alias-bg-layer-1); }
+.dsh-workflow-template-item > button { border: 0; padding: 3px 0; background: none; color: var(--dsw-alias-label-primary); font: inherit; font-size: 13px; font-weight: 600; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
+.dsh-workflow-template-item > button:hover { color: var(--dsw-alias-state-business-primary); }
+.dsh-workflow-template-item > button:disabled { color: var(--dsw-alias-label-tertiary); cursor: default; }
+.dsh-workflow-template-item > button:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 2px; }
+.dsh-workflow-template-item > p { margin: 8px 0 0; color: var(--dsw-alias-label-error); font-size: 12px; overflow-wrap: anywhere; }
+.dsh-workflow-template-item > p strong { margin-right: 8px; }
+.dsh-workflow-template-item .dsh-workflow-layout-notices { margin: 10px 0 0; }
+.dsh-workflow-template-list > .dsh-workflow-template-empty { margin-top: 20px; }
+.dsh-workflow-template-detail .dsh-workflow-detail-header { justify-content: space-between; gap: 12px; }
+.dsh-workflow-template-detail .dsh-workflow-detail-header button { align-self: center; }
+.dsh-workflow-template-graph .dsh-workflow-node { grid-template-rows: 16px minmax(0, 1fr) auto; }
+.dsh-workflow-template-inspector { width: min(320px, 100%); display: flex; flex-direction: column; }
+.dsh-workflow-template-inspector .dsh-workflow-inspector-body { flex: 1; min-height: 0; }
+.dsh-workflow-template-inspector dl { margin: 0; }
+.dsh-workflow-template-field { border-bottom: .5px solid var(--dsw-alias-border-l3); padding: 9px 0; }
+.dsh-workflow-template-field:first-child { padding-top: 0; }
+.dsh-workflow-template-field dt { font-weight: 600; overflow-wrap: anywhere; }
+.dsh-workflow-template-field dd { margin: 5px 0 0; }
+.dsh-workflow-template-field pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; line-height: 1.5; }
 .dsh-workflow-instances {
   min-width: 0;
   min-height: 0;
