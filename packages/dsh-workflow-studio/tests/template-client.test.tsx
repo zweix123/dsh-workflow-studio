@@ -62,6 +62,7 @@ test('template tab rescans, shows invalid entries, and reuses and closes read-on
     assert.equal(container.querySelector('.dsh-workflow-template-detail [aria-label="执行"]'), null)
     const writeDetails = container.querySelector<HTMLButtonElement>('.dsh-workflow-template-detail [aria-label="详情 write"]')
     assert.ok(writeDetails)
+    assert.equal(writeDetails.closest<HTMLElement>('.react-flow__node')?.style.pointerEvents, 'all')
     await act(async () => writeDetails.click())
     assert.match(container.querySelector('.dsh-workflow-template-inspector')!.textContent!, /完整提示词/)
     assert.match(container.querySelector('.dsh-workflow-template-inspector')!.textContent!, /dagcustom metadata/)

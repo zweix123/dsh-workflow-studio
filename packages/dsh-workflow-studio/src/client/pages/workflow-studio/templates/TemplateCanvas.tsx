@@ -28,7 +28,7 @@ export function TemplateCanvas({ definition, t, onInspect, active, inspectorWidt
   return <div className="dsh-workflow-graph dsh-workflow-template-graph" aria-label={t('templateGraph')}>
     <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} minZoom={0.05} maxZoom={2} onInit={() => setReady(true)}
       panOnDrag zoomOnScroll nodesDraggable={false} nodesConnectable={false} nodesFocusable={false} edgesFocusable={false}
-      elementsSelectable={false} deleteKeyCode={null} proOptions={{ hideAttribution: true }}>
+      elementsSelectable={false} onNodeClick={() => {}} deleteKeyCode={null} proOptions={{ hideAttribution: true }}>
       <Controls showInteractive={false} showFitView={false} />
       <CanvasNavigation nodes={nodes} candidates={[]} active={active} ready={ready} inspectorWidth={inspectorWidth} t={t} template />
     </ReactFlow>
