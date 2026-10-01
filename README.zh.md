@@ -33,7 +33,7 @@ dsh web
 ## 创建工作流
 
 1. 在 `<DSH 用户目录>/dsh-workflow-studio/templates/<template-id>/` 下添加 `workflow.yaml`。默认 DSH 用户目录是 `~/.dsh`。
-2. 从 DSH 侧边栏打开 **工作流工坊**，在 **实例管理** 中选择工作区和模板，创建实例。
+2. 从 DSH 侧边栏打开 **工作流**，在 **实例管理** 中选择工作区和模板，创建实例。
 3. 打开实例，在运行图中执行就绪节点。`chat` 节点需用户明确标记完成；`bash` 命令成功后自动完成；`form` 节点在有效提交后完成。
 
 最小模板，保存为 `~/.dsh/dsh-workflow-studio/templates/hello/workflow.yaml`：

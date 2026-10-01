@@ -1,5 +1,5 @@
 export const zh = {
-  title: '工作流工坊',
+  title: '工作流',
   instances: '实例',
   templates: '模版',
   instanceManagement: '实例管理',

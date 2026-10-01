@@ -1,7 +1,7 @@
 import type { zh } from './zh.js'
 
 export const en: Record<keyof typeof zh, string> = {
-  title: 'Workflow Studio',
+  title: 'Workflows',
   instances: 'Instances',
   templates: 'Templates',
   instanceManagement: 'Instance management',

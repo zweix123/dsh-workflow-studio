@@ -33,7 +33,7 @@ DSH itself is not bundled with this plugin.
 ## Create a workflow
 
 1. Add a `workflow.yaml` under `<DSH home>/dsh-workflow-studio/templates/<template-id>/`. The default DSH home is `~/.dsh`.
-2. Open **Workflow Studio** from the DSH sidebar. In **Instances**, choose a workspace, select the template, and create a run.
+2. Open **Workflows** from the DSH sidebar. In **Instances**, choose a workspace, select the template, and create a run.
 3. Open the run to execute ready nodes and inspect its graph. A `chat` node is completed explicitly by the user; a successful `bash` command completes automatically; a `form` node completes on valid submission.
 
 Minimal template at `~/.dsh/dsh-workflow-studio/templates/hello/workflow.yaml`:
