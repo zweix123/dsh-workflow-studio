@@ -34,7 +34,7 @@ export function cloneDefinition<T>(value: T): T {
   for (const key of Object.keys(value)) put(result as Record<string, unknown>, key, cloneDefinition((value as Record<string, unknown>)[key]));
   return result as T;
 }
-export function compilePlan(source: unknown): Vertex {
+export function compilePlan(source: unknown, rootProvider?: Schema): Vertex {
   const issues: CompileIssue[] = [];
   const issue = (code: CompileIssueCode, path: DefinitionPath, message: string): void => { issues.push({ code, path: [...path], message }); };
   const stack = new Set<object>();
@@ -142,6 +142,7 @@ export function compilePlan(source: unknown): Vertex {
       else if (!compatible(source[key]!, target[key]!)) issue('SCHEMA_TYPE_MISMATCH', [...path, key], `Incompatible or incomplete declaration for ${key}`);
     }
   }
+  if (schemasValid && rootProvider !== undefined) covers(rootProvider, root.input, [...root.path, 'input_schema']);
   for (const plan of plans) {
     const ownId = plan.vertex.definition.id;
     if (plan.edges.some(e => e.from === ownId || e.to === ownId)) plan.positions.set(ownId, plan.vertex);

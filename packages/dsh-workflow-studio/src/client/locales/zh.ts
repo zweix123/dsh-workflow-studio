@@ -66,7 +66,7 @@ export const zh = {
   commandError: '错误',
   executing: '正在执行…',
   resultUnknown: '上次执行结果未知，请确认后决定是否再次执行。',
-  placeholderNotice: 'session_agent/bash 仍向 DAG 下游及 if、for 提交占位输出；form 提交真实结果。',
+  resultNotice: 'session_agent 完成只提供执行依赖；bash 的 JSON 结果与 form 的正式提交交付真实数据。',
   requestFailed: '操作失败，请重试。',
   executeNode: '执行',
   nodeDetails: '详情',

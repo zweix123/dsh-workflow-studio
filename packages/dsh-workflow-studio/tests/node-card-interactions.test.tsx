@@ -241,6 +241,8 @@ test('workflow node inspector opens the existing session_agent, completes it, an
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="详情 bash"]')!.click())
     assert.match(container.querySelector('.dsh-workflow-inspector')!.textContent!, /printf done.*done.*warning.*Command exited with code 2/s)
     assert.equal(container.querySelector<HTMLButtonElement>('[aria-label="执行 bash"]')!.disabled, false)
+    await render({ ...base, executions: { ...base.executions, 'bash-i': { kind: 'bash', status: 'succeeded', output: {} } } })
+    assert.equal(container.querySelector<HTMLButtonElement>('[aria-label="执行 bash"]')!.disabled, false)
     await render({ ...base, executions: { ...base.executions, 'bash-i': { kind: 'bash', status: 'running' } } })
     assert.equal(container.querySelector<HTMLButtonElement>('[aria-label="执行 bash"]'), null)
     assert.match(container.querySelector('.dsh-workflow-inspector')!.textContent!, /正在执行/)

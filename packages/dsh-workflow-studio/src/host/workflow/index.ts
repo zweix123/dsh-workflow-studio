@@ -1,10 +1,11 @@
+import { copy } from '../dag/data.js'
 import type { Context } from '@deepseek-ai/cordis'
 import { z } from 'zod'
 import { compile, SubmissionError, type DagDefinition, type ExecutionSnapshot, type JsonObject, type SavedExecution } from '../dag/index.js'
 import { NodeInputError, type NodeContext, type NodeFact, type NodePlan, type ServerNode } from '../../contract/node/index.js'
 import type { InstanceDetail, NodeExecution } from '../../shared/types/workflow-instance.js'
 import { WorkflowInstanceStore, type StoredInstance } from '../storage/workflow-instance-store.js'
-import { executeWorkflowNode, placeholderOutput } from './dag.js'
+import { executeWorkflowNode } from './dag.js'
 import { workflowNode, validateWorkflowNodes } from './definition.js'
 import { WorkflowInstanceError } from './errors.js'
 import { serverNodes } from '../nodes/registry.js'
@@ -118,7 +119,7 @@ export class WorkflowEngine {
     const node = this.nodes.get(workflowNode(ready.definition).node_kind)!
     for (const service of node.requires) if (this.services[service] == null) throw new Error(`Node ${node.kind} requires host service ${String(service)}`)
     return { definition: ready.definition, input: ready.input as JsonObject, fact, workspaceId: row.workspaceId, services: this.services,
-      placeholder: () => placeholderOutput(ready.definition.output_schema ?? {}),
+      validateOutput: output => z.json().parse(copy(output, ready.definition.output_schema ?? {}, true, 'node-output', { instanceId: ready.instanceId })) as JsonObject,
       save: async next => { await this.store.serial(async () => {
         const latest = this.store.get(row.id)
         if (!latest || !this.active.has(key) || latest.executions?.[ready.instanceId]?.status !== 'running') return

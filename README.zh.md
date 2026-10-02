@@ -52,7 +52,7 @@ dag:
 
 ## 当前限制
 
-`session_agent` 和 `bash` 会执行真实任务，但其声明的 DAG 输出目前仍为占位值。对话文本和命令输出不会传给下游节点，也不会驱动 `if` / `for` 表达式；`form` 的有效提交则会将真实结果交给 DAG。依赖数据分支前请阅读 [DAG 语法文档](docs/dag-syntax.zh.md)。
+`session_agent` 通过 prompt 中的 `{{ name }}` / `{{ object.field }}` 消费声明输入，完成提交 `{}`，不能声明业务输出。`bash` 使用相同引用作为独立且安全转义的 Shell 参数；声明输出时 stdout 必须整体为符合输出契约的 JSON 对象，日志写 stderr；不声明输出时提交 `{}`，stdout 仅作日志。`form` 正式提交真实用户数据。工坊模板没有外部根输入，请用入口表单收集。详见 [DAG 语法文档](docs/dag-syntax.zh.md)。
 
 原 `chat` 类型已更名为 `session_agent`。自定义模板需更新 `node_kind`；保留旧模板快照的已有实例需重新创建。
 

@@ -89,7 +89,7 @@ DAG 的内容由顶点和边组成。顶点分为节点（`node`）和 DAG（`da
 
 ### 3.1 工作流模板的节点字段
 
-工作流模板中的每个普通 `node` 必须显式提供 `node_kind`，当前接受 `session_agent`、`bash` 或 `form`。`session_agent` 必须提供字符串 `prompt`，`bash` 必须提供字符串 `command`；两者的 `is_auto_start` 可省略，默认 `false`，显式提供时必须是布尔值。空字符串和纯空白字符串合法，内容不被裁剪；空白 prompt 只创建对话，不发送初始消息，空白 command 作为空操作成功结束。每种节点只校验当前 kind 的业务字段；其他自定义字段原样保留，但不获得业务或编排含义。
+工作流模板中的每个普通 `node` 必须显式提供 `node_kind`，当前接受 `session_agent`、`bash` 或 `form`。`session_agent` 必须提供字符串 `prompt`，`bash` 必须提供字符串 `command`；两者的 `is_auto_start` 可省略，默认 `false`，显式提供时必须是布尔值。空字符串和纯空白字符串合法，内容不被裁剪；空白 prompt 只创建对话，不发送初始消息。未声明输出的空白 command 作为空操作成功结束；声明输出时空命令仍因缺少 JSON 结果而失败。每种节点只校验当前 kind 的业务字段；其他自定义字段原样保留，但不获得业务或编排含义。
 
 ```yaml
 id: example
@@ -111,11 +111,15 @@ dag:
 
 session_agent/bash 的手动“执行”只启动选中的就绪节点实例；配置自动启动的节点首次就绪后启动。bash 成功后自动完成，失败时保留错误并可用同一按钮再次尝试；session_agent 创建独立宿主对话，由用户在详情中手动标记任务完成。`for` 展开的每个 session_agent 实例各有自己的对话。form 就绪后直接填写并提交，不需要开始按钮；关闭详情不会提交。已成功的业务动作若 DAG 提交失败，后续只重试已保存的结果，不重复执行命令或重新接受表单数据。旧实例文件与模板快照不会自动清理，本期不提供旧格式兼容。
 
-session_agent/bash 的真实业务执行已接入，但它们的业务结果仍不进入 DAG：成功后仍按 `output_schema` 生成零值占位输出，`if`、`for` 和下游输入据此判定。命令输出及聊天内容只供用户查看。form 的正式提交是例外：其经过服务端校验的真实结果进入 DAG 和下游。
+session_agent 只消费输入，`output_schema` 只能省略或为 `{}`；手动完成提交空对象，不提取会话内容、不透传输入。bash 声明非空输出时，成功命令的 stdout 必须整体是一个 JSON 对象，日志应写到 stderr。结果须完整满足输出契约且能可靠保存；空输出、非法或非对象 JSON、缺字段、类型错误和被截断的 stdout 均使节点失败，下游不会推进。省略或空输出声明时 stdout 仅作为日志，完成提交 `{}`。form 的有效正式提交交付真实结果。
+
+运行实例中的命令只读，接口不接受命令覆盖。执行失败后使用原有“执行”按钮重试快照中的原命令；源模板修改后需创建新实例。合法结果先保存再提交 DAG；提交失败时保留结果和错误，再次执行只提交结果，不重复命令。重启恢复保留已接受结果；执行结果未知时不自动重跑。
+
+工坊创建实例没有外部业务输入。根 DAG 与普通节点、嵌套 DAG 一样检查输入来源；非空根输入声明没有提供方，模板不可用，也不会生成占位根输入。需要人工数据时使用入口 form，新填写字段只声明在输出中。公共 DAG 引擎的外部调用方仍可明确提供根输入。
 
 ### 3.2 表单节点
 
-form 的字段名与类型直接来自 `output_schema`，仅支持 `string`、`number`、`boolean`。用户填写的字段不必出现在 `input_schema`；只有真正需要上游提供的字段才写入输入契约。可选的 `schema.properties` 为字段补充 `title`、`description`、`default`、`enum`，也可声明与输出契约一致的 `type`；`uiSchema` 可为字段指定 `ui:widget`。支持的控件如下：
+form 的字段名与类型直接来自 `output_schema`，仅支持 `string`、`number`、`boolean`。用户填写的字段不必出现在 `input_schema`；只有用于同名预填的上游字段才写入输入契约，且必须存在于输出契约中、类型一致。可选的 `schema.properties` 为字段补充 `title`、`description`、`default`、`enum`，也可声明与输出契约一致的 `type`；`uiSchema` 可为字段指定 `ui:widget`。支持的控件如下：
 
 | 类型 | 默认控件 | 可选 `ui:widget` |
 | --- | --- | --- |
@@ -148,7 +152,46 @@ uiSchema:
 
 首次打开时，同名上游输入优先，其次使用 `default`；零、`false` 与空字符串均是有效值。缺失值留给用户填写，不自动猜测。类型不匹配的预填值不会转换。当前工作流页面内关闭详情或切换节点可保留未提交草稿；刷新或离开页面会丢弃草稿。提交后结果只读，额外上游字段不会混入输出。
 
-### 3.2 实例运行图排布 `layout`
+### 3.3 prompt / command 输入引用
+
+仅支持 `{{ name }}` 和 `{{ object.field }}`；字段与对象路径都必须在当前节点 `input_schema` 中声明。变量名和路径段使用字母或下划线开头的标识符。未知路径、过滤器、条件、循环、数组索引和 `$.` 引用在模板判定阶段拒绝。不自动追加整份输入。
+
+字符串使用原值，数字、布尔值、对象、数组使用 JSON 文本。零、`false`、空字符串保留原值；来源关闭或跳过导致的正常缺失（包括不可到达的对象路径）替换为空文本。输入声明仍须具有潜在来源，不能以运行时的空文本规则绕过静态来源校验。
+
+bash 的占位符必须是独立、未额外加引号的数据参数；不能用作命令名、拼进参数或放进引号、注释、命令替换和 heredoc。节点使用 Shell 单引号转义，含空格、引号、换行和特殊字符的值始终保持为一个参数；缺失值形成一个空参数。
+
+```yaml
+id: input-example
+type: dag
+dag:
+  - id: request
+    type: node
+    node_kind: form
+    output_schema: { text: string }
+  - id: discuss
+    type: node
+    node_kind: session_agent
+    input_schema: { text: string }
+    prompt: "处理需求：{{ text }}"
+  - id: verify
+    type: node
+    node_kind: bash
+    input_schema: { text: string }
+    command: "printf '%s' {{ text }}"
+  - type: edge
+    from: request
+    to: discuss
+  - type: edge
+    from: request
+    to: verify
+  - type: edge
+    from: discuss
+    to: verify
+```
+
+verify 同时等待会话完成并从 request 接收真实 text；会话空输出不会透传业务字段。内置中英文模板同样通过需求表单取得真实输入；会话处理后由结果表单确认业务字段。需要数组或对象时，表单收集完整 JSON 文本，由 `printf '%s' {{ result_json }}` 的 bash 节点交付并校验 JSON 对象，保持原有条件分支和递归流程。
+
+### 3.4 实例运行图排布 `layout`
 
 任意 DAG 定义可选配 `layout`，只影响该层实例画布的位置和连线方向。根 DAG、嵌套 DAG 及递归产生的每次 DAG 实例各用所引用定义的本层配置；父层不会覆盖子层。省略时沿用从左到右的横向画布，不显示排布提示。`layout` 不影响依赖、`if`、`for`、实例身份、输出、持久化和恢复。
 
@@ -434,7 +477,8 @@ ScalarLiteral ::= JSONString | JSONNumber | "true" | "false"
 
 | 执行位置 | 用于检查输入的来源声明 |
 | --- | --- |
-| 结构入口 | 所在 DAG 的 `input_schema` |
+| 根 DAG | 外部调用方明确提供的输入声明；工坊没有此来源 |
+| 结构入口 | 所在 DAG 的 `input_schema`；该 DAG 的声明继续沿其外部来源检查 |
 | 无 `for` 入边的非入口 | 所有普通前驱的有效 `output_schema` |
 | 有 `for` 入边的目标 | `for` 数组元素的 `properties` 去掉 `key`，再加所有普通前驱的有效 `output_schema` |
 
@@ -849,7 +893,7 @@ JS
 
 | 调用 | 返回与含义 |
 | --- | --- |
-| `compile(definition)` | 校验已解析的定义对象，返回可复用的 `Program` |
+| `compile(definition, rootProvider?)` | 校验已解析的定义对象，返回可复用的 `Program`；可选的根提供方声明使用相同来源覆盖检查，工坊传入 `{}` 表示没有外部业务输入 |
 | `program.getDefinition()` | 返回完整定义副本，修改它不会改变已有程序 |
 | `program.createExecution(rootInput)` | 校验根输入并推进初始状态，返回独立 `Execution` |
 | `execution.getFrontier()` | 返回已创建、尚未成功提交结果的普通节点实例及其定义、输入和身份 |
@@ -874,4 +918,4 @@ JS
 
 在项目根目录运行 `npm run check`，完成类型检查、构建及全部测试。引擎行为测试直接导入本项目构建产物，覆盖静态拒绝、条件、逐项节点和 DAG、按序聚合、嵌套与自递归、事务回滚、结构隔离和数据容器限制；另有启用 `exactOptionalPropertyTypes` 的类型契约检查。
 
-实例管理 Tab 已接入模板读取、HTTP 接口、宿主领域存储和真实业务执行。创建时保存模板定义、运行输入与可恢复的实例运行图；详情画布展示运行图投影。session_agent 和 bash 完成后仍按输出声明生成零值占位输出，form 的有效提交则把真实结果交给 DAG。
+实例管理 Tab 已接入模板读取、HTTP 接口、宿主领域存储和真实业务执行。创建时保存模板快照、空根输入与可恢复的实例运行图；详情画布展示运行图投影。session_agent 完成提交空对象；bash 的合法 stdout JSON 对象和 form 的有效正式提交把真实结果交给 DAG。

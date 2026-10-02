@@ -3,7 +3,7 @@ import type { ClientNode } from '../../dsh-workflow-studio/src/contract/node/cli
 
 export const bashClient: ClientNode = {
   kind: 'bash',
-  Card: ({ ready, pending, execution, action, t, label }) => ready && execution?.status !== 'succeeded' && execution?.status !== 'running'
+  Card: ({ ready, pending, execution, action, t, label }) => ready && execution?.status !== 'running'
     ? <button type="button" className="nodrag nopan" aria-label={`${t('executeNode')} ${label}`} disabled={pending} onClick={event => { event.stopPropagation(); action('start', {}) }}>▶ {t('executeNode')}</button> : null,
   Panel: ({ definition, execution, t }) => <>
     <strong>{t('command')}</strong><pre>{typeof definition.command === 'string' ? definition.command : ''}</pre>

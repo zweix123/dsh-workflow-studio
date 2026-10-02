@@ -68,7 +68,7 @@ export const en: Record<keyof typeof zh, string> = {
   commandError: 'Error',
   executing: 'Executing…',
   resultUnknown: 'The previous result is unknown. Check before running again.',
-  placeholderNotice: 'Session agent/bash still submit placeholder outputs to downstream DAG steps and if/for; form submits real results.',
+  resultNotice: 'Session agent completion provides an execution dependency; bash JSON results and submitted forms deliver real data.',
   requestFailed: 'The operation failed. Try again.',
   executeNode: 'Execute',
   nodeDetails: 'Details',

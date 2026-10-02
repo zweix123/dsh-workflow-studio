@@ -22,6 +22,7 @@ function initial(props: NodeViewProps): { values: NodeData; errors: string[] } {
 }
 
 function FormPanel(props: NodeViewProps) {
+  const formId = React.useId()
   const resolved = initial(props)
   const values = props.output ?? props.draft ?? resolved.values
   const completed = Boolean(props.output)
@@ -38,13 +39,13 @@ function FormPanel(props: NodeViewProps) {
       const value = values[key]
       const label = field.title ?? key
       return <div className="dsh-workflow-form-field" key={key}>
-        <label htmlFor={`form-${key}`}>{label}</label>
+        <label htmlFor={`${formId}-${key}`}>{label}</label>
         {field.description && <small>{field.description}</small>}
-        {field.enum ? <select id={`form-${key}`} disabled={completed || props.pending} value={Object.hasOwn(values, key) ? String(field.enum.findIndex(option => option === value)) : ''} onChange={event => set(key, field.enum![Number(event.target.value)])}>
+        {field.enum ? <select id={`${formId}-${key}`} disabled={completed || props.pending} value={Object.hasOwn(values, key) ? String(field.enum.findIndex(option => option === value)) : ''} onChange={event => set(key, field.enum![Number(event.target.value)])}>
           <option value="" disabled>{props.t('formChoose')}</option>{field.enum.map((option, index) => <option key={index} value={index}>{String(option)}</option>)}
-        </select> : field.type === 'boolean' ? <input id={`form-${key}`} type="checkbox" role="switch" disabled={completed || props.pending} checked={value === true} onChange={event => set(key, event.target.checked)} />
-          : field.widget === 'textarea' ? <textarea id={`form-${key}`} disabled={completed || props.pending} value={typeof value === 'string' ? value : ''} onChange={event => set(key, event.target.value)} />
-            : <input id={`form-${key}`} type={field.type === 'number' ? 'number' : 'text'} disabled={completed || props.pending} value={value === undefined ? '' : String(value)} onChange={event => set(key, field.type === 'number' ? (event.target.value === '' ? undefined : Number(event.target.value)) : event.target.value)} />}
+        </select> : field.type === 'boolean' ? <input id={`${formId}-${key}`} type="checkbox" role="switch" disabled={completed || props.pending} checked={value === true} onChange={event => set(key, event.target.checked)} />
+          : field.widget === 'textarea' ? <textarea id={`${formId}-${key}`} disabled={completed || props.pending} value={typeof value === 'string' ? value : ''} onChange={event => set(key, event.target.value)} />
+            : <input id={`${formId}-${key}`} type={field.type === 'number' ? 'number' : 'text'} disabled={completed || props.pending} value={value === undefined ? '' : String(value)} onChange={event => set(key, field.type === 'number' ? (event.target.value === '' ? undefined : Number(event.target.value)) : event.target.value)} />}
       </div>
     })}
     {completed ? <><p role="status">{props.t('formSubmitted')}</p>{props.execution?.error && props.ready && <button type="button" disabled={props.pending} onClick={() => props.action('retry', {})}>{props.t('formRetry')}</button>}</>

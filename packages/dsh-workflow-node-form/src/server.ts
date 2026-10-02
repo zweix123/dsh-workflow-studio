@@ -46,7 +46,10 @@ function validateSubmission(node: NodeDefinition, payload: unknown): NodeData {
 export const formNode: ServerNode = {
   kind: 'form',
   requires: [],
-  validate(node) { formFields(node) },
+  validate(node) {
+    const fields = formFields(node)
+    for (const [key, type] of Object.entries(node.input_schema ?? {})) if (!Object.hasOwn(fields, key) || fields[key]!.type !== type) throw new Error(`Node ${node.id}: prefill input ${key} must match output_schema type`)
+  },
   ready() { return undefined },
   action(context, name, payload) {
     if (context.fact?.status === 'succeeded') {

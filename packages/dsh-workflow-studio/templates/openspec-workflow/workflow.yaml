@@ -1,177 +1,461 @@
-id: openspec-sdd-workflow
-type: dag
-input_schema:
-  request: string
-output_schema: {}
 # source: https://github.com/Fission-AI/OpenSpec
 # references:
 #   - https://github.com/Fission-AI/OpenSpec/blob/main/docs/workflows.md
 #   - https://github.com/Fission-AI/OpenSpec/blob/main/docs/commands.md
 #   - https://github.com/Fission-AI/OpenSpec/blob/main/docs/agent-contract.md
-description: "Use the OpenSpec OPSX workflow for a specification-driven change: explore when needed,
-  create and review planning artifacts, recursively converge through plan revisions, implementation
-  fixes, and consistency checks, then sync the main specs and archive the change."
+id: openspec-sdd-workflow
+type: dag
+output_schema: {}
+description: "Use the OpenSpec OPSX workflow for a specification-driven change: explore when needed, create
+  and review planning artifacts, recursively converge through plan revisions, implementation fixes, and
+  consistency checks, then sync the main specs and archive the change."
 dag:
-  - id: shape-change-request
+  - id: collect-workflow-input
     type: node
-    node_kind: session_agent
-    input_schema:
-      request: string
+    node_kind: form
     output_schema:
+      request: string
+    description: Enter the actual request for this workflow.
+  - id: shape-change-request
+    type: dag
+    input_schema: &a1
+      request: string
+    output_schema: &a2
       request: string
       exploration_used: boolean
-    prompt: Decide whether request already defines a concrete change. If it is still vague or requires
-      repository investigation, option comparison, or risk discovery, call $.openspec-explore.
-      During exploration, only read and discuss; do not write product code or create a change unless
-      the user explicitly agrees to save the exploration result. Skip the skill if the request is
-      already clear. Summarize a proposal-ready request in English, preserving the confirmed scope,
-      constraints, and acceptance goals. Return exploration_used to show whether exploration
-      actually occurred.
+    dag:
+      - id: shape-change-request-session
+        type: node
+        node_kind: session_agent
+        input_schema: *a1
+        prompt: >-
+          Inputs for this task:
+
+          request: {{ request }}
+
+
+          Decide whether request already defines a concrete change. If it is still vague or requires
+          repository investigation, option comparison, or risk discovery, call $.openspec-explore. During
+          exploration, only read and discuss; do not write product code or create a change unless the user
+          explicitly agrees to save the exploration result. Skip the skill if the request is already clear.
+          Summarize a proposal-ready request in English, preserving the confirmed scope, constraints, and
+          acceptance goals. Return exploration_used to show whether exploration actually occurred.
+
+
+          Report actual results in the conversation. Manual completion submits an empty object; the user then
+          confirms the business fields in the result form. Conversation completion is not structured output.
+      - id: shape-change-request-result
+        type: node
+        node_kind: form
+        output_schema: *a2
+        schema:
+          properties:
+            request:
+              description: Enter the actual result confirmed in the conversation.
+            exploration_used:
+              description: Enter the actual result confirmed in the conversation.
+      - type: edge
+        from: shape-change-request-session
+        to: shape-change-request-result
   - id: propose-openspec-change
-    type: node
-    node_kind: session_agent
-    input_schema:
+    type: dag
+    input_schema: &a3
       request: string
-    output_schema:
+    output_schema: &a4
       change_reference: string
-    prompt: Call $.openspec-propose to create an OpenSpec change from request. Follow the schema enabled
-      in this project and the dependency graph, templates, and paths returned by the OpenSpec CLI;
-      do not hard-code the artifact set. The default spec-driven schema usually calls for a
-      proposal, delta specs, design, and tasks. Generate only planning artifacts needed before
-      implementation; do not modify product code. Stop at the planning boundary and return the
-      stable change name or openspec/changes/<name> path as change_reference.
+    dag:
+      - id: propose-openspec-change-session
+        type: node
+        node_kind: session_agent
+        input_schema: *a3
+        prompt: >-
+          Inputs for this task:
+
+          request: {{ request }}
+
+
+          Call $.openspec-propose to create an OpenSpec change from request. Follow the schema enabled in this
+          project and the dependency graph, templates, and paths returned by the OpenSpec CLI; do not
+          hard-code the artifact set. The default spec-driven schema usually calls for a proposal, delta
+          specs, design, and tasks. Generate only planning artifacts needed before implementation; do not
+          modify product code. Stop at the planning boundary and return the stable change name or
+          openspec/changes/<name> path as change_reference.
+
+
+          Report actual results in the conversation. Manual completion submits an empty object; the user then
+          confirms the business fields in the result form. Conversation completion is not structured output.
+      - id: propose-openspec-change-result
+        type: node
+        node_kind: form
+        output_schema: *a4
+        schema:
+          properties:
+            change_reference:
+              description: Enter the actual result confirmed in the conversation.
+      - type: edge
+        from: propose-openspec-change-session
+        to: propose-openspec-change-result
   - id: openspec-change-lifecycle
     type: dag
     input_schema:
       change_reference: string
     output_schema: {}
-    description: Review the current change; revise plans, implement, and verify again in response to
-      human feedback or verification results. Repeat when gaps remain, then sync and archive when
-      ready.
+    description: Review the current change; revise plans, implement, and verify again in response to human
+      feedback or verification results. Repeat when gaps remain, then sync and archive when ready.
     dag:
       - id: review-planning-artifacts
-        type: node
-        node_kind: session_agent
-        input_schema:
+        type: dag
+        input_schema: &a5
           change_reference: string
-        output_schema:
+        output_schema: &a6
           change_reference: string
           planning_disposition: string
           revision_request: string
-        prompt: Read the current state and all existing planning artifacts for change_reference. Use
-          openspec status --change <name> --json as the authority for paths and artifact IDs.
-          Summarize the motivation, requirements and scenarios, technical tradeoffs, tasks, risks,
-          and open decisions to the user in English, then ask whether implementation may begin. If
-          the user requests changes, return planning_disposition="revise_plan" with the confirmed
-          changes in revision_request. Return planning_disposition="implement" with an empty
-          revision_request only after explicit approval and when all apply-required artifacts are
-          ready. Do not treat silence as approval or modify artifacts or code in this node.
+        dag:
+          - id: review-planning-artifacts-session
+            type: node
+            node_kind: session_agent
+            input_schema: *a5
+            prompt: >-
+              Inputs for this task:
+
+              change_reference: {{ change_reference }}
+
+
+              Read the current state and all existing planning artifacts for change_reference. Use openspec
+              status --change <name> --json as the authority for paths and artifact IDs. Summarize the
+              motivation, requirements and scenarios, technical tradeoffs, tasks, risks, and open decisions to
+              the user in English, then ask whether implementation may begin. If the user requests changes,
+              return planning_disposition="revise_plan" with the confirmed changes in revision_request. Return
+              planning_disposition="implement" with an empty revision_request only after explicit approval and
+              when all apply-required artifacts are ready. Do not treat silence as approval or modify
+              artifacts or code in this node.
+
+
+              Report actual results in the conversation. Manual completion submits an empty object; the user
+              then confirms the business fields in the result form. Conversation completion is not structured
+              output.
+          - id: review-planning-artifacts-result
+            type: node
+            node_kind: form
+            output_schema: *a6
+            schema:
+              properties:
+                change_reference:
+                  description: Enter the actual result confirmed in the conversation.
+                planning_disposition:
+                  description: Enter the actual result confirmed in the conversation.
+                revision_request:
+                  description: Enter the actual result confirmed in the conversation.
+          - type: edge
+            from: review-planning-artifacts-session
+            to: review-planning-artifacts-result
       - id: revise-planning-artifacts
-        type: node
-        node_kind: session_agent
-        input_schema:
+        type: dag
+        input_schema: &a7
           change_reference: string
           revision_request: string
-        output_schema:
+        output_schema: &a8
           planning_revision_reference: string
-        prompt: Call $.openspec-update-change to revise existing planning artifacts for change_reference
-          according to revision_request, keeping them consistent. Confirm proposed edits with the
-          user one by one. Write only existing artifact paths returned by openspec status; do not
-          create missing artifacts or change product code. If the revision changes the fundamental
-          intent, stop and recommend a new change instead of forcing it into the current one. Return
-          the same stable change reference as planning_revision_reference after success.
+        dag:
+          - id: revise-planning-artifacts-session
+            type: node
+            node_kind: session_agent
+            input_schema: *a7
+            prompt: >-
+              Inputs for this task:
+
+              change_reference: {{ change_reference }}
+
+              revision_request: {{ revision_request }}
+
+
+              Call $.openspec-update-change to revise existing planning artifacts for change_reference
+              according to revision_request, keeping them consistent. Confirm proposed edits with the user one
+              by one. Write only existing artifact paths returned by openspec status; do not create missing
+              artifacts or change product code. If the revision changes the fundamental intent, stop and
+              recommend a new change instead of forcing it into the current one. Return the same stable change
+              reference as planning_revision_reference after success.
+
+
+              Report actual results in the conversation. Manual completion submits an empty object; the user
+              then confirms the business fields in the result form. Conversation completion is not structured
+              output.
+          - id: revise-planning-artifacts-result
+            type: node
+            node_kind: form
+            output_schema: *a8
+            schema:
+              properties:
+                planning_revision_reference:
+                  description: Enter the actual result confirmed in the conversation.
+          - type: edge
+            from: revise-planning-artifacts-session
+            to: revise-planning-artifacts-result
       - id: apply-openspec-change
-        type: node
-        node_kind: session_agent
-        input_schema:
+        type: dag
+        input_schema: &a9
           change_reference: string
-        output_schema:
+        output_schema: &a10
           change_reference: string
-        prompt: Call $.openspec-apply-change for change_reference. First obtain the active schema's apply
-          instructions, context files, and task state from the OpenSpec CLI. Then handle unfinished
-          tasks in dependency order, write code, run checks and tests suited to the changes, and
-          mark tasks complete only after they are done. If implementation exposes an inaccurate
-          plan, record it honestly for the later verification and update loop; do not silently
-          change the intent. Preserve the real state and ask the user to handle blockers. Do not
-          claim unfinished work is complete. Return the original change_reference.
+        dag:
+          - id: apply-openspec-change-session
+            type: node
+            node_kind: session_agent
+            input_schema: *a9
+            prompt: >-
+              Inputs for this task:
+
+              change_reference: {{ change_reference }}
+
+
+              Call $.openspec-apply-change for change_reference. First obtain the active schema's apply
+              instructions, context files, and task state from the OpenSpec CLI. Then handle unfinished tasks
+              in dependency order, write code, run checks and tests suited to the changes, and mark tasks
+              complete only after they are done. If implementation exposes an inaccurate plan, record it
+              honestly for the later verification and update loop; do not silently change the intent. Preserve
+              the real state and ask the user to handle blockers. Do not claim unfinished work is complete.
+              Return the original change_reference.
+
+
+              Report actual results in the conversation. Manual completion submits an empty object; the user
+              then confirms the business fields in the result form. Conversation completion is not structured
+              output.
+          - id: apply-openspec-change-result
+            type: node
+            node_kind: form
+            output_schema: *a10
+            schema:
+              properties:
+                change_reference:
+                  description: Enter the actual result confirmed in the conversation.
+          - type: edge
+            from: apply-openspec-change-session
+            to: apply-openspec-change-result
       - id: verify-openspec-change
-        type: node
-        node_kind: session_agent
-        input_schema:
+        type: dag
+        input_schema: &a11
           change_reference: string
-        output_schema:
+        output_schema: &a12
           change_reference: string
           verification_disposition: string
           verification_summary: string
-        prompt: Call $.openspec-verify-change and check implementation against every planning artifact for
-          change_reference for completeness, correctness, and coherence. Record evidence, CRITICAL
-          and WARNING findings, and recommendations in English in verification_summary. Return
-          verification_disposition="fix_implementation" if code or tests fail to satisfy confirmed
-          artifacts; return "revise_plan" if implementation reveals outdated, contradictory, or
-          otherwise necessary plan revisions. Return "ready" only when tasks, requirement scenarios,
-          and design have sufficient implementation evidence and the user accepts any remaining
-          non-blocking warnings. This node only verifies and classifies; it does not modify code or
-          planning artifacts.
+        dag:
+          - id: verify-openspec-change-session
+            type: node
+            node_kind: session_agent
+            input_schema: *a11
+            prompt: >-
+              Inputs for this task:
+
+              change_reference: {{ change_reference }}
+
+
+              Call $.openspec-verify-change and check implementation against every planning artifact for
+              change_reference for completeness, correctness, and coherence. Record evidence, CRITICAL and
+              WARNING findings, and recommendations in English in verification_summary. Return
+              verification_disposition="fix_implementation" if code or tests fail to satisfy confirmed
+              artifacts; return "revise_plan" if implementation reveals outdated, contradictory, or otherwise
+              necessary plan revisions. Return "ready" only when tasks, requirement scenarios, and design have
+              sufficient implementation evidence and the user accepts any remaining non-blocking warnings.
+              This node only verifies and classifies; it does not modify code or planning artifacts.
+
+
+              Report actual results in the conversation. Manual completion submits an empty object; the user
+              then confirms the business fields in the result form. Conversation completion is not structured
+              output.
+          - id: verify-openspec-change-result
+            type: node
+            node_kind: form
+            output_schema: *a12
+            schema:
+              properties:
+                change_reference:
+                  description: Enter the actual result confirmed in the conversation.
+                verification_disposition:
+                  description: Enter the actual result confirmed in the conversation.
+                verification_summary:
+                  description: Enter the actual result confirmed in the conversation.
+          - type: edge
+            from: verify-openspec-change-session
+            to: verify-openspec-change-result
       - id: fix-implementation-gaps
-        type: node
-        node_kind: session_agent
-        input_schema:
+        type: dag
+        input_schema: &a13
           change_reference: string
           verification_summary: string
-        output_schema:
+        output_schema: &a14
           implementation_fix_reference: string
-        prompt: For implementation deviations, omissions, or test gaps in verification_summary, call
-          $.openspec-apply-change again for change_reference. Use only the approved specs, design,
-          and tasks as the source of intent. Complete the implementation and run relevant checks
-          without changing requirements or design under the guise of a fix. After resolving the
-          executable gaps, return the same stable change reference as implementation_fix_reference
-          for another human review and verification cycle.
+        dag:
+          - id: fix-implementation-gaps-session
+            type: node
+            node_kind: session_agent
+            input_schema: *a13
+            prompt: >-
+              Inputs for this task:
+
+              change_reference: {{ change_reference }}
+
+              verification_summary: {{ verification_summary }}
+
+
+              For implementation deviations, omissions, or test gaps in verification_summary, call
+              $.openspec-apply-change again for change_reference. Use only the approved specs, design, and
+              tasks as the source of intent. Complete the implementation and run relevant checks without
+              changing requirements or design under the guise of a fix. After resolving the executable gaps,
+              return the same stable change reference as implementation_fix_reference for another human review
+              and verification cycle.
+
+
+              Report actual results in the conversation. Manual completion submits an empty object; the user
+              then confirms the business fields in the result form. Conversation completion is not structured
+              output.
+          - id: fix-implementation-gaps-result
+            type: node
+            node_kind: form
+            output_schema: *a14
+            schema:
+              properties:
+                implementation_fix_reference:
+                  description: Enter the actual result confirmed in the conversation.
+          - type: edge
+            from: fix-implementation-gaps-session
+            to: fix-implementation-gaps-result
       - id: reconcile-plan-after-implementation
-        type: node
-        node_kind: session_agent
-        input_schema:
+        type: dag
+        input_schema: &a15
           change_reference: string
           verification_summary: string
-        output_schema:
+        output_schema: &a16
           post_implementation_revision_reference: string
-        prompt: Call $.openspec-update-change to revise existing planning artifacts for change_reference
-          that verification_summary shows are inconsistent with reality. Bring the proposal, delta
-          specs, design, tasks, or custom-schema artifacts back into agreement. Obtain user
-          confirmation for each edit. Change planning artifacts only, not code; recommend a new
-          change if the revision represents new intent. Return
-          post_implementation_revision_reference. The next cycle must review and apply the revised
-          plan again so the code matches it.
+        dag:
+          - id: reconcile-plan-after-implementation-session
+            type: node
+            node_kind: session_agent
+            input_schema: *a15
+            prompt: >-
+              Inputs for this task:
+
+              change_reference: {{ change_reference }}
+
+              verification_summary: {{ verification_summary }}
+
+
+              Call $.openspec-update-change to revise existing planning artifacts for change_reference that
+              verification_summary shows are inconsistent with reality. Bring the proposal, delta specs,
+              design, tasks, or custom-schema artifacts back into agreement. Obtain user confirmation for each
+              edit. Change planning artifacts only, not code; recommend a new change if the revision
+              represents new intent. Return post_implementation_revision_reference. The next cycle must review
+              and apply the revised plan again so the code matches it.
+
+
+              Report actual results in the conversation. Manual completion submits an empty object; the user
+              then confirms the business fields in the result form. Conversation completion is not structured
+              output.
+          - id: reconcile-plan-after-implementation-result
+            type: node
+            node_kind: form
+            output_schema: *a16
+            schema:
+              properties:
+                post_implementation_revision_reference:
+                  description: Enter the actual result confirmed in the conversation.
+          - type: edge
+            from: reconcile-plan-after-implementation-session
+            to: reconcile-plan-after-implementation-result
       - id: normalize-repeat-context
-        type: node
-        node_kind: session_agent
-        input_schema:
+        type: dag
+        input_schema: &a17
           planning_revision_reference: string
           implementation_fix_reference: string
           post_implementation_revision_reference: string
-        output_schema:
+        output_schema: &a18
           change_reference: string
           continue_lifecycle: boolean
-        prompt: Exactly one of the three input references should exist at runtime. Select that reference,
-          normalize it to change_reference, confirm the change is still active, and return
-          continue_lifecycle=true to begin another review, implementation, and verification cycle.
-          If there is not exactly one reference, the change was archived externally, or its state is
-          damaged, do not submit a result; report the problem and request human intervention.
+        dag:
+          - id: normalize-repeat-context-session
+            type: node
+            node_kind: session_agent
+            input_schema: *a17
+            prompt: >-
+              Inputs for this task:
+
+              planning_revision_reference: {{ planning_revision_reference }}
+
+              implementation_fix_reference: {{ implementation_fix_reference }}
+
+              post_implementation_revision_reference: {{ post_implementation_revision_reference }}
+
+
+              Exactly one of the three input references should exist at runtime. Select that reference,
+              normalize it to change_reference, confirm the change is still active, and return
+              continue_lifecycle=true to begin another review, implementation, and verification cycle. If
+              there is not exactly one reference, the change was archived externally, or its state is damaged,
+              do not submit a result; report the problem and request human intervention.
+
+
+              Report actual results in the conversation. Manual completion submits an empty object; the user
+              then confirms the business fields in the result form. Conversation completion is not structured
+              output.
+          - id: normalize-repeat-context-result
+            type: node
+            node_kind: form
+            output_schema: *a18
+            schema:
+              properties:
+                change_reference:
+                  description: Enter the actual result confirmed in the conversation.
+                continue_lifecycle:
+                  description: Enter the actual result confirmed in the conversation.
+          - type: edge
+            from: normalize-repeat-context-session
+            to: normalize-repeat-context-result
       - id: sync-main-specs
-        type: node
-        node_kind: session_agent
-        input_schema:
+        type: dag
+        input_schema: &a19
           change_reference: string
           verification_summary: string
-        output_schema:
+        output_schema: &a20
           change_reference: string
           specs_synced: boolean
-        prompt: change_reference has passed verification. For a long-running or parallel change, or when the
-          merged result needs separate review before archiving, obtain user consent and call
-          $.openspec-sync-specs to merge delta specs intelligently into the main openspec/specs;
-          then return specs_synced=true. If separate syncing is unnecessary, skip the skill, return
-          specs_synced=false, and leave the sync choice to archive. Do not replace OpenSpec's ADDED,
-          MODIFIED, REMOVED, and RENAMED merge rules with file copying. Keep the change active and
-          return its original reference.
+        dag:
+          - id: sync-main-specs-session
+            type: node
+            node_kind: session_agent
+            input_schema: *a19
+            prompt: >-
+              Inputs for this task:
+
+              change_reference: {{ change_reference }}
+
+              verification_summary: {{ verification_summary }}
+
+
+              change_reference has passed verification. For a long-running or parallel change, or when the
+              merged result needs separate review before archiving, obtain user consent and call
+              $.openspec-sync-specs to merge delta specs intelligently into the main openspec/specs; then
+              return specs_synced=true. If separate syncing is unnecessary, skip the skill, return
+              specs_synced=false, and leave the sync choice to archive. Do not replace OpenSpec's ADDED,
+              MODIFIED, REMOVED, and RENAMED merge rules with file copying. Keep the change active and return
+              its original reference.
+
+
+              Report actual results in the conversation. Manual completion submits an empty object; the user
+              then confirms the business fields in the result form. Conversation completion is not structured
+              output.
+          - id: sync-main-specs-result
+            type: node
+            node_kind: form
+            output_schema: *a20
+            schema:
+              properties:
+                change_reference:
+                  description: Enter the actual result confirmed in the conversation.
+                specs_synced:
+                  description: Enter the actual result confirmed in the conversation.
+          - type: edge
+            from: sync-main-specs-session
+            to: sync-main-specs-result
       - id: archive-openspec-change
         type: node
         node_kind: session_agent
@@ -179,12 +463,19 @@ dag:
           change_reference: string
           specs_synced: boolean
         output_schema: {}
-        prompt: Call $.openspec-archive-change to complete change_reference. Recheck artifact and task
-          state. If specs_synced=false and delta specs exist, show the differences and obtain an
-          explicit choice about syncing; normally recommend syncing. Use OpenSpec's archive flow for
-          validation, any required spec merge, and movement to
-          openspec/changes/archive/YYYY-MM-DD-<name>/, preserving the audit history. Do not claim
-          success if validation, syncing, target conflict, or file movement fails. Return an empty
+        prompt: >-
+          Inputs for this task:
+
+          change_reference: {{ change_reference }}
+
+          specs_synced: {{ specs_synced }}
+
+
+          Call $.openspec-archive-change to complete change_reference. Recheck artifact and task state. If
+          specs_synced=false and delta specs exist, show the differences and obtain an explicit choice about
+          syncing; normally recommend syncing. Use OpenSpec's archive flow for validation, any required spec
+          merge, and movement to openspec/changes/archive/YYYY-MM-DD-<name>/, preserving the audit history. Do
+          not claim success if validation, syncing, target conflict, or file movement fails. Return an empty
           object {} and finish the workflow only after archiving actually succeeds.
       - id: review-to-planning-revision
         type: edge
@@ -244,3 +535,6 @@ dag:
     type: edge
     from: propose-openspec-change
     to: openspec-change-lifecycle
+  - type: edge
+    from: collect-workflow-input
+    to: shape-change-request

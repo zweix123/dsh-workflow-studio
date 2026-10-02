@@ -10,7 +10,7 @@ export async function validateTemplateDirectory(directory: string, nodes: Readon
   try {
     const document = parseDocument(await readFile(join(directory, 'workflow.yaml'), 'utf8'))
     if (document.errors.length) throw document.errors[0]
-    const definition = compile(document.toJS()).getDefinition()
+    const definition = compile(document.toJS(), {}).getDefinition()
     validateWorkflowNodes(definition, nodes)
     return { definition }
   } catch (error) {

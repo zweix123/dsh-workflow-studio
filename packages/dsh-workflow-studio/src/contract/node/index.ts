@@ -19,7 +19,7 @@ export interface NodeContext {
   fact?: NodeFact
   workspaceId: string
   services: Context
-  placeholder: () => NodeData
+  validateOutput: (output: unknown) => NodeData
   save: (fact: NodeFact) => Promise<void>
 }
 

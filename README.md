@@ -52,7 +52,7 @@ Templates are files, not yet editable in the plugin UI. The bundled examples are
 
 ## Current limitation
 
-`session_agent` and `bash` execute real work, but their declared DAG outputs are currently placeholder values. Their conversation text and command output do not flow into downstream nodes or drive `if` / `for` expressions. `form` submits real values to the DAG. See the [DAG syntax guide (Chinese)](docs/dag-syntax.zh.md) before relying on data-dependent branches.
+`session_agent` consumes declared inputs through `{{ name }}` / `{{ object.field }}` in its prompt and completes with `{}`; it cannot declare business outputs. `bash` uses the same references as independently escaped Shell arguments. With output declarations, its complete stdout must be a valid JSON object matching the output contract; logs belong on stderr. Without output declarations it completes with `{}` and keeps stdout as logs. `form` submits real user data. Workshop templates have no external root input: use an entry form to collect it. See the [DAG syntax guide (Chinese)](docs/dag-syntax.zh.md).
 
 The former `chat` kind is now `session_agent`. Update custom templates to the new kind and recreate existing runs that retain the old template snapshot.
 

@@ -1,3 +1,4 @@
+import { validateTextTemplate, renderTextTemplate } from '../../dsh-workflow-studio/src/contract/node/text-template.js'
 import { randomUUID } from 'node:crypto'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionRequestId } from '@deepseek-ai/dsh-api-session-controller'
@@ -8,6 +9,7 @@ type SessionAgentState = { sessionId: string; requestId: string; sessionCreated?
 const state = (fact?: NodeFact): SessionAgentState | undefined => fact?.business as SessionAgentState | undefined
 
 function start(context: NodeContext) {
+  const prompt = renderTextTemplate(context.definition.prompt as string, context.input)
   const previous = state(context.fact)
   if (context.fact?.status === 'succeeded') return { fact: context.fact }
   if (context.fact?.status === 'waiting' && previous?.sessionCreated) return { fact: context.fact }
@@ -22,8 +24,8 @@ function start(context: NodeContext) {
         business.sessionCreated = true
         await context.save({ kind: 'session_agent', status: 'running', business: { ...business } })
       }
-      if ((context.definition.prompt as string).trim() && !business.promptStarted) {
-        await context.services.sessionController.prompt({ sessionId, requestId: business.requestId as SessionRequestId, mode: 'queue', content: [{ type: 'text', text: context.definition.prompt as string }] }, new AbortController().signal)
+      if (prompt.trim() && !business.promptStarted) {
+        await context.services.sessionController.prompt({ sessionId, requestId: business.requestId as SessionRequestId, mode: 'queue', content: [{ type: 'text', text: prompt }] }, new AbortController().signal)
         business.promptStarted = true
         await context.save({ kind: 'session_agent', status: 'running', business: { ...business } })
       }
@@ -37,13 +39,15 @@ export const sessionAgentNode: ServerNode = {
   requires: ['sessionController'],
   validate(node) {
     if (typeof node.prompt !== 'string') throw new Error(`Node ${node.id}: prompt must be a string`)
+    if (Object.keys(node.output_schema ?? {}).length) throw new Error(`Node ${node.id}: session_agent cannot declare outputs`)
+    validateTextTemplate(node, 'prompt')
     if (node.is_auto_start !== undefined && typeof node.is_auto_start !== 'boolean') throw new Error(`Node ${node.id}: is_auto_start must be a boolean`)
   },
   ready(context) { return context.definition.is_auto_start === true && !context.fact ? start(context) : undefined },
   action(context, name, payload) {
     if (payload === null || typeof payload !== 'object' || Array.isArray(payload) || Object.keys(payload).length) throw new Error('Unsupported session_agent action')
     if (name === 'start') return start(context)
-    if (name === 'complete' && state(context.fact)?.sessionCreated) return { fact: { ...context.fact!, status: 'succeeded' as const, error: undefined, output: context.placeholder() } }
+    if (name === 'complete' && state(context.fact)?.sessionCreated) return { fact: { ...context.fact!, status: 'succeeded' as const, error: undefined, output: {} } }
     throw new Error('Session agent cannot perform this action now')
   },
   recover(fact) {

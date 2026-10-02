@@ -1,21 +1,9 @@
 import { compile } from '../dag/index.js'
-import type { DagDefinition, ExecutionSnapshot, JsonObject, JsonValue, SavedExecution, Schema, TypeDescriptor } from '../dag/index.js'
-
-function emptyValue(type: TypeDescriptor): JsonValue {
-  if (type === 'string') return ''
-  if (type === 'number') return 0
-  if (type === 'boolean') return false
-  if (type.type === 'array') return []
-  return placeholderOutput(type.properties)
-}
-
-export function placeholderOutput(schema: Schema): JsonObject {
-  return Object.fromEntries(Object.entries(schema).map(([key, type]) => [key, emptyValue(type)]))
-}
+import type { DagDefinition, ExecutionSnapshot, JsonObject, SavedExecution } from '../dag/index.js'
 
 export function initializeWorkflow(definition: DagDefinition): { input: JsonObject; snapshot: ExecutionSnapshot; state: SavedExecution } {
-  const program = compile(definition)
-  const input = placeholderOutput(program.getDefinition().input_schema ?? {})
+  const program = compile(definition, {})
+  const input = {}
   const execution = program.createExecution(input)
   return { input, snapshot: execution.getSnapshot(), state: execution.exportState() }
 }
@@ -31,6 +19,6 @@ export function executeWorkflowNode(
   const execution = state ? program.restoreExecution(state) : program.createExecution(input)
   const ready = execution.getFrontier().find(item => item.instanceId === nodeInstanceId)
   if (!ready) return undefined
-  execution.submit(nodeInstanceId, output ?? placeholderOutput(ready.definition.output_schema ?? {}))
+  execution.submit(nodeInstanceId, output ?? {})
   return { snapshot: execution.getSnapshot(), state: execution.exportState() }
 }
