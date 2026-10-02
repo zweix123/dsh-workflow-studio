@@ -1,5 +1,5 @@
 {
-  "name": "@dsh-workflow/node-chat",
+  "name": "@dsh-workflow/node-session-agent",
   "version": "0.1.0",
   "private": true,
   "type": "module",

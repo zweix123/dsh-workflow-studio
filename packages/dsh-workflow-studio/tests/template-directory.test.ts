@@ -47,17 +47,18 @@ test('workflow node fields are validated at the template boundary without droppi
     await writeFile(join(root, 'workflow.yaml'), validYaml.replace('command: ""', 'command: "  "\n    custom_note: keep'))
     const valid = await validateTemplateDirectory(root)
     assert.equal('definition' in valid && (valid.definition.dag[0] as any).custom_note, 'keep')
-    await writeFile(join(root, 'workflow.yaml'), validYaml.replace('node_kind: bash\n    command: ""', 'node_kind: chat\n    prompt: ""'))
+    await writeFile(join(root, 'workflow.yaml'), validYaml.replace('node_kind: bash\n    command: ""', 'node_kind: session_agent\n    prompt: ""'))
     assert.equal('definition' in await validateTemplateDirectory(root), true)
     await writeFile(join(root, 'workflow.yaml'), validYaml.replace('command: ""', 'command: ""\n    prompt: nope'))
     assert.equal('definition' in await validateTemplateDirectory(root), true)
     for (const [fragment, expected] of [
       ['node_kind: unknown\n    command: ""', /node_kind/],
+      ['node_kind: chat\n    prompt: ""', /node_kind/],
       ['node_kind: bash', /command/],
       ['node_kind: bash\n    command: null', /command/],
       ['node_kind: bash\n    command: ""\n    is_auto_start: yes', /is_auto_start/],
-      ['node_kind: chat', /prompt/],
-      ['node_kind: chat\n    prompt: 42', /prompt/],
+      ['node_kind: session_agent', /prompt/],
+      ['node_kind: session_agent\n    prompt: 42', /prompt/],
     ] as const) {
       const yaml = validYaml.replace('node_kind: bash\n    command: ""', fragment)
       await writeFile(join(root, 'workflow.yaml'), yaml)

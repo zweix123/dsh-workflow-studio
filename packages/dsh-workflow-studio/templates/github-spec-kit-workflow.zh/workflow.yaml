@@ -8,7 +8,7 @@ description: 使用 GitHub Spec Kit 的推荐流程，从项目原则开始，�
 dag:
   - id: 建立项目宪章
     type: node
-    node_kind: chat
+    node_kind: session_agent
     input_schema:
       request: string
     output_schema:
@@ -18,7 +18,7 @@ dag:
       会按自身约定读取默认宪章，不要把宪章路径作为业务参数传递。保持原始需求 request 不变并返回。本节点不要编写功能规格，也不要实现代码。
   - id: 编写功能规格
     type: node
-    node_kind: chat
+    node_kind: session_agent
     input_schema:
       request: string
     output_schema: {}
@@ -28,7 +28,7 @@ dag:
       Skill 按自身约定解析，不要把目录路径作为业务参数传递。本节点不要制定技术方案或实现代码。
   - id: 澄清功能规格
     type: node
-    node_kind: chat
+    node_kind: session_agent
     input_schema: {}
     output_schema: {}
     prompt: 调用 $speckit-clarify，按 Spec Kit 的活动功能上下文找到当前功能规格，检查是否存在会实质影响实现或验收的歧义与缺失决策。按照该 Skill
@@ -36,7 +36,7 @@ dag:
       和规格质量检查清单。如果规格已经足够清晰，不要编造问题，也不要无意义改写。本节点不要决定技术方案或实现代码。
   - id: 评审功能规格
     type: node
-    node_kind: chat
+    node_kind: session_agent
     input_schema: {}
     output_schema:
       spec_approved: boolean
@@ -45,7 +45,7 @@ dag:
       spec_approved=true；用户拒绝或仍需重新执行 $speckit-specify、$speckit-clarify 时返回 false。本节点不要制定方案或实现代码。
   - id: 制定技术方案
     type: node
-    node_kind: chat
+    node_kind: session_agent
     input_schema: {}
     output_schema: {}
     prompt: 调用 $speckit-plan，按 Spec Kit 的活动功能上下文处理当前功能。读取已批准的 spec.md 和项目宪章，解析当前生效的方案模板，研究尚未解决的技术问题，生成
@@ -53,7 +53,7 @@ dag:
       等辅助产物。设计前后都要执行宪章门禁，结合真实仓库与技术上下文，并确保方案能够追溯到功能规格。本节点不要生成任务或应用代码。
   - id: 评审技术方案
     type: node
-    node_kind: chat
+    node_kind: session_agent
     input_schema: {}
     output_schema:
       plan_approved: boolean
@@ -62,7 +62,7 @@ dag:
       plan_approved=true；方案被拒绝或需要再次调用 $speckit-plan 修订时返回 false。本节点不要生成任务或实现代码。
   - id: 评审需求质量
     type: node
-    node_kind: chat
+    node_kind: session_agent
     input_schema: {}
     output_schema: {}
     prompt: 与用户确认当前活动功能是否需要针对安全、可访问性、性能、用户体验等领域增加需求质量清单。需要时，针对每个确认的关注领域调用一次
@@ -70,7 +70,7 @@ dag:
       requirements 清单并继续。本节点不要创建实现任务或代码。
   - id: 生成实施任务
     type: node
-    node_kind: chat
+    node_kind: session_agent
     input_schema: {}
     output_schema: {}
     prompt: 调用 $speckit-tasks，按 Spec Kit 的活动功能上下文处理当前功能。读取 spec.md、plan.md、全部可用的辅助设计产物和项目宪章，生成完整的
@@ -78,7 +78,7 @@ dag:
       TDD 时加入测试任务。本节点不要执行任何任务。
   - id: 分析产物一致性
     type: node
-    node_kind: chat
+    node_kind: session_agent
     input_schema: {}
     output_schema:
       implementation_approved: boolean
@@ -94,7 +94,7 @@ dag:
     dag:
       - id: 执行任务计划
         type: node
-        node_kind: chat
+        node_kind: session_agent
         input_schema: {}
         output_schema: {}
         prompt: 调用 $speckit-implement，按 Spec Kit 的活动功能上下文处理当前功能。首先严格执行 Spec Kit
@@ -102,7 +102,7 @@ dag:
           tasks.md、plan.md、可用的设计产物和项目宪章，检查或创建适用的忽略文件，然后按照依赖顺序分阶段执行任务，只对标记为可并行的任务采用安全并行。任务成功完成后才能勾选，执行相应验证，并如实报告进展与阻塞。
       - id: 评估交付收敛
         type: node
-        node_kind: chat
+        node_kind: session_agent
         input_schema: {}
         output_schema:
           continue_delivery: boolean

@@ -12,7 +12,7 @@ Built for `@deepseek-ai/dsh@0.2.0-rc.1`. The plugin is currently installed from 
 
 - Loads workflow templates from the local DSH home directory, with three bundled examples.
 - Creates independent, persistent runs from template snapshots and shows their progress on a DAG canvas.
-- Runs `chat` nodes in DSH conversations, `bash` nodes in the host sandbox, and `form` nodes through user input.
+- Runs `session_agent` nodes in DSH conversations, `bash` nodes in the host sandbox, and `form` nodes through user input.
 - Supports dependencies, conditional edges, item expansion, nested DAGs, and recursive DAG references. See the [DAG syntax guide (Chinese)](docs/dag-syntax.zh.md) for the full rules.
 
 ## Install from source
@@ -34,7 +34,7 @@ DSH itself is not bundled with this plugin.
 
 1. Add a `workflow.yaml` under `<DSH home>/dsh-workflow-studio/templates/<template-id>/`. The default DSH home is `~/.dsh`.
 2. Open **Workflows** from the DSH sidebar. In **Instances**, choose a workspace, select the template, and create a run.
-3. Open the run to execute ready nodes and inspect its graph. A `chat` node is completed explicitly by the user; a successful `bash` command completes automatically; a `form` node completes on valid submission.
+3. Open the run to execute ready nodes and inspect its graph. A `session_agent` node is completed explicitly by the user; a successful `bash` command completes automatically; a `form` node completes on valid submission.
 
 Minimal template at `~/.dsh/dsh-workflow-studio/templates/hello/workflow.yaml`:
 
@@ -44,7 +44,7 @@ type: dag
 dag:
   - id: draft
     type: node
-    node_kind: chat
+    node_kind: session_agent
     prompt: Write a short draft.
 ```
 
@@ -52,7 +52,9 @@ Templates are files, not yet editable in the plugin UI. The bundled examples are
 
 ## Current limitation
 
-`chat` and `bash` execute real work, but their declared DAG outputs are currently placeholder values. Their conversation text and command output do not flow into downstream nodes or drive `if` / `for` expressions. `form` submits real values to the DAG. See the [DAG syntax guide (Chinese)](docs/dag-syntax.zh.md) before relying on data-dependent branches.
+`session_agent` and `bash` execute real work, but their declared DAG outputs are currently placeholder values. Their conversation text and command output do not flow into downstream nodes or drive `if` / `for` expressions. `form` submits real values to the DAG. See the [DAG syntax guide (Chinese)](docs/dag-syntax.zh.md) before relying on data-dependent branches.
+
+The former `chat` kind is now `session_agent`. Update custom templates to the new kind and recreate existing runs that retain the old template snapshot.
 
 ## Development
 

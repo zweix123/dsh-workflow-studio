@@ -7,7 +7,7 @@ test('template graph keeps all static vertices, nested groups, recursion, and ex
   const definition: DagDefinition = { id: 'root', type: 'dag', description: 'Whole flow', dag: [
     { id: 'start', type: 'node', node_kind: 'bash', command: 'echo hi' },
     { id: 'inner', type: 'dag', description: 'A group', dag: [
-      { id: 'work', type: 'node', node_kind: 'chat', prompt: 'Long prompt' },
+      { id: 'work', type: 'node', node_kind: 'session_agent', prompt: 'Long prompt' },
       { type: 'edge', from: 'work', to: 'inner', if: '$.again' },
     ] },
     { id: 'later', type: 'node' },

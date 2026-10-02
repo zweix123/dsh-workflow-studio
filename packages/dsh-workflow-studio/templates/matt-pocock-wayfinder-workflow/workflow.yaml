@@ -9,7 +9,7 @@ description: Wayfinder selects every open decision ticket on the map in one pass
 dag:
   - id: Chart Wayfinder map
     type: node
-    node_kind: chat
+    node_kind: session_agent
     input_schema:
       request: string
     output_schema:
@@ -23,7 +23,7 @@ dag:
       implement product code in this node.
   - id: Select all decision tickets
     type: node
-    node_kind: chat
+    node_kind: session_agent
     input_schema:
       map_reference: string
     output_schema:
@@ -52,7 +52,7 @@ dag:
     dag:
       - id: Handle one decision ticket
         type: node
-        node_kind: chat
+        node_kind: session_agent
         input_schema:
           map_reference: string
           ticket_reference: string
@@ -87,7 +87,7 @@ dag:
         for: $.next_tickets
   - id: Publish specification
     type: node
-    node_kind: chat
+    node_kind: session_agent
     input_schema:
       map_reference: string
     output_schema:
@@ -99,7 +99,7 @@ dag:
       published spec.
   - id: Publish implementation tickets
     type: node
-    node_kind: chat
+    node_kind: session_agent
     input_schema:
       spec_reference: string
     output_schema:
@@ -116,7 +116,7 @@ dag:
     dag:
       - id: Implement next ticket
         type: node
-        node_kind: chat
+        node_kind: session_agent
         input_schema:
           ticket_set_reference: string
         output_schema:

@@ -14,7 +14,7 @@ description: "Use the OpenSpec OPSX workflow for a specification-driven change: 
 dag:
   - id: shape-change-request
     type: node
-    node_kind: chat
+    node_kind: session_agent
     input_schema:
       request: string
     output_schema:
@@ -29,7 +29,7 @@ dag:
       actually occurred.
   - id: propose-openspec-change
     type: node
-    node_kind: chat
+    node_kind: session_agent
     input_schema:
       request: string
     output_schema:
@@ -51,7 +51,7 @@ dag:
     dag:
       - id: review-planning-artifacts
         type: node
-        node_kind: chat
+        node_kind: session_agent
         input_schema:
           change_reference: string
         output_schema:
@@ -68,7 +68,7 @@ dag:
           ready. Do not treat silence as approval or modify artifacts or code in this node.
       - id: revise-planning-artifacts
         type: node
-        node_kind: chat
+        node_kind: session_agent
         input_schema:
           change_reference: string
           revision_request: string
@@ -82,7 +82,7 @@ dag:
           the same stable change reference as planning_revision_reference after success.
       - id: apply-openspec-change
         type: node
-        node_kind: chat
+        node_kind: session_agent
         input_schema:
           change_reference: string
         output_schema:
@@ -96,7 +96,7 @@ dag:
           claim unfinished work is complete. Return the original change_reference.
       - id: verify-openspec-change
         type: node
-        node_kind: chat
+        node_kind: session_agent
         input_schema:
           change_reference: string
         output_schema:
@@ -114,7 +114,7 @@ dag:
           planning artifacts.
       - id: fix-implementation-gaps
         type: node
-        node_kind: chat
+        node_kind: session_agent
         input_schema:
           change_reference: string
           verification_summary: string
@@ -128,7 +128,7 @@ dag:
           for another human review and verification cycle.
       - id: reconcile-plan-after-implementation
         type: node
-        node_kind: chat
+        node_kind: session_agent
         input_schema:
           change_reference: string
           verification_summary: string
@@ -143,7 +143,7 @@ dag:
           plan again so the code matches it.
       - id: normalize-repeat-context
         type: node
-        node_kind: chat
+        node_kind: session_agent
         input_schema:
           planning_revision_reference: string
           implementation_fix_reference: string
@@ -158,7 +158,7 @@ dag:
           damaged, do not submit a result; report the problem and request human intervention.
       - id: sync-main-specs
         type: node
-        node_kind: chat
+        node_kind: session_agent
         input_schema:
           change_reference: string
           verification_summary: string
@@ -174,7 +174,7 @@ dag:
           return its original reference.
       - id: archive-openspec-change
         type: node
-        node_kind: chat
+        node_kind: session_agent
         input_schema:
           change_reference: string
           specs_synced: boolean

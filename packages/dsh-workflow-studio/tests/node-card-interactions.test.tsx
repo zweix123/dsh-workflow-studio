@@ -207,23 +207,23 @@ test('cards execute independently and the inspector follows the selected graph o
   }
 })
 
-test('workflow node inspector opens the existing chat, completes it, and shows the last bash result', async () => {
+test('workflow node inspector opens the existing session_agent, completes it, and shows the last bash result', async () => {
   const { dom, cleanup } = testDom()
   const base: any = { id: 'run', workspaceId: 'w', name: 'Business', templateId: 'flow', createdAt: '2026-09-24T00:00:00Z', input: {},
-    definition: { id: 'root', type: 'dag', dag: [{ id: 'chat', type: 'node', node_kind: 'chat', prompt: '' }, { id: 'bash', type: 'node', node_kind: 'bash', command: 'printf done' }] },
+    definition: { id: 'root', type: 'dag', dag: [{ id: 'session_agent', type: 'node', node_kind: 'session_agent', prompt: '' }, { id: 'bash', type: 'node', node_kind: 'bash', command: 'printf done' }] },
     snapshot: { rootInstanceId: 'root-i', instances: [
       { instanceId: 'root-i', definitionId: 'root', definitionPath: [], parentInstanceId: null, input: {}, type: 'dag', status: 'running' },
-      { instanceId: 'chat-i', definitionId: 'chat', definitionPath: ['dag', 0], parentInstanceId: 'root-i', input: {}, type: 'node', status: 'ready' },
+      { instanceId: 'session_agent-i', definitionId: 'session_agent', definitionPath: ['dag', 0], parentInstanceId: 'root-i', input: {}, type: 'node', status: 'ready' },
       { instanceId: 'bash-i', definitionId: 'bash', definitionPath: ['dag', 1], parentInstanceId: 'root-i', input: {}, type: 'node', status: 'ready' },
     ], waitingPositions: [], skippedPositions: [], edges: [], instanceConnections: [] },
-    executions: { 'chat-i': { kind: 'chat', status: 'waiting', sessionId: 'session-one', sessionCreated: true }, 'bash-i': { kind: 'bash', status: 'failed', stdout: 'done', stderr: 'warning', exitCode: 2, error: 'Command exited with code 2' } } }
+    executions: { 'session_agent-i': { kind: 'session_agent', status: 'waiting', sessionId: 'session-one', sessionCreated: true }, 'bash-i': { kind: 'bash', status: 'failed', stdout: 'done', stderr: 'warning', exitCode: 2, error: 'Command exited with code 2' } } }
   let latest: any
   const opened: string[] = []
   let completed = 0
   globalThis.fetch = async (url, init) => {
-    if (String(url).endsWith('/nodes/chat-i/actions/complete') && init?.method === 'POST') {
+    if (String(url).endsWith('/nodes/session_agent-i/actions/complete') && init?.method === 'POST') {
       completed++
-      return Response.json({ ...base, snapshot: { ...base.snapshot, instances: base.snapshot.instances.map((item: any) => item.instanceId === 'chat-i' ? { ...item, status: 'completed', output: {} } : item) } })
+      return Response.json({ ...base, snapshot: { ...base.snapshot, instances: base.snapshot.instances.map((item: any) => item.instanceId === 'session_agent-i' ? { ...item, status: 'completed', output: {} } : item) } })
     }
     return new Response('missing', { status: 404 })
   }
@@ -232,12 +232,12 @@ test('workflow node inspector opens the existing chat, completes it, and shows t
   const render = async (detail: any) => act(async () => root.render(<InstanceRunPanel detail={detail} t={key => zh[key]} onUpdate={value => { latest = value }} onWidthUpdate={() => {}} onOpenSession={id => opened.push(id)} />))
   try {
     await render(base)
-    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="详情 chat"]')!.click())
-    await act(async () => [...container.querySelectorAll<HTMLButtonElement>('.dsh-workflow-inspector button')].find(button => button.textContent === zh.openChat)!.click())
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="详情 session_agent"]')!.click())
+    await act(async () => [...container.querySelectorAll<HTMLButtonElement>('.dsh-workflow-inspector button')].find(button => button.textContent === zh.openSession)!.click())
     assert.deepEqual(opened, ['session-one'])
-    await act(async () => [...container.querySelectorAll<HTMLButtonElement>('.dsh-workflow-inspector button')].find(button => button.textContent === zh.completeChat)!.click())
+    await act(async () => [...container.querySelectorAll<HTMLButtonElement>('.dsh-workflow-inspector button')].find(button => button.textContent === zh.completeSessionAgent)!.click())
     assert.equal(completed, 1)
-    assert.equal(latest.snapshot.instances.find((item: any) => item.instanceId === 'chat-i').status, 'completed')
+    assert.equal(latest.snapshot.instances.find((item: any) => item.instanceId === 'session_agent-i').status, 'completed')
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="详情 bash"]')!.click())
     assert.match(container.querySelector('.dsh-workflow-inspector')!.textContent!, /printf done.*done.*warning.*Command exited with code 2/s)
     assert.equal(container.querySelector<HTMLButtonElement>('[aria-label="执行 bash"]')!.disabled, false)

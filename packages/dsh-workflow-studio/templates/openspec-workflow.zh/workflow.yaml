@@ -12,7 +12,7 @@ description: 使用 OpenSpec 的 OPSX 工作流完成一次规格驱动变更：
 dag:
   - id: shape-change-request
     type: node
-    node_kind: chat
+    node_kind: session_agent
     input_schema:
       request: string
     output_schema:
@@ -23,7 +23,7 @@ dag:
       skill。最终用中文整理出可供提案使用的 request，保留用户已经确认的范围、约束和验收目标，并返回 exploration_used 表示本次是否实际进行了探索。
   - id: propose-openspec-change
     type: node
-    node_kind: chat
+    node_kind: session_agent
     input_schema:
       request: string
     output_schema:
@@ -41,7 +41,7 @@ dag:
     dag:
       - id: review-planning-artifacts
         type: node
-        node_kind: chat
+        node_kind: session_agent
         input_schema:
           change_reference: string
         output_schema:
@@ -54,7 +54,7 @@ dag:
           产物已经就绪，返回 planning_disposition="implement" 和空的 revision_request。不得把沉默当作批准，也不得在本节点修改产物或代码。
       - id: revise-planning-artifacts
         type: node
-        node_kind: chat
+        node_kind: session_agent
         input_schema:
           change_reference: string
           revision_request: string
@@ -66,7 +66,7 @@ dag:
           change。成功完成后将同一个稳定 change 引用作为 planning_revision_reference 返回。
       - id: apply-openspec-change
         type: node
-        node_kind: chat
+        node_kind: session_agent
         input_schema:
           change_reference: string
         output_schema:
@@ -76,7 +76,7 @@ dag:
           update 回环。遇到阻塞时保留真实状态并请求用户处理，不得虚报完成。返回原 change_reference。
       - id: verify-openspec-change
         type: node
-        node_kind: chat
+        node_kind: session_agent
         input_schema:
           change_reference: string
         output_schema:
@@ -89,7 +89,7 @@ dag:
           "revise_plan"；只有任务、需求场景和设计均有充分实现证据，且用户接受剩余非阻塞 warning 时，才返回 "ready"。本节点只验证和分类，不修改代码或规划产物。
       - id: fix-implementation-gaps
         type: node
-        node_kind: chat
+        node_kind: session_agent
         input_schema:
           change_reference: string
           verification_summary: string
@@ -100,7 +100,7 @@ dag:
           change 引用作为 implementation_fix_reference 返回，以便进入下一轮人工审阅和验证。
       - id: reconcile-plan-after-implementation
         type: node
-        node_kind: chat
+        node_kind: session_agent
         input_schema:
           change_reference: string
           verification_summary: string
@@ -112,7 +112,7 @@ dag:
           post_implementation_revision_reference，后续必须重新审阅并再次 apply，使代码与修订后的计划一致。
       - id: normalize-repeat-context
         type: node
-        node_kind: chat
+        node_kind: session_agent
         input_schema:
           planning_revision_reference: string
           implementation_fix_reference: string
@@ -124,7 +124,7 @@ dag:
           continue_lifecycle=true 以启动下一轮审阅、实施和验证。若没有恰好一个引用、change 已被外部归档或状态损坏，不要提交结果；应报告异常并请求人工介入。
       - id: sync-main-specs
         type: node
-        node_kind: chat
+        node_kind: session_agent
         input_schema:
           change_reference: string
           verification_summary: string
@@ -137,7 +137,7 @@ dag:
           合并规则。保持 change 仍为 active 并返回原引用。
       - id: archive-openspec-change
         type: node
-        node_kind: chat
+        node_kind: session_agent
         input_schema:
           change_reference: string
           specs_synced: boolean

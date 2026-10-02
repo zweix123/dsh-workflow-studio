@@ -41,7 +41,7 @@ packages/dsh-workflow-studio/
 ├── scripts/build.mjs
 ├── package.json
 └── cordis.patch.yml
-packages/dsh-workflow-node-chat/      # chat 节点服务端与前端
+packages/dsh-workflow-node-session-agent/      # session_agent 节点服务端与前端
 packages/dsh-workflow-node-bash/      # bash 节点服务端与前端
 packages/dsh-workflow-node-form/      # form 节点服务端与前端
 ```

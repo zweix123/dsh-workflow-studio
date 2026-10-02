@@ -9,7 +9,7 @@ description: Follow the GitHub Spec Kit process from project principles through 
 dag:
   - id: Establish project constitution
     type: node
-    node_kind: chat
+    node_kind: session_agent
     input_schema:
       request: string
     output_schema:
@@ -23,7 +23,7 @@ dag:
       specification or implement code in this node.
   - id: Write feature specification
     type: node
-    node_kind: chat
+    node_kind: session_agent
     input_schema:
       request: string
     output_schema: {}
@@ -38,7 +38,7 @@ dag:
       create a technical plan or implement code in this node.
   - id: Clarify feature specification
     type: node
-    node_kind: chat
+    node_kind: session_agent
     input_schema: {}
     output_schema: {}
     prompt: Call $speckit-clarify and locate the current specification through Spec Kit's active-feature
@@ -50,7 +50,7 @@ dag:
       node.
   - id: Review feature specification
     type: node
-    node_kind: chat
+    node_kind: session_agent
     input_schema: {}
     output_schema:
       spec_approved: boolean
@@ -62,7 +62,7 @@ dag:
       Do not plan or implement code in this node.
   - id: Create technical plan
     type: node
-    node_kind: chat
+    node_kind: session_agent
     input_schema: {}
     output_schema: {}
     prompt: Call $speckit-plan for the current active feature. Read the approved spec.md and project
@@ -73,7 +73,7 @@ dag:
       not create tasks or application code in this node.
   - id: Review technical plan
     type: node
-    node_kind: chat
+    node_kind: session_agent
     input_schema: {}
     output_schema:
       plan_approved: boolean
@@ -85,7 +85,7 @@ dag:
       implement code in this node.
   - id: Review requirements quality
     type: node
-    node_kind: chat
+    node_kind: session_agent
     input_schema: {}
     output_schema: {}
     prompt: Ask whether the active feature needs additional requirements quality checklists for
@@ -97,7 +97,7 @@ dag:
       continue. Do not create implementation tasks or code in this node.
   - id: Generate implementation tasks
     type: node
-    node_kind: chat
+    node_kind: session_agent
     input_schema: {}
     output_schema: {}
     prompt: Call $speckit-tasks for the current active feature. Read spec.md, plan.md, all available
@@ -108,7 +108,7 @@ dag:
       constitution, or user explicitly requires TDD. Do not execute tasks in this node.
   - id: Analyze artifact consistency
     type: node
-    node_kind: chat
+    node_kind: session_agent
     input_schema: {}
     output_schema:
       implementation_approved: boolean
@@ -128,7 +128,7 @@ dag:
     dag:
       - id: Execute task plan
         type: node
-        node_kind: chat
+        node_kind: session_agent
         input_schema: {}
         output_schema: {}
         prompt: Call $speckit-implement for the current active feature. Enforce Spec Kit's checklist gate
@@ -139,7 +139,7 @@ dag:
           verification, and report progress and blockers honestly.
       - id: Evaluate delivery convergence
         type: node
-        node_kind: chat
+        node_kind: session_agent
         input_schema: {}
         output_schema:
           continue_delivery: boolean

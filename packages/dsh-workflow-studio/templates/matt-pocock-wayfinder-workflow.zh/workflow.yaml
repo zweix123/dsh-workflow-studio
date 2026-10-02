@@ -8,7 +8,7 @@ description: Wayfinder：一次选择地图中的全部开放 decision tickets�
 dag:
   - id: 绘制-Wayfinder-地图
     type: node
-    node_kind: chat
+    node_kind: session_agent
     input_schema:
       request: string
     output_schema:
@@ -20,7 +20,7 @@ dag:
       false。本节点不得实现产品代码。
   - id: 选择全部决策票
     type: node
-    node_kind: chat
+    node_kind: session_agent
     input_schema:
       map_reference: string
     output_schema:
@@ -46,7 +46,7 @@ dag:
     dag:
       - id: 处理单个决策票
         type: node
-        node_kind: chat
+        node_kind: session_agent
         input_schema:
           map_reference: string
           ticket_reference: string
@@ -76,7 +76,7 @@ dag:
         for: $.next_tickets
   - id: 发布规格
     type: node
-    node_kind: chat
+    node_kind: session_agent
     input_schema:
       map_reference: string
     output_schema:
@@ -86,7 +86,7 @@ dag:
       spec_reference。
   - id: 发布实现票
     type: node
-    node_kind: chat
+    node_kind: session_agent
     input_schema:
       spec_reference: string
     output_schema:
@@ -102,7 +102,7 @@ dag:
     dag:
       - id: 实现下一张票
         type: node
-        node_kind: chat
+        node_kind: session_agent
         input_schema:
           ticket_set_reference: string
         output_schema:
