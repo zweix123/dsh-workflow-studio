@@ -306,7 +306,7 @@ test('instance cards and creation dialog preserve drafts, then open details only
     assert.equal(detailTabs[2]!.getAttribute('aria-selected'), 'true')
     assert.equal(dom.window.document.activeElement, detailTabs[2])
     assert.equal(container.querySelectorAll('.dsh-workflow-detail .dsh-workflow-instance-list').length, 0)
-    assert.equal(container.querySelector('.dsh-workflow-detail .dsh-workflow-button'), null)
+    assert.equal(container.querySelector('.dsh-workflow-detail-header .dsh-workflow-button')?.textContent, zh.rootDagDetails)
     const worker = [...container.querySelectorAll<HTMLElement>('[data-graph-node]')].filter(node => node.dataset.definitionId === 'worker')
     assert.equal(worker.length, 2)
     assert.equal(container.querySelector<HTMLElement>('[data-definition-id="later"]')!.dataset.status, 'waiting')

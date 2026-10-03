@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { Node } from '@xyflow/react'
 import type { InstanceDetail } from '../src/shared/types/workflow-instance.js'
-import { flowStartNodeId, workCandidates } from '../src/client/pages/workflow-studio/instances/graph-navigation.js'
+import { flowStartNodeId, workCandidates } from '../src/client/pages/workflow-studio/canvas/navigation.js'
 
 const detail: InstanceDetail = {
   id: 'run', workspaceId: 'w', name: 'Run', templateId: 'flow', createdAt: '2026-09-25', input: {},

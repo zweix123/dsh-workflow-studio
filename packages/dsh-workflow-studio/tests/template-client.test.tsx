@@ -17,8 +17,9 @@ test('template tab rescans, shows invalid entries, and reuses and closes read-on
   globalThis.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} }
   globalThis.requestAnimationFrame = callback => setTimeout(() => callback(Date.now()), 0) as unknown as number
   globalThis.cancelAnimationFrame = handle => clearTimeout(handle)
+  const prompt = '完整提示词\n第二行保留换行\n' + '长内容 '.repeat(80)
   const definition = { id: 'root', type: 'dag', description: '原始描述', dag: [
-    { id: 'write', type: 'node', node_kind: 'session_agent', prompt: '完整提示词', dag: 'custom metadata', output_schema: { answer: 'string' } },
+    { id: 'write', type: 'node', node_kind: 'session_agent', prompt, dag: 'custom metadata', output_schema: { answer: 'string' }, custom: { zero: 0, flag: false, empty: '' } },
     { id: 'review', type: 'node', node_kind: 'bash', command: 'echo ok' },
     { type: 'edge', from: 'write', to: 'review', if: '$.answer == "yes"' },
   ] }
@@ -64,9 +65,14 @@ test('template tab rescans, shows invalid entries, and reuses and closes read-on
     assert.ok(writeDetails)
     assert.equal(writeDetails.closest<HTMLElement>('.react-flow__node')?.style.pointerEvents, 'all')
     await act(async () => writeDetails.click())
-    assert.match(container.querySelector('.dsh-workflow-template-inspector')!.textContent!, /完整提示词/)
-    assert.match(container.querySelector('.dsh-workflow-template-inspector')!.textContent!, /dagcustom metadata/)
-    assert.match(container.querySelector('.dsh-workflow-template-inspector')!.textContent!, /output_schema/)
+    const writeInspector = container.querySelector('.dsh-workflow-template-inspector')!
+    const fields = Object.fromEntries([...writeInspector.querySelectorAll('dl > div')].map(row => [row.querySelector('dt')!.textContent!, row.querySelector('dd')!.textContent!]))
+    assert.deepEqual(Object.keys(fields), ['id', 'type', 'node_kind', 'prompt', 'dag', 'output_schema', 'custom'])
+    assert.equal(fields.prompt, prompt)
+    assert.equal(fields.dag, 'custom metadata')
+    assert.deepEqual(JSON.parse(fields.output_schema!), { answer: 'string' })
+    assert.deepEqual(JSON.parse(fields.custom!), { zero: 0, flag: false, empty: '' })
+    assert.equal(writeInspector.querySelector('.dsh-workflow-inspector-body input, .dsh-workflow-inspector-body textarea, .dsh-workflow-inspector-body button'), null)
     await act(async () => tabs()[1]!.click())
     assert.equal(catalogLoads, 2)
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="打开模板 good"]')!.click())

@@ -1,6 +1,16 @@
 import type { zh } from './zh.js'
 
 export const en: Record<keyof typeof zh, string> = {
+  runningInformation: 'Running information',
+  definitionDetails: 'Definition details',
+  definitionMissing: 'The definition for this object could not be found.',
+  instanceId: 'Instance ID',
+  parentInstanceId: 'Parent instance ID',
+  definitionId: 'Definition ID',
+  forItemIdentity: 'Iteration identity',
+  nodeInput: 'Input',
+  nodeOutput: 'Output',
+  runState: 'Status',
   title: 'Workflows',
   instances: 'Instances',
   templates: 'Templates',

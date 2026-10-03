@@ -126,14 +126,18 @@ ${reactFlowCss}
 .dsh-workflow-template-detail .dsh-workflow-detail-header { justify-content: space-between; gap: 12px; }
 .dsh-workflow-template-detail .dsh-workflow-detail-header button { align-self: center; }
 .dsh-workflow-template-graph .dsh-workflow-node { grid-template-rows: 16px minmax(0, 1fr) auto; }
-.dsh-workflow-template-inspector { width: min(320px, 100%); display: flex; flex-direction: column; }
-.dsh-workflow-template-inspector .dsh-workflow-inspector-body { flex: 1; min-height: 0; }
+.dsh-workflow-template-inspector { width: min(320px, 100%); }
+.dsh-workflow-inspector { display: flex; flex-direction: column; }
+.dsh-workflow-inspector > header { flex: none; }
+.dsh-workflow-inspector-body { flex: 1; min-height: 0; }
 .dsh-workflow-template-inspector dl { margin: 0; }
-.dsh-workflow-template-field { border-bottom: .5px solid var(--dsw-alias-border-l3); padding: 9px 0; }
-.dsh-workflow-template-field:first-child { padding-top: 0; }
-.dsh-workflow-template-field dt { font-weight: 600; overflow-wrap: anywhere; }
-.dsh-workflow-template-field dd { margin: 5px 0 0; }
-.dsh-workflow-template-field pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; line-height: 1.5; }
+.dsh-workflow-inspector-body section + section { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--dsw-alias-border-l2); }
+.dsh-workflow-inspector-body h4 { margin: 0 0 12px; font-size: 13px; font-weight: 600; }
+.dsh-workflow-detail-field { border-bottom: .5px solid var(--dsw-alias-border-l3); padding: 9px 0; }
+.dsh-workflow-detail-field:first-child { padding-top: 0; }
+.dsh-workflow-detail-field dt { font-weight: 600; overflow-wrap: anywhere; }
+.dsh-workflow-detail-field dd { margin: 5px 0 0; }
+.dsh-workflow-detail-field pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; line-height: 1.5; }
 .dsh-workflow-instances {
   min-width: 0;
   min-height: 0;

@@ -28,6 +28,161 @@ function testDom(onResize?: (callback: ResizeObserverCallback) => void) {
   } }
 }
 
+function fields(container: Element): Record<string, string> {
+  return Object.fromEntries([...container.querySelectorAll('dl > div')].map(row => [
+    row.querySelector('dt')!.textContent!, row.querySelector('dd')!.textContent!,
+  ]))
+}
+
+function inspectorSection(container: Element, name: string): HTMLElement {
+  const section = container.querySelector<HTMLElement>(`.dsh-workflow-inspector section[aria-label="${name}"]`)
+  assert.ok(section, `Missing inspector section: ${name}`)
+  return section
+}
+
+test('every graph object exposes its snapshot definition below the correct running information', async () => {
+  const { dom, cleanup } = testDom()
+  const snapshotCommand = 'printf "snapshot command\\nsecond line"'
+  const detail: any = { id: 'run', workspaceId: 'w', name: 'Definitions', templateId: 'source-template', createdAt: '2026-10-03T00:00:00Z', input: {},
+    definition: { id: 'root', type: 'dag', description: 'Root snapshot', custom: { zero: 0, flag: false }, dag: [
+      { id: 'same', type: 'node', node_kind: 'bash', command: snapshotCommand, dag: 'ordinary custom field', output_schema: { answer: 'string' } },
+      { id: 'nested', type: 'dag', description: 'Nested snapshot', dag: [
+        { id: 'same', type: 'node', node_kind: 'bash', command: 'nested command' },
+        { type: 'edge', from: 'same', to: 'nested', if: '$.again' },
+      ] },
+      { id: 'later', type: 'node', node_kind: 'bash', command: 'waiting command' },
+      { id: 'closed', type: 'node', node_kind: 'bash', command: 'skipped command' },
+    ] }, snapshot: { rootInstanceId: 'root-i', instances: [
+      { instanceId: 'root-i', parentInstanceId: null, definitionId: 'root', definitionPath: [], type: 'dag', status: 'running', input: {} },
+      { instanceId: 'same-i', parentInstanceId: 'root-i', definitionId: 'same', definitionPath: ['dag', 0], type: 'node', status: 'completed', input: { zero: 0, flag: false, empty: '' }, output: { answer: 'accepted' } },
+      { instanceId: 'nested-i', parentInstanceId: 'root-i', definitionId: 'nested', definitionPath: ['dag', 1], type: 'dag', status: 'running', input: {} },
+      { instanceId: 'inner-i', parentInstanceId: 'nested-i', definitionId: 'same', definitionPath: ['dag', 1, 'dag', 0], type: 'node', status: 'ready', input: {} },
+      { instanceId: 'recursive-i', parentInstanceId: 'nested-i', definitionId: 'nested', definitionPath: ['dag', 1], type: 'dag', status: 'running', input: {} },
+    ], waitingPositions: [{ parentInstanceId: 'root-i', definitionId: 'later', definitionPath: ['dag', 2] }],
+    skippedPositions: [{ parentInstanceId: 'root-i', definitionId: 'closed', definitionPath: ['dag', 3] }], edges: [], instanceConnections: [] } }
+  const requests: string[] = []
+  globalThis.fetch = async url => {
+    requests.push(String(url))
+    return Response.json({ id: detail.templateId, definition: { ...detail.definition, dag: [{ id: 'same', type: 'node', node_kind: 'bash', command: 'changed source command' }] } })
+  }
+  const container = dom.window.document.getElementById('root')!
+  const root = createRoot(container)
+  const render = async (value = detail, language = zh) => act(async () => root.render(<InstanceRunPanel detail={value} t={key => language[key]} onUpdate={() => {}} onWidthUpdate={() => {}} onOpenSession={() => {}} />))
+  const inspect = async (id: string) => act(async () => {
+    container.querySelector<HTMLButtonElement>(`.react-flow__node[data-id="${id}"] [aria-label^="详情 "]`)!.click()
+  })
+  const runtime = () => fields(inspectorSection(container, '运行信息'))
+  const definition = () => fields(inspectorSection(container, '定义详情'))
+  try {
+    await render()
+    const rootButton = [...container.querySelectorAll<HTMLButtonElement>('.dsh-workflow-detail-header button')].find(button => button.textContent === zh.rootDagDetails)!
+    assert.ok(rootButton)
+    await act(async () => rootButton.click())
+    assert.deepEqual([...container.querySelectorAll('.dsh-workflow-inspector section')].map(section => section.getAttribute('aria-label')), ['运行信息', '定义详情'])
+    assert.equal(runtime()['实例 ID'], 'root-i')
+    assert.equal(runtime()['父实例 ID'], 'null')
+    assert.equal(runtime()['定义 ID'], 'root')
+    assert.equal(runtime()['状态'], zh.statusRunning)
+    assert.deepEqual(Object.keys(definition()), ['id', 'type', 'description', 'custom'])
+    assert.equal(definition().description, 'Root snapshot')
+    assert.deepEqual(JSON.parse(definition().custom!), { zero: 0, flag: false })
+    await inspect('same-i')
+    assert.equal(runtime()['实例 ID'], 'same-i')
+    assert.equal(runtime()['父实例 ID'], 'root-i')
+    assert.equal(runtime()['状态'], zh.statusCompleted)
+    assert.deepEqual(JSON.parse(runtime()['输入']!), { zero: 0, flag: false, empty: '' })
+    assert.deepEqual(JSON.parse(runtime()['输出']!), { answer: 'accepted' })
+    assert.equal(definition().command, snapshotCommand)
+    assert.equal(definition().dag, 'ordinary custom field')
+    assert.deepEqual(JSON.parse(definition().output_schema!), { answer: 'string' })
+    assert.equal(inspectorSection(container, '定义详情').querySelector('button, input, textarea'), null)
+    await inspect('inner-i')
+    assert.equal(runtime()['实例 ID'], 'inner-i')
+    assert.equal(definition().command, 'nested command')
+    assert.equal(runtime()['输出'], undefined)
+    for (const id of ['nested-i', 'recursive-i']) {
+      await inspect(id)
+      assert.equal(runtime()['实例 ID'], id)
+      assert.equal(definition().description, 'Nested snapshot')
+      assert.equal(definition().dag, undefined)
+      assert.equal(inspectorSection(container, '运行信息').querySelector('button[type="submit"]'), null)
+    }
+    for (const [id, command] of [['later', 'waiting command'], ['closed', 'skipped command']]) {
+      await act(async () => container.querySelector<HTMLButtonElement>(`[aria-label="详情 ${id}"]`)!.click())
+      assert.equal(runtime()['父实例 ID'], 'root-i')
+      assert.equal(runtime()['定义 ID'], id)
+      assert.equal(runtime()['实例 ID'], undefined)
+      assert.equal(runtime()['逐项身份'], undefined)
+      assert.equal(runtime()['输入'], undefined)
+      assert.equal(runtime()['输出'], undefined)
+      assert.deepEqual(Object.keys(runtime()).sort(), ['父实例 ID', '定义 ID', '状态'].sort())
+      assert.equal(runtime()['状态'], id === 'later' ? zh.statusWaiting : zh.statusSkipped)
+      assert.equal(definition().command, command)
+      assert.equal(inspectorSection(container, '运行信息').querySelector('button'), null)
+    }
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="详情 later"]')!.click())
+    await render({ ...detail, snapshot: { ...detail.snapshot, waitingPositions: [] } })
+    assert.equal(container.querySelector('.dsh-workflow-inspector'), null)
+    await render()
+    await inspect('same-i')
+    assert.equal(definition().command, snapshotCommand)
+    assert.deepEqual(requests, [], 'Inspecting snapshot definitions must not load the current source template')
+    await render(detail, en)
+    assert.ok(inspectorSection(container, 'Running information'))
+    assert.equal(fields(inspectorSection(container, 'Definition details')).command, snapshotCommand)
+    assert.ok([...container.querySelectorAll<HTMLButtonElement>('.dsh-workflow-detail-header button')].some(button => button.textContent === en.rootDagDetails))
+  } finally { await act(async () => root.unmount()); cleanup() }
+})
+
+test('for instances share definition fields and retain independent identities and results', async () => {
+  const { dom, cleanup } = testDom()
+  const detail: any = { id: 'for-run', workspaceId: 'w', name: 'For definitions', templateId: 'flow', createdAt: '2026-10-03T00:00:00Z', input: {},
+    definition: { id: 'root', type: 'dag', dag: [{ id: 'worker', type: 'node', node_kind: 'bash', command: 'shared command' }] },
+    snapshot: { rootInstanceId: 'root-i', instances: [
+      { instanceId: 'root-i', parentInstanceId: null, definitionId: 'root', definitionPath: [], type: 'dag', status: 'running', input: {} },
+      { instanceId: 'first-i', parentInstanceId: 'root-i', definitionId: 'worker', definitionPath: ['dag', 0], type: 'node', status: 'completed', input: { value: 0 }, output: { value: 'first' }, forItem: { key: 'first', index: 0 } },
+      { instanceId: 'second-i', parentInstanceId: 'root-i', definitionId: 'worker', definitionPath: ['dag', 0], type: 'node', status: 'ready', input: { value: false }, forItem: { key: 'second', index: 1 } },
+    ], waitingPositions: [], skippedPositions: [], edges: [], instanceConnections: [] } }
+  const container = dom.window.document.getElementById('root')!
+  const root = createRoot(container)
+  try {
+    await act(async () => root.render(<InstanceRunPanel detail={detail} t={key => zh[key]} onUpdate={() => {}} onWidthUpdate={() => {}} onOpenSession={() => {}} />))
+    for (const [index, id, value] of [[0, 'first-i', 0], [1, 'second-i', false]] as const) {
+      await act(async () => container.querySelector<HTMLButtonElement>(`.react-flow__node[data-id="${id}"] [aria-label^="详情 worker"]`)!.click())
+      const running = fields(inspectorSection(container, '运行信息'))
+      assert.equal(running['实例 ID'], id)
+      assert.equal(running['状态'], index === 0 ? zh.statusCompleted : zh.statusReady)
+      assert.deepEqual(JSON.parse(running['逐项身份']!), { key: index === 0 ? 'first' : 'second', index })
+      assert.deepEqual(JSON.parse(running['输入']!), { value })
+      if (index === 0) assert.deepEqual(JSON.parse(running['输出']!), { value: 'first' })
+      else assert.equal(running['输出'], undefined)
+      assert.equal(fields(inspectorSection(container, '定义详情')).command, 'shared command')
+    }
+  } finally { await act(async () => root.unmount()); cleanup() }
+})
+
+test('an invalid definition reference keeps running information and shows a localized missing-definition message', async () => {
+  const { dom, cleanup } = testDom()
+  const detail: any = { id: 'missing-run', workspaceId: 'w', name: 'Missing definition', templateId: 'flow', createdAt: '2026-10-03T00:00:00Z', input: {},
+    definition: { id: 'root', type: 'dag', dag: [{ id: 'worker', type: 'node', node_kind: 'bash', command: 'must not be mistaken for the missing definition' }] },
+    snapshot: { rootInstanceId: 'root-i', instances: [
+      { instanceId: 'root-i', parentInstanceId: null, definitionId: 'root', definitionPath: [], type: 'dag', status: 'running', input: {} },
+    ], waitingPositions: [{ parentInstanceId: 'root-i', definitionId: 'missing', definitionPath: ['dag', 9] }], skippedPositions: [], edges: [], instanceConnections: [] } }
+  const container = dom.window.document.getElementById('root')!
+  const root = createRoot(container)
+  try {
+    await act(async () => root.render(<InstanceRunPanel detail={detail} t={key => zh[key]} onUpdate={() => {}} onWidthUpdate={() => {}} onOpenSession={() => {}} />))
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="详情 missing"]')!.click())
+    assert.equal(fields(inspectorSection(container, '运行信息'))['定义 ID'], 'missing')
+    const definitionSection = inspectorSection(container, '定义详情')
+    assert.equal(definitionSection.querySelector('p')!.textContent, '无法定位此对象的定义。')
+    assert.deepEqual(fields(definitionSection), {})
+    assert.equal(inspectorSection(container, '运行信息').querySelector('button'), null)
+    await act(async () => root.render(<InstanceRunPanel detail={detail} t={key => en[key]} onUpdate={() => {}} onWidthUpdate={() => {}} onOpenSession={() => {}} />))
+    assert.equal(inspectorSection(container, 'Definition details').querySelector('p')!.textContent, en.definitionMissing)
+  } finally { await act(async () => root.unmount()); cleanup() }
+})
+
 test('cards execute independently and the inspector follows the selected graph object', async () => {
   let resize: (() => void) | undefined
   const { dom, cleanup } = testDom(callback => { resize = () => callback([], {} as ResizeObserver) })
@@ -230,6 +385,10 @@ test('workflow node inspector opens the existing session_agent, completes it, an
   const container = dom.window.document.getElementById('root')!
   const root = createRoot(container)
   const render = async (detail: any) => act(async () => root.render(<InstanceRunPanel detail={detail} t={key => zh[key]} onUpdate={value => { latest = value }} onWidthUpdate={() => {}} onOpenSession={id => opened.push(id)} />))
+  const assertStatus = (expected: string) => {
+    assert.equal(fields(inspectorSection(container, '运行信息'))['状态'], expected)
+    assert.equal(container.querySelector('.dsh-workflow-inspector > header p')!.textContent, expected)
+  }
   try {
     await render(base)
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="详情 session_agent"]')!.click())
@@ -239,14 +398,22 @@ test('workflow node inspector opens the existing session_agent, completes it, an
     assert.equal(completed, 1)
     assert.equal(latest.snapshot.instances.find((item: any) => item.instanceId === 'session_agent-i').status, 'completed')
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="详情 bash"]')!.click())
-    assert.match(container.querySelector('.dsh-workflow-inspector')!.textContent!, /printf done.*done.*warning.*Command exited with code 2/s)
+    assert.match(inspectorSection(container, '运行信息').textContent!, /printf done.*done.*warning.*Command exited with code 2/s)
+    assert.equal(fields(inspectorSection(container, '定义详情')).command, 'printf done')
+    assertStatus(zh.executionError)
     assert.equal(container.querySelector<HTMLButtonElement>('[aria-label="执行 bash"]')!.disabled, false)
     await render({ ...base, executions: { ...base.executions, 'bash-i': { kind: 'bash', status: 'succeeded', output: {} } } })
+    assertStatus(zh.statusReady)
     assert.equal(container.querySelector<HTMLButtonElement>('[aria-label="执行 bash"]')!.disabled, false)
     await render({ ...base, executions: { ...base.executions, 'bash-i': { kind: 'bash', status: 'running' } } })
     assert.equal(container.querySelector<HTMLButtonElement>('[aria-label="执行 bash"]'), null)
-    assert.match(container.querySelector('.dsh-workflow-inspector')!.textContent!, /正在执行/)
+    assertStatus(zh.statusRunning)
+    assert.match(inspectorSection(container, '运行信息').textContent!, /正在执行/)
+    await render({ ...base, executions: { ...base.executions, 'bash-i': { kind: 'bash', status: 'unknown' } } })
+    assertStatus(zh.statusUnknown)
+    assert.equal(container.querySelector<HTMLButtonElement>('[aria-label="执行 bash"]')!.disabled, false)
     await render({ ...base, incompatible: 'node_kind missing' })
+    assertStatus(zh.executionError)
     assert.equal(container.querySelector<HTMLButtonElement>('[aria-label="执行 bash"]')!.disabled, true)
     assert.match(container.querySelector('[role="alert"]')!.textContent!, /node_kind missing/)
   } finally {
@@ -330,6 +497,12 @@ test('form keeps a page draft, submits through the node action, then becomes rea
     assert.equal(container.querySelector<HTMLInputElement>('input[type="number"]')!.value, '0')
     assert.equal(container.querySelector<HTMLInputElement>('input[type="checkbox"]')!.checked, false)
     await act(async () => { Object.getOwnPropertyDescriptor(dom.window.HTMLTextAreaElement.prototype, 'value')!.set!.call(textarea, 'Grace'); Simulate.change(textarea) })
+    assert.equal(fields(inspectorSection(container, 'Definition details')).id, 'answer')
+    assert.equal(inspectorSection(container, 'Definition details').querySelector('textarea, input, button'), null)
+    await act(async () => [...container.querySelectorAll<HTMLButtonElement>('.dsh-workflow-detail-header button')].find(button => button.textContent === en.rootDagDetails)!.click())
+    assert.equal(fields(inspectorSection(container, 'Definition details')).id, 'root')
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Details answer"]')!.click())
+    assert.equal(container.querySelector<HTMLTextAreaElement>('textarea')!.value, 'Grace')
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Close details"]')!.click())
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Details answer"]')!.click())
     assert.equal(container.querySelector<HTMLTextAreaElement>('textarea')!.value, 'Grace')

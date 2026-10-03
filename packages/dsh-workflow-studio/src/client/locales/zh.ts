@@ -1,4 +1,15 @@
 export const zh = {
+  runState: '状态',
+  runningInformation: '运行信息',
+  definitionDetails: '定义详情',
+  definitionMissing: '无法定位此对象的定义。',
+  instanceId: '实例 ID',
+  parentInstanceId: '父实例 ID',
+  definitionId: '定义 ID',
+  forItemIdentity: '逐项身份',
+  nodeInput: '输入',
+  nodeOutput: '输出',
+
   title: '工作流',
   instances: '实例',
   templates: '模版',

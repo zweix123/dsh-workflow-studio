@@ -1,16 +1,16 @@
-import type { Node } from '@xyflow/react'
+import type { CanvasNode } from './types.js'
 import type { InstanceDetail } from '../../../../shared/types/workflow-instance.js'
 
 export type WorkCandidate = { id: string; label: string; status: 'error' | 'unknown' | 'ready' | 'running'; path: string; item?: string; x: number; y: number }
 
-export function canvasPosition(node: Node, byId: Map<string, Node>): { x: number; y: number } {
+export function canvasPosition(node: CanvasNode, byId: Map<string, CanvasNode>): { x: number; y: number } {
   let x = node.position.x, y = node.position.y
   let parent = node.parentId && byId.get(node.parentId)
   while (parent) { x += parent.position.x; y += parent.position.y; parent = parent.parentId && byId.get(parent.parentId) }
   return { x, y }
 }
 
-export function flowStartNodeId(nodes: Node[]): string | undefined {
+export function flowStartNodeId(nodes: CanvasNode[]): string | undefined {
   const byId = new Map(nodes.map(node => [node.id, node]))
   const ordinary = nodes.filter(node => node.type === 'workflow' && node.data.kind === 'node')
   const visible = ordinary.length ? ordinary : nodes.filter(node => node.type === 'workflow')
@@ -21,7 +21,7 @@ export function flowStartNodeId(nodes: Node[]): string | undefined {
   })[0]?.id
 }
 
-export function workCandidates(detail: InstanceDetail, nodes: Node[]): WorkCandidate[] {
+export function workCandidates(detail: InstanceDetail, nodes: CanvasNode[]): WorkCandidate[] {
   const byId = new Map(nodes.map(node => [node.id, node]))
   const candidates: WorkCandidate[] = []
   for (const instance of detail.snapshot.instances) {

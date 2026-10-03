@@ -1,39 +1,38 @@
 import dagre from '@dagrejs/dagre'
-import { MarkerType, type Edge, type Node } from '@xyflow/react'
-import type { DagDefinition, EntityDefinition } from '../../../../host/dag/index.js'
+import { MarkerType } from '@xyflow/react'
+import type { DagDefinition } from '../../../../host/dag/index.js'
 import { inspectLayout, type LayoutDirection } from '../../../../shared/layout.js'
+
+import type { CanvasGraph, TemplateCanvasNode, CanvasEdge } from '../canvas/types.js'
 
 const WIDTH = 184
 const HEIGHT = 112
 const PADDING = 28
 const HEADER = 40
 
-export type TemplateGraphNode = Node<{ label: string; kind: 'node' | 'dag' | 'recursive'; path: number[]; direction?: LayoutDirection }>
-export type TemplateGraphEdge = Edge<{ condition?: string; each?: string; definitionId?: string; path: number[] }>
-
-export function buildTemplateGraph(root: DagDefinition): { nodes: TemplateGraphNode[]; edges: TemplateGraphEdge[] } {
+export function buildTemplateGraph(root: DagDefinition): CanvasGraph {
   const layers = new Map(inspectLayout(root).layers.map(layer => [layer.path.join('\0'), layer]))
-  const nodes: TemplateGraphNode[] = []
-  const edges: TemplateGraphEdge[] = []
+  const nodes: TemplateCanvasNode[] = []
+  const edges: CanvasEdge[] = []
   const idAt = (path: number[]) => path.length ? `dag/${path.join('/dag/')}` : 'root'
 
   function visit(dag: DagDefinition, path: number[], names: string[]): { width: number; height: number } {
     const parent = idAt(path)
     const vertices = dag.dag.flatMap((item, index) => item.type === 'edge' ? [] : [{ item, index }])
     const self = dag.dag.some(item => item.type === 'edge' && (item.from === dag.id || item.to === dag.id))
-    const items: TemplateGraphNode[] = []
+    const items: TemplateCanvasNode[] = []
     for (const { item, index } of vertices) {
       const childPath = [...path, index]
       const size = item.type === 'dag' ? visit(item, childPath, [...names, item.id]) : { width: WIDTH, height: HEIGHT }
       items.push({
         id: idAt(childPath), type: item.type === 'dag' ? 'dagGroup' : 'workflow',
-        data: { label: item.id, kind: item.type, path: childPath }, position: { x: 0, y: 0 },
+        data: { source: 'template', label: item.id, kind: item.type, definitionPath: childPath.flatMap(index => ['dag', index]) }, position: { x: 0, y: 0 },
         style: item.type === 'dag' ? { width: size.width + PADDING * 2, height: size.height + HEADER + PADDING } : { width: WIDTH, height: HEIGHT },
         ...(path.length && { parentId: parent }), draggable: false, selectable: false, connectable: false,
       })
     }
     if (self) items.push({
-      id: `${parent}/recursive`, type: 'workflow', data: { label: dag.id, kind: 'recursive', path },
+      id: `${parent}/recursive`, type: 'workflow', data: { source: 'template', label: dag.id, kind: 'recursive', definitionPath: path.flatMap(index => ['dag', index]) },
       position: { x: 0, y: 0 }, style: { width: WIDTH, height: HEIGHT },
       ...(path.length && { parentId: parent }), draggable: false, selectable: false, connectable: false,
     })
@@ -93,20 +92,14 @@ export function buildTemplateGraph(root: DagDefinition): { nodes: TemplateGraphN
         id: `${parent}/edge/${index}`, source: source.id, target: target.id,
         sourceHandle: sourceDirection === 'vertical' ? 'bottom' : 'right',
         targetHandle: targetDirection === 'vertical' ? 'top' : 'left',
-        type: 'expression', data: { path: [...path, index], ...(item.id && { definitionId: item.id }), ...(item.if && { condition: item.if }), ...(item.for && { each: item.for }) },
+        type: 'expression', data: { source: 'template', definitionPath: [...path, index].flatMap(index => ['dag', index]), ...(item.id && { definitionId: item.id }), ...(item.if && { condition: item.if }), ...(item.for && { each: item.for }) },
         markerEnd: { type: MarkerType.ArrowClosed, color: 'var(--dsw-alias-label-secondary)' }, selectable: false,
       })
     }
     return { width, height }
   }
   visit(root, [], [root.id])
-  const depth = (node: TemplateGraphNode): number => node.parentId ? 1 + depth(nodes.find(item => item.id === node.parentId)!) : 0
+  const depth = (node: TemplateCanvasNode): number => node.parentId ? 1 + depth(nodes.find(item => item.id === node.parentId)!) : 0
   nodes.sort((a, b) => depth(a) - depth(b))
   return { nodes, edges }
-}
-
-export function templateDefinitionAt(root: DagDefinition, path: number[]): EntityDefinition {
-  let item: EntityDefinition = root
-  for (const index of path) item = (item as DagDefinition).dag[index]!
-  return item
 }

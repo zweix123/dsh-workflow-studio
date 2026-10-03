@@ -2,10 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { InstanceDetail } from '../../../../shared/types/workflow-instance.js'
 import { getInstance, nodeAction, setDrawerWidth, WorkflowInstanceApiError } from '../../../apis/workflow-instances.js'
 import type { WorkflowKey, WorkflowTranslate } from '../../../locales/index.js'
-import { buildPositionNodeId, definitionAt } from './build-canvas-graph.js'
+import { buildPositionNodeId } from './build-canvas-graph.js'
+import { DefinitionDetails, DetailFields, definitionAt } from '../DefinitionDetails.js'
 import { inspectLayout } from '../../../../shared/layout.js'
 import { LayoutNotices } from '../LayoutNotices.js'
-import { DagCanvas, statusKeys } from './DagCanvas.js'
+import { DagCanvas } from './DagCanvas.js'
+import { canvasStatusLabel } from '../canvas/CanvasElements.js'
 import { clientNodes } from '../../../nodes.js'
 import type { NodeViewProps } from '../../../../contract/node/client.js'
 import type { NodeData, NodeDefinition } from '../../../../contract/node/index.js'
@@ -32,7 +34,8 @@ export function InstanceRunPanel({ detail, t, onUpdate, onWidthUpdate, onOpenSes
     .find(row => buildPositionNodeId(row, row.status) === selected)
   const inspection = item ?? position
   const execution = item?.type === 'node' ? detail.executions?.[item.instanceId] : undefined
-  const definition = item && definitionAt(detail.definition, item.definitionPath)
+  const definition = inspection && definitionAt(detail.definition, inspection.definitionPath)
+  const output = item?.status === 'completed' ? item.output : execution?.status === 'succeeded' ? execution.output : undefined
 
   useEffect(() => { if (selected && !inspection) setSelected(null) }, [selected, inspection])
   useEffect(() => {
@@ -136,10 +139,10 @@ export function InstanceRunPanel({ detail, t, onUpdate, onWidthUpdate, onOpenSes
     }
   }
 
-  const statusKey = statusKeys[inspection?.status ?? 'waiting']
+  const inspectionStatus = canvasStatusLabel(inspection?.status ?? 'waiting', execution?.status, t)
   const layoutReport = useMemo(() => inspectLayout(detail.definition), [detail.definition])
   return <section className="dsh-workflow-detail" aria-label={detail.name}>
-    <header className="dsh-workflow-detail-header"><div><h2>{detail.name}</h2><p>{detail.templateId}</p></div></header>
+    <header className="dsh-workflow-detail-header"><div><h2>{detail.name}</h2><p>{detail.templateId}</p></div><button type="button" className="dsh-workflow-button" onClick={() => setSelected(detail.snapshot.rootInstanceId)}>{t('rootDagDetails')}</button></header>
     {error && <p className="dsh-workflow-run-error" role="alert">{t(error.key)} {error.message}</p>}
     {detail.incompatible && <p className="dsh-workflow-run-error" role="alert">{t('instanceIncompatible')} {detail.incompatible}</p>}
     <LayoutNotices report={layoutReport} t={t} surface="instance" />
@@ -148,18 +151,34 @@ export function InstanceRunPanel({ detail, t, onUpdate, onWidthUpdate, onOpenSes
       <DagCanvas detail={detail} t={t} onAction={(id, name, payload) => void run(id, name, payload)} onInspect={setSelected} pending={pending} active={active} inspectorWidth={inspection ? visibleWidth(dragWidth ?? detail.drawerWidth ?? 320, areaWidth) : 0} />
       {inspection && <aside className="dsh-workflow-inspector" aria-label={`${t('nodeDetails')} ${inspection.definitionId}`} style={{ width: `${visibleWidth(dragWidth ?? detail.drawerWidth ?? 320, areaWidth)}px` }}>
         <div className="dsh-workflow-inspector-resize" role="separator" tabIndex={0} aria-label={t('resizeNodeDetails')} aria-orientation="vertical" aria-valuemin={areaWidth ? Math.min(300, areaWidth) : undefined} aria-valuemax={areaWidth ? Math.max(Math.min(300, areaWidth), Math.floor(areaWidth * 0.7)) : undefined} aria-valuenow={visibleWidth(dragWidth ?? detail.drawerWidth ?? 320, areaWidth)} onPointerDown={startResize} onKeyDown={resizeByKeyboard} />
-        <header><div><h3>{inspection.definitionId}</h3><p>{execution?.status === 'running' ? t('statusRunning') : t(statusKey)}</p></div><button type="button" aria-label={t('closeNodeDetails')} onClick={() => setSelected(null)}>×</button></header>
+        <header><div><h3>{inspection.definitionId}</h3><p>{inspectionStatus}</p></div><button type="button" aria-label={t('closeNodeDetails')} onClick={() => setSelected(null)}>×</button></header>
         <div className="dsh-workflow-inspector-body">
-          {item?.type === 'node' && definition && (() => {
+          <section aria-label={t('runningInformation')}>
+            <h4>{t('runningInformation')}</h4>
+            <DetailFields fields={[
+              ...(item ? [[t('instanceId'), item.instanceId] as [string, unknown]] : []),
+              [t('parentInstanceId'), inspection.parentInstanceId],
+              [t('definitionId'), inspection.definitionId],
+              [t('runState'), inspectionStatus],
+              ...(item?.forItem ? [[t('forItemIdentity'), item.forItem] as [string, unknown]] : []),
+              ...(item ? [[t('nodeInput'), item.input] as [string, unknown]] : []),
+              ...(output !== undefined ? [[t('nodeOutput'), output] as [string, unknown]] : []),
+            ]} />
+          {item?.type === 'node' && definition?.type === 'node' && (() => {
             const Panel = clientNodes.get(String(definition.node_kind))?.Panel
             if (!Panel) return null
-            const props: NodeViewProps = { label: item.definitionId, definition: definition as NodeDefinition, input: item.input as NodeData, output: item.status === 'completed' ? item.output as NodeData : execution?.status === 'succeeded' ? execution.output : undefined,
+            const props: NodeViewProps = { label: item.definitionId, definition: definition as NodeDefinition, input: item.input as NodeData, output: output as NodeData | undefined,
               execution: execution as NodeViewProps['execution'], ready: item.status === 'ready', pending: Boolean(detail.incompatible) || pending.includes(item.instanceId),
               t: key => t(key as Parameters<WorkflowTranslate>[0]), action: (name, payload) => void run(item.instanceId, name, payload),
               openSession: onOpenSession, draft: drafts[item.instanceId],
               setDraft: value => setDrafts(current => ({ ...current, [item.instanceId]: value })) }
-            return <Panel {...props} />
+            return <Panel key={item.instanceId} {...props} />
           })()}
+          </section>
+          <section aria-label={t('definitionDetails')}>
+            <h4>{t('definitionDetails')}</h4>
+            {definition ? <DefinitionDetails definition={definition} /> : <p role="status">{t('definitionMissing')}</p>}
+          </section>
         </div>
       </aside>}
     </div>

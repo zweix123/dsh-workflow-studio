@@ -1,9 +1,11 @@
 import dagre from '@dagrejs/dagre'
-import { MarkerType, Position, type Edge, type Node } from '@xyflow/react'
-import type { EntityDefinition, PositionSnapshot, RuntimeEdgeSnapshot } from '../../../../host/dag/index.js'
+import { MarkerType, Position } from '@xyflow/react'
+import type { PositionSnapshot, RuntimeEdgeSnapshot } from '../../../../host/dag/index.js'
 import type { InstanceDetail } from '../../../../shared/types/workflow-instance.js'
 import { inspectLayout, type LayoutDirection } from '../../../../shared/layout.js'
-import { canvasPosition } from './graph-navigation.js'
+import { canvasPosition } from '../canvas/navigation.js'
+import { definitionAt } from '../DefinitionDetails.js'
+import type { CanvasGraph, CanvasNode, CanvasEdge, RuntimeCanvasNode } from '../canvas/types.js'
 
 const NODE_WIDTH = 184
 const NODE_HEIGHT = 112
@@ -11,22 +13,11 @@ const GAP = 20
 const GROUP_PADDING = 28
 const GROUP_HEADER = 40
 
-type GraphNode = Node<{ label: string; status: string; kind: 'node' | 'dag' | 'position'; forItem?: { key: string; index: number }; direction?: LayoutDirection; segment?: number }>
+type GraphNode = RuntimeCanvasNode
 
 const positionKey = (parent: string, definition: string) => `${parent}\u0000${definition}`
 export const buildPositionNodeId = (position: Pick<PositionSnapshot, 'parentInstanceId' | 'definitionId'>, status: 'waiting' | 'skipped') =>
   `${status}:${positionKey(position.parentInstanceId, position.definitionId)}`
-
-export function definitionAt(root: InstanceDetail['definition'], path: readonly (string | number)[]): EntityDefinition | undefined {
-  let current: EntityDefinition = root
-  for (let index = 0; index < path.length; index += 2) {
-    if (path[index] !== 'dag' || typeof path[index + 1] !== 'number' || current.type !== 'dag') return
-    const child: EntityDefinition | undefined = current.dag[path[index + 1] as number]
-    if (!child) return
-    current = child
-  }
-  return current
-}
 
 function edgeExpressions(root: InstanceDetail['definition'], edge: RuntimeEdgeSnapshot): { condition?: string; each?: string } | undefined {
   const definition = definitionAt(root, edge.definitionPath)
@@ -35,7 +26,7 @@ function edgeExpressions(root: InstanceDetail['definition'], edge: RuntimeEdgeSn
   return { ...(definition.if && { condition: definition.if }), ...(definition.for && { each: definition.for }) }
 }
 
-export function buildCanvasGraph(detail: InstanceDetail): { nodes: Node[]; edges: Edge[] } {
+export function buildCanvasGraph(detail: InstanceDetail): CanvasGraph {
   const { snapshot } = detail
   const layoutLayers = new Map(inspectLayout(detail.definition).layers.map(layer => [layer.path.join('\u0000'), layer]))
   const instances = new Map(snapshot.instances.map(instance => [instance.instanceId, instance]))
@@ -65,12 +56,12 @@ export function buildCanvasGraph(detail: InstanceDetail): { nodes: Node[]; edges
   for (const instance of snapshot.instances) {
     if (instance.parentInstanceId === null) continue
     add(instance.instanceId, instance.type === 'dag' ? 'dagGroup' : 'workflow',
-      { label: instance.definitionId, status: instance.status, kind: instance.type, ...(instance.forItem && { forItem: instance.forItem }) },
+      { source: 'instance', instanceId: instance.instanceId, definitionPath: instance.definitionPath, label: instance.definitionId, status: instance.status, kind: instance.type, ...(instance.forItem && { forItem: instance.forItem }) },
       instance.parentInstanceId, instance.definitionId)
   }
   const placeholder = (position: PositionSnapshot, status: 'waiting' | 'skipped') => add(
     buildPositionNodeId(position, status), 'workflow',
-    { label: position.definitionId, status, kind: 'position' }, position.parentInstanceId, position.definitionId)
+    { source: 'position', definitionPath: position.definitionPath, parentInstanceId: position.parentInstanceId, definitionId: position.definitionId, label: position.definitionId, status, kind: 'position' }, position.parentInstanceId, position.definitionId)
   snapshot.waitingPositions.forEach(position => placeholder(position, 'waiting'))
   snapshot.skippedPositions.forEach(position => placeholder(position, 'skipped'))
 
@@ -219,6 +210,7 @@ export function buildCanvasGraph(detail: InstanceDetail): { nodes: Node[]; edges
   }
   layout(snapshot.rootInstanceId)
   for (const item of frameItems.values()) nodes.push(...item)
+  const canvasNodes: CanvasNode[] = [...nodes]
   const aggregateIds = new Map<string, string>()
   const outgoing = new Set(snapshot.edges.map(edge => positionKey(edge.from.parentInstanceId, edge.from.definitionId)))
   for (const [key, ids] of byPosition) if (outgoing.has(key) && (ids.length > 1 || ids.some(id => instances.get(id)?.forItem))) {
@@ -228,8 +220,8 @@ export function buildCanvasGraph(detail: InstanceDetail): { nodes: Node[]; edges
     const vertical = first.data.direction === 'vertical'
     const id = `aggregate:${key}`
     aggregateIds.set(key, id)
-    nodes.push({
-      id, type: 'aggregate', data: { label: '', status: '', kind: 'position', ...(first.data.direction && { direction: first.data.direction, segment: first.data.segment }) },
+    canvasNodes.push({
+      id, type: 'aggregate', data: { source: 'aggregate', label: '', kind: 'aggregate', ...(first.data.direction && { direction: first.data.direction, segment: first.data.segment }) },
       position: vertical
         ? { x: (first.position.x + last.position.x + Number(last.style?.width || NODE_WIDTH)) / 2 - 41,
           y: Math.max(...row.map(item => item.position.y + Number(item.style?.height || NODE_HEIGHT))) + 8 }
@@ -242,20 +234,20 @@ export function buildCanvasGraph(detail: InstanceDetail): { nodes: Node[]; edges
     })
   }
   // React Flow needs group nodes before descendants to resolve relative positions.
-  const nodeById = new Map(nodes.map(node => [node.id, node]))
-  const depth = (node: GraphNode): number => node.parentId ? 1 + depth(nodeById.get(node.parentId)!) : 0
-  nodes.sort((a, b) => depth(a) - depth(b))
+  const nodeById = new Map(canvasNodes.map(node => [node.id, node]))
+  const depth = (node: CanvasNode): number => node.parentId ? 1 + depth(nodeById.get(node.parentId)!) : 0
+  canvasNodes.sort((a, b) => depth(a) - depth(b))
 
   const laneY = new Map([...frameItems].map(([frameId, items]) => [frameId,
-    Math.max(...[...items, ...nodes.filter(item => item.type === 'aggregate'
+    Math.max(...[...items, ...canvasNodes.filter(item => item.type === 'aggregate'
       && (item.parentId ?? snapshot.rootInstanceId) === frameId)].map(item => {
       const at = canvasPosition(item, nodeById)
       return at.y + (Number(item.style?.height) || NODE_HEIGHT)
     })) + 16]))
 
   const edgePorts = (source: string, target: string, frameId: string) => {
-    const from = nodeById.get(source) as GraphNode | undefined
-    const to = nodeById.get(target) as GraphNode | undefined
+    const from = nodeById.get(source)
+    const to = nodeById.get(target)
     const crosses = from?.data.segment !== undefined && to?.data.segment !== undefined
       && from.data.segment !== to.data.segment
     const columnTurn = crosses && from?.data.direction === 'vertical' && to?.data.direction === 'vertical'
@@ -268,7 +260,7 @@ export function buildCanvasGraph(detail: InstanceDetail): { nodes: Node[]; edges
         targetHandle: to?.data.direction === 'vertical' ? 'top' : 'left', data: {} }
   }
 
-  const edges: Edge[] = snapshot.edges.flatMap((edge, edgeIndex) => {
+  const edges: CanvasEdge[] = snapshot.edges.flatMap((edge, edgeIndex) => {
     const sources = byPosition.get(positionKey(edge.from.parentInstanceId, edge.from.definitionId)) ?? []
     const targets = byPosition.get(positionKey(edge.to.parentInstanceId, edge.to.definitionId)) ?? []
     const expressions = edgeExpressions(detail.definition, edge)
@@ -276,7 +268,8 @@ export function buildCanvasGraph(detail: InstanceDetail): { nodes: Node[]; edges
       JSON.stringify(connection.edgeDefinitionPath) === JSON.stringify(edge.definitionPath)
       && connection.from.parentInstanceId === edge.parentInstanceId)
     const source = aggregateIds.get(positionKey(edge.from.parentInstanceId, edge.from.definitionId)) ?? sources[0]
-    const targetPosition = targets.find(id => nodeById.get(id)?.data.kind === 'position')
+    const targetPosition = targets.find(id => nodeById.get(id)?.data.source === 'position')
+    const targetData = targetPosition ? nodeById.get(targetPosition)?.data : undefined
     const pairs = edge.status === 'active'
       ? snapshot.instanceConnections
         ? connections.length
@@ -286,18 +279,18 @@ export function buildCanvasGraph(detail: InstanceDetail): { nodes: Node[]; edges
               : connection.sourceInstanceIds[0]
             return origin ? [[origin, connection.toInstanceId] as const] : []
           })
-          : source && targetPosition && nodeById.get(targetPosition)?.data.status === 'waiting'
+          : source && targetPosition && targetData?.source === 'position' && targetData.status === 'waiting'
             ? [[source, targetPosition] as const] : []
         : source && targets[0] ? [[source, targets[0]] as const] : []
       : source && targetPosition ? [[source, targetPosition] as const] : []
-    return pairs.map(([source, target], pairIndex): Edge => {
+    return pairs.map(([source, target], pairIndex): CanvasEdge => {
       const ports = edgePorts(source, target, edge.parentInstanceId)
       return {
         id: `${edgeIndex}:${pairIndex}`,
         source, target,
         sourceHandle: ports.sourceHandle,
         targetHandle: ports.targetHandle,
-        data: { status: edge.status, ...expressions, ...ports.data },
+        data: { source: 'runtime', definitionPath: edge.definitionPath, status: edge.status, ...expressions, ...ports.data },
         className: `dsh-workflow-edge-${edge.status}`,
         type: 'expression',
         markerEnd: { type: MarkerType.ArrowClosed, color: edge.status === 'active'
@@ -311,8 +304,8 @@ export function buildCanvasGraph(detail: InstanceDetail): { nodes: Node[]; edges
     id: `member:${source}:${aggregate}`, source, target: aggregate, type: 'smoothstep',
     sourceHandle: nodeById.get(source)?.data.direction === 'vertical' ? 'bottom' : 'right',
     targetHandle: nodeById.get(aggregate)?.data.direction === 'vertical' ? 'top' : 'left',
-    data: { status: 'aggregation' }, className: 'dsh-workflow-edge-aggregation', selectable: false,
+    data: { source: 'aggregation', status: 'aggregation' }, className: 'dsh-workflow-edge-aggregation', selectable: false,
     markerEnd: { type: MarkerType.ArrowClosed, color: 'var(--dsw-alias-label-secondary)' },
   })
-  return { nodes, edges }
+  return { nodes: canvasNodes, edges }
 }
