@@ -7,6 +7,8 @@ import { JSDOM } from 'jsdom'
 import type { WorkspaceSnapshot } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import { WorkflowStudioPanel } from '../src/client/pages/workflow-studio/WorkflowStudioPanel.js'
 import { InstanceRunPanel } from '../src/client/pages/workflow-studio/instances/InstanceRunPanel.js'
+import { StudioClient } from '../src/client/studio-client.js'
+import { ConversationInstanceAction } from '../src/client/ConversationInstanceAction.js'
 import { en, zh } from '../src/client/locales/index.js'
 
 function testDom(onResize?: (callback: ResizeObserverCallback) => void) {
@@ -516,4 +518,318 @@ test('form keeps a page draft, submits through the node action, then becomes rea
     assert.equal(container.querySelector<HTMLTextAreaElement>('textarea')!.disabled, true)
     assert.equal(container.querySelector<HTMLButtonElement>('button[type="submit"]'), null)
   } finally { await act(async () => root.unmount()); cleanup() }
+})
+
+
+test('conversation header returns to the latest instance and exact node after studio unmounts', async () => {
+  const { dom, cleanup } = testDom()
+  const client = new StudioClient()
+  const workspaces = { items: [], archivedSessionIds: [], pinnedSessionIds: [], state: 'idle', phase: 'ready', error: null } as unknown as WorkspaceSnapshot
+  const useWorkspaces = <T,>(selector: (snapshot: WorkspaceSnapshot) => T) => selector(workspaces)
+  const detail: any = { id: 'run', workspaceId: 'w', name: 'Navigation run', templateId: 'source', createdAt: '2026-10-03T00:00:00Z', revision: 2, input: {},
+    definition: { id: 'root', type: 'dag', dag: [{ id: 'same', type: 'node', node_kind: 'session_agent', prompt: '' }] },
+    executions: { 'node-2': { kind: 'session_agent', status: 'waiting', sessionId: 'session-2', sessionCreated: true } },
+    snapshot: { rootInstanceId: 'root-i', instances: [
+      { instanceId: 'root-i', parentInstanceId: null, definitionId: 'root', definitionPath: [], type: 'dag', status: 'running', input: {} },
+      { instanceId: 'node-1', parentInstanceId: 'root-i', definitionId: 'same', definitionPath: ['dag', 0], type: 'node', status: 'ready', input: {} },
+      { instanceId: 'node-2', parentInstanceId: 'root-i', definitionId: 'same', definitionPath: ['dag', 0], type: 'node', status: 'ready', input: {}, forItem: { key: 'second', index: 1 } },
+    ], waitingPositions: [], skippedPositions: [], edges: [], instanceConnections: [] } }
+  const calls: string[] = []
+  globalThis.fetch = async url => {
+    calls.push(String(url))
+    if (String(url).includes('/conversations/')) return Response.json({ target: { instanceId: 'run', nodeInstanceId: 'node-2' } })
+    if (String(url).endsWith('/instances/run')) return Response.json(detail)
+    if (String(url).endsWith('/templates')) return Response.json({ directory: '/templates', templates: [] })
+    return Response.json([])
+  }
+  const container = dom.window.document.getElementById('root')!
+  const root = createRoot(container)
+  const studio = () => <WorkflowStudioPanel client={client} t={key => zh[key]} useWorkspaces={useWorkspaces} onOpenSession={() => {}} />
+  let returns = 0
+  const layout = { beginNavigation: () => new AbortController().signal, selectPanel: () => { returns++; root.render(studio()) } }
+  try {
+    await act(async () => root.render(studio()))
+    await act(async () => root.render(<ConversationInstanceAction client={client} layout={layout} sessionId="session-2" t={key => zh[key]} />))
+    const back = [...container.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === '返回实例')!
+    assert.ok(back)
+    await act(async () => { back.click(); back.click() })
+    assert.equal(returns, 1)
+    const selected = container.querySelector('[role="tab"][aria-selected="true"]')!
+    assert.equal(selected.textContent, 'Navigation run')
+    const info = inspectorSection(container, '运行信息')
+    assert.equal(fields(info)['实例 ID'], 'node-2')
+    assert.equal(container.querySelectorAll('[role="tab"]').length, 3)
+    assert.equal(calls.filter(url => url.includes('/actions/')).length, 0)
+    assert.equal(container.querySelector('.dsh-workflow-inspector [aria-label="执行 same"]'), null)
+    await act(async () => container.querySelector<HTMLButtonElement>('.react-flow__controls-zoomin')!.click())
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 230)) })
+    const view = container.querySelector<HTMLElement>('.react-flow__viewport')!.style.transform
+    await act(async () => root.render(<ConversationInstanceAction client={client} layout={layout} sessionId="session-2" t={key => zh[key]} />))
+    await act(async () => container.querySelector<HTMLButtonElement>('button')!.click())
+    assert.equal(container.querySelectorAll('[role="tab"]').length, 3)
+    assert.equal(container.querySelector<HTMLElement>('.react-flow__viewport')!.style.transform, view)
+    assert.equal(fields(inspectorSection(container, '运行信息'))['实例 ID'], 'node-2')
+    await act(async () => container.querySelector<HTMLButtonElement>('.dsh-workflow-tab-close')!.click())
+    await act(async () => root.render(<ConversationInstanceAction client={client} layout={layout} sessionId="session-2" t={key => zh[key]} />))
+    await act(async () => container.querySelector<HTMLButtonElement>('button')!.click())
+    assert.equal(container.querySelectorAll('[role="tab"]').length, 3)
+    assert.notEqual(container.querySelector<HTMLElement>('.react-flow__viewport')!.style.transform, view)
+    assert.equal(fields(inspectorSection(container, '运行信息'))['实例 ID'], 'node-2')
+  } finally {
+    await act(async () => root.unmount()); client.dispose(); cleanup()
+  }
+})
+
+
+test('one plugin client preserves ordered instance and template tabs and independent viewports across unmounts', async () => {
+  const { dom, cleanup } = testDom()
+  dom.window.matchMedia = (() => ({ matches: true })) as any
+  const client = new StudioClient()
+  const workspace = { items: [{ workspaceId: 'w', title: 'Workspace', sessionIds: [] }], phase: 'ready' } as unknown as WorkspaceSnapshot
+  const useWorkspaces = <T,>(selector: (snapshot: WorkspaceSnapshot) => T) => selector(workspace)
+  const detail = (id: string): any => ({ id, workspaceId: 'w', name: id, templateId: 'flow', createdAt: '2026-10-03T00:00:00Z', input: {},
+    definition: { id: 'root', type: 'dag', dag: [] }, snapshot: { rootInstanceId: 'root-i', instances: [
+      { instanceId: 'root-i', definitionId: 'root', definitionPath: [], parentInstanceId: null, type: 'dag', status: 'running', input: {} },
+    ], waitingPositions: [], skippedPositions: [], edges: [], instanceConnections: [] } })
+  globalThis.fetch = async url => {
+    if (String(url).endsWith('/instances')) return Response.json([detail('A'), detail('B')])
+    if (String(url).endsWith('/templates')) return Response.json({ directory: '/templates', templates: [{ id: 'flow' }] })
+    if (String(url).endsWith('/templates/flow')) return Response.json({ id: 'flow', definition: detail('A').definition })
+    return Response.json(detail(String(url).split('/').at(-1)!))
+  }
+  const container = dom.window.document.getElementById('root')!
+  const root = createRoot(container)
+  const render = (value = client) => root.render(<WorkflowStudioPanel client={value} t={key => zh[key]} useWorkspaces={useWorkspaces} onOpenSession={() => {}} />)
+  const tabs = () => [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
+  const click = async (button: HTMLButtonElement) => act(async () => button.click())
+  const viewport = (index: number) => container.querySelectorAll<HTMLElement>('.react-flow__viewport')[index].style.transform
+  try {
+    await act(async () => render())
+    const rows = [...container.querySelectorAll<HTMLButtonElement>('.dsh-workflow-instance-row')]
+    await click(rows[0]); await click(tabs()[0]); await click(rows[1])
+    await click(tabs()[1])
+    await click(container.querySelector<HTMLButtonElement>('.dsh-workflow-template-item button')!)
+    const zoom = [...container.querySelectorAll<HTMLButtonElement>('.react-flow__controls-zoomin')]
+    await click(zoom[0]); await click(zoom[1]); await click(zoom[1]); await click(zoom[2]); await click(zoom[2]); await click(zoom[2])
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 230)) })
+    const beforePan = viewport(0)
+    await act(async () => {
+      const pane = container.querySelector<HTMLElement>('.react-flow__pane')!
+      pane.dispatchEvent(new dom.window.MouseEvent('mousedown', { bubbles: true, clientX: 300, clientY: 300, button: 0, view: dom.window as any }))
+      dom.window.dispatchEvent(new dom.window.MouseEvent('mousemove', { bubbles: true, clientX: 410, clientY: 370, buttons: 1, view: dom.window as any }))
+      dom.window.dispatchEvent(new dom.window.MouseEvent('mouseup', { bubbles: true, clientX: 410, clientY: 370, view: dom.window as any }))
+    })
+    assert.notEqual(viewport(0), beforePan)
+    const views = [viewport(0), viewport(1), viewport(2)]
+    assert.equal(new Set(views).size, 3)
+    await act(async () => root.render(null))
+    await act(async () => render())
+    assert.deepEqual(tabs().map(tab => tab.textContent), ['实例管理', '模板管理', 'A', 'B', 'flow'])
+    assert.equal(tabs()[4].getAttribute('aria-selected'), 'true')
+    assert.deepEqual([viewport(0), viewport(1), viewport(2)], views)
+    await act(async () => root.render(null))
+    await act(async () => render(new StudioClient()))
+    assert.deepEqual(tabs().map(tab => tab.textContent), ['实例管理', '模板管理'])
+  } finally { await act(async () => root.unmount()); client.dispose(); cleanup() }
+})
+
+
+test('superseded host navigation leaves the current conversation return action usable', async () => {
+  const { dom, cleanup } = testDom()
+  const client = new StudioClient()
+  const controller = new AbortController()
+  let delayed: (value: Response) => void = () => {}
+  let delay = true
+  let selected = false
+  globalThis.fetch = async url => {
+    if (String(url).includes('/conversations/')) return Response.json({ target: { instanceId: 'run', nodeInstanceId: 'node' } })
+    if (delay) return new Promise<Response>(resolve => { delayed = resolve })
+    return Response.json({ id: 'run', workspaceId: 'w', name: 'Run', templateId: 'flow', createdAt: '2026-10-03T00:00:00Z', definition: { id: 'root', type: 'dag', dag: [] }, input: {}, snapshot: { rootInstanceId: 'root', instances: [], waitingPositions: [], skippedPositions: [], edges: [] } })
+  }
+  const container = dom.window.document.getElementById('root')!
+  const root = createRoot(container)
+  let first = true
+  const layout = { beginNavigation: () => { if (first) { first = false; return controller.signal } return new AbortController().signal }, selectPanel: () => { selected = true } }
+  try {
+    await act(async () => root.render(<ConversationInstanceAction sessionId="session" client={client} layout={layout} t={key => zh[key]} />))
+    await act(async () => container.querySelector<HTMLButtonElement>('button')!.click())
+    assert.equal(container.querySelector<HTMLButtonElement>('button')!.disabled, true)
+    await act(async () => { controller.abort(); delayed(Response.json({})); await Promise.resolve() })
+    assert.equal(selected, false)
+    assert.equal(container.querySelector<HTMLButtonElement>('button')!.disabled, false)
+    delay = false
+    await act(async () => container.querySelector<HTMLButtonElement>('button')!.click())
+    assert.equal(selected, true)
+  } finally { await act(async () => root.unmount()); client.dispose(); cleanup() }
+})
+
+
+function returnPage() {
+  const { dom, cleanup } = testDom()
+  const client = new StudioClient()
+  const container = dom.window.document.getElementById('root')!
+  const root = createRoot(container)
+  const workspaces = { items: [], phase: 'ready' } as unknown as WorkspaceSnapshot
+  let navigation = new AbortController()
+  const studio = () => <WorkflowStudioPanel client={client} t={key => zh[key]} useWorkspaces={selector => selector(workspaces)} onOpenSession={() => {}} />
+  const layout = { beginNavigation: () => { navigation.abort(); navigation = new AbortController(); return navigation.signal },
+    selectPanel: () => root.render(studio()) }
+  return { container, client,
+    showStudio: () => act(async () => root.render(studio())),
+    header: (sessionId: string) => act(async () => root.render(<ConversationInstanceAction sessionId={sessionId} client={client} layout={layout} t={key => zh[key]} />)),
+    close: async () => { await act(async () => root.unmount()); client.dispose(); cleanup() } }
+}
+const returnDetail = (id = 'run', nodeId = 'n2'): any => ({ id, workspaceId: 'w', name: id, templateId: 'flow', revision: 3, createdAt: '2026-10-03T00:00:00Z', input: {},
+  definition: { id: 'root', type: 'dag', dag: [{ id: 'task', type: 'node', node_kind: 'session_agent', prompt: '' }] },
+  executions: { [nodeId]: { kind: 'session_agent', status: 'succeeded', sessionId: 'session', sessionCreated: true, output: {} } },
+  snapshot: { rootInstanceId: 'root-i', instances: [
+    { instanceId: 'root-i', parentInstanceId: null, definitionId: 'root', definitionPath: [], type: 'dag', status: 'completed', input: {}, output: {} },
+    { instanceId: nodeId, parentInstanceId: 'root-i', definitionId: 'task', definitionPath: ['dag', 0], type: 'node', status: 'completed', input: {}, output: {} },
+  ], waitingPositions: [], skippedPositions: [], edges: [], instanceConnections: [] } })
+
+test('conversation query errors are retryable and ordinary and fork conversations have no return action', async () => {
+  const page = returnPage()
+  let fail = true
+  globalThis.fetch = async url => String(url).includes('/conversations/ordinary/') || String(url).includes('/conversations/fork/')
+    ? Response.json({ target: null }) : fail ? new Response('unavailable', { status: 503 }) : Response.json({ target: { instanceId: 'run', nodeInstanceId: 'n2' } })
+  try {
+    await page.header('session')
+    assert.equal(page.container.querySelector('[role="alert"]')!.textContent, zh.navigationFailed)
+    fail = false
+    await act(async () => page.container.querySelector<HTMLButtonElement>('button')!.click())
+    assert.equal(page.container.querySelector('button')!.textContent, zh.returnToInstance)
+    await page.header('ordinary'); assert.equal(page.container.querySelector('button'), null)
+    await page.header('fork'); assert.equal(page.container.querySelector('button'), null)
+  } finally { await page.close() }
+})
+
+test('detail loading errors can retry the return and completed nodes remain read only', async () => {
+  const page = returnPage()
+  let fail = true
+  globalThis.fetch = async url => {
+    if (String(url).includes('/conversations/')) return Response.json({ target: { instanceId: 'run', nodeInstanceId: 'n2' } })
+    if (String(url).endsWith('/instances/run')) return fail ? new Response('unavailable', { status: 503 }) : Response.json(returnDetail())
+    return Response.json([])
+  }
+  try {
+    await page.header('session')
+    await act(async () => page.container.querySelector<HTMLButtonElement>('button')!.click())
+    assert.equal(page.container.querySelector('[role="alert"]')!.textContent, zh.navigationFailed)
+    assert.equal(page.container.querySelector('[role="tab"]'), null)
+    fail = false
+    await act(async () => page.container.querySelector<HTMLButtonElement>('button')!.click())
+    assert.equal(page.container.querySelector('[role="tab"][aria-selected="true"]')!.textContent, 'run')
+    assert.equal(fields(inspectorSection(page.container, '运行信息'))['状态'], zh.statusCompleted)
+    assert.equal(page.container.querySelector('.dsh-workflow-inspector button[aria-label^="完成"]'), null)
+  } finally { await page.close() }
+})
+
+test('deletion between showing the action and clicking it clears cached details and permits management', async () => {
+  const page = returnPage()
+  let deleted = false
+  globalThis.fetch = async url => {
+    if (String(url).includes('/conversations/')) return Response.json({ target: deleted ? null : { instanceId: 'run', nodeInstanceId: 'n2' } })
+    if (String(url).endsWith('/instances/run')) return Response.json(returnDetail())
+    return Response.json([])
+  }
+  try {
+    await page.header('session')
+    await act(async () => page.container.querySelector<HTMLButtonElement>('button')!.click())
+    assert.equal(page.container.querySelectorAll('[role="tab"]').length, 3)
+    await page.header('session')
+    deleted = true
+    await act(async () => page.container.querySelector<HTMLButtonElement>('button')!.click())
+    assert.equal(page.container.querySelector('[role="alert"]')!.textContent, zh.navigationInstanceMissing)
+    await act(async () => page.container.querySelector<HTMLButtonElement>('button')!.click())
+    assert.equal(page.container.querySelector('button'), null)
+    await page.showStudio()
+    assert.equal(page.container.querySelectorAll('[role="tab"]').length, 2)
+    assert.equal(page.container.querySelector('[role="tab"][aria-selected="true"]')!.textContent, zh.instanceManagement)
+  } finally { await page.close() }
+})
+
+test('late ownership and detail responses never replace the current conversation or navigate to its predecessor', async () => {
+  const page = returnPage()
+  let oldQuery: (value: Response) => void = () => {}
+  let oldDetail: (value: Response) => void = () => {}
+  globalThis.fetch = async url => {
+    if (String(url).includes('/conversations/first/')) return new Promise<Response>(resolve => { oldQuery = resolve })
+    if (String(url).includes('/conversations/')) return Response.json({ target: { instanceId: 'second', nodeInstanceId: 'n2' } })
+    if (String(url).endsWith('/instances/second')) return new Promise<Response>(resolve => { oldDetail = resolve })
+    return Response.json([])
+  }
+  try {
+    await page.header('first'); await page.header('second')
+    await act(async () => oldQuery(Response.json({ target: { instanceId: 'first', nodeInstanceId: 'n1' } })))
+    await act(async () => page.container.querySelector<HTMLButtonElement>('button')!.click())
+    await page.header('third')
+    await act(async () => oldDetail(Response.json(returnDetail('second'))))
+    assert.equal(page.container.querySelector('[role="tab"]'), null)
+    assert.equal(page.container.querySelector('button')!.textContent, zh.returnToInstance)
+    page.client.dispose()
+    await act(async () => page.container.querySelector<HTMLButtonElement>('button')!.click())
+    await act(async () => oldDetail(Response.json(returnDetail('second'))))
+    assert.equal(page.container.querySelector('[role="tab"]'), null)
+  } finally { await page.close() }
+})
+
+
+test('return uses the newest revision when an older detail response arrives after node completion', async () => {
+  const page = returnPage()
+  let loads = 0
+  let actionDone: (value: Response) => void = () => {}
+  let oldLoaded: (value: Response) => void = () => {}
+  const waiting = returnDetail()
+  waiting.revision = 2
+  waiting.executions.n2.status = 'waiting'
+  waiting.snapshot.instances[0].status = 'running'
+  waiting.snapshot.instances[1].status = 'ready'
+  globalThis.fetch = async (url, init) => {
+    if (String(url).includes('/conversations/')) return Response.json({ target: { instanceId: 'run', nodeInstanceId: 'n2' } })
+    if (init?.method === 'POST') return new Promise<Response>(resolve => { actionDone = resolve })
+    if (String(url).endsWith('/instances/run')) {
+      loads++
+      return loads === 1 ? Response.json(waiting) : new Promise<Response>(resolve => { oldLoaded = resolve })
+    }
+    return Response.json([])
+  }
+  try {
+    await page.header('session')
+    await act(async () => page.container.querySelector<HTMLButtonElement>('button')!.click())
+    const complete = [...page.container.querySelectorAll<HTMLButtonElement>('.dsh-workflow-inspector button')].find(button => button.textContent === zh.completeSessionAgent)!
+    assert.ok(complete)
+    await act(async () => complete.click())
+    await page.header('session')
+    await act(async () => page.container.querySelector<HTMLButtonElement>('button')!.click())
+    await act(async () => actionDone(Response.json(returnDetail())))
+    await act(async () => oldLoaded(Response.json(waiting)))
+    assert.equal(fields(inspectorSection(page.container, '运行信息'))['状态'], zh.statusCompleted)
+    assert.equal(page.container.querySelectorAll('[role="tab"]').length, 3)
+    assert.equal(page.container.querySelector('.dsh-workflow-inspector button[aria-label^="完成"]'), null)
+  } finally { await page.close() }
+})
+
+
+test('an older return detail cannot overwrite a drawer width saved while navigation is loading', async () => {
+  const page = returnPage()
+  let loads = 0
+  let widthSaved: (value: Response) => void = () => {}
+  let oldLoaded: (value: Response) => void = () => {}
+  const initial = { ...returnDetail(), revision: 2, drawerWidth: 320 }
+  globalThis.fetch = async (url, init) => {
+    if (String(url).includes('/conversations/')) return Response.json({ target: { instanceId: 'run', nodeInstanceId: 'n2' } })
+    if (init?.method === 'POST') return new Promise<Response>(resolve => { widthSaved = resolve })
+    if (String(url).endsWith('/instances/run')) return ++loads === 1 ? Response.json(initial) : new Promise<Response>(resolve => { oldLoaded = resolve })
+    return Response.json([])
+  }
+  try {
+    await page.header('session')
+    await act(async () => page.container.querySelector<HTMLButtonElement>('button')!.click())
+    await act(async () => page.container.querySelector('[role="separator"]')!.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true })))
+    await page.header('session')
+    await act(async () => page.container.querySelector<HTMLButtonElement>('button')!.click())
+    await act(async () => widthSaved(Response.json({ ...initial, revision: 3, drawerWidth: 330 })))
+    await act(async () => oldLoaded(Response.json(initial)))
+    assert.equal(page.container.querySelector('[role="separator"]')!.getAttribute('aria-valuenow'), '330')
+  } finally { await page.close() }
 })

@@ -1,4 +1,5 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { StudioClient } from '../../studio-client.js'
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react'
 import type { KeyboardEvent } from 'react'
 import type { WorkspaceSnapshot } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
@@ -13,11 +14,14 @@ import { styles } from './styles.js'
 
 type UseWorkspaces = <T>(selector: (snapshot: WorkspaceSnapshot) => T) => T
 
-export function WorkflowStudioPanel({ t, useWorkspaces, onOpenSession }: { t: WorkflowTranslate; useWorkspaces: UseWorkspaces; onOpenSession: (sessionId: string) => void }) {
+export function WorkflowStudioPanel({ t, useWorkspaces, onOpenSession, client: suppliedClient }: { client?: StudioClient; t: WorkflowTranslate; useWorkspaces: UseWorkspaces; onOpenSession: (sessionId: string) => void }) {
   const id = useId()
-  const [activeTab, setActiveTab] = useState('instances')
-  const [opened, setOpened] = useState<InstanceDetail[]>([])
-  const [openedTemplates, setOpenedTemplates] = useState<TemplateDetail[]>([])
+  const [localClient] = useState(() => new StudioClient())
+  const client = suppliedClient ?? localClient
+  const { activeTab, opened, openedTemplates, selection } = useSyncExternalStore(client.subscribe, client.getSnapshot)
+  const setActiveTab = (activeTab: string) => client.set(current => ({ ...current, activeTab }))
+  const setOpened = (update: (items: InstanceDetail[]) => InstanceDetail[]) => client.set(current => ({ ...current, opened: update(current.opened) }))
+  const setOpenedTemplates = (update: (items: TemplateDetail[]) => TemplateDetail[]) => client.set(current => ({ ...current, openedTemplates: update(current.openedTemplates) }))
   const buttons = useRef<Record<string, HTMLButtonElement | null>>({})
   const tabs: { id: string; label: string; detail?: InstanceDetail; template?: TemplateDetail }[] = [
     { id: 'instances', label: t('instanceManagement') },
@@ -53,6 +57,7 @@ export function WorkflowStudioPanel({ t, useWorkspaces, onOpenSession }: { t: Wo
   }
 
   function closeDetail(tabId: string) {
+    client.releaseCanvas(tabId)
     const index = tabs.findIndex(tab => tab.id === tabId)
     const next = tabs[index + 1]?.id ?? tabs[index - 1]?.id ?? 'instances'
     const focused = activeTab === tabId ? next : activeTab
@@ -111,16 +116,15 @@ export function WorkflowStudioPanel({ t, useWorkspaces, onOpenSession }: { t: Wo
       tabIndex={0}
     >{tab.id === 'instances'
       ? <InstancesPanel t={t} useWorkspaces={useWorkspaces} onSelect={openDetail} onOpenExisting={openExisting} onDeleted={instanceId => {
-        setOpened(current => current.filter(detail => detail.id !== instanceId))
-        if (activeTab === `instance-${instanceId}`) setActiveTab('instances')
+        client.remove(instanceId)
       }} />
       : tab.id === 'templates'
         ? <TemplatesPanel t={t} active={activeTab === 'templates'} onSelect={openTemplate} onOpenExisting={openExistingTemplate} />
       : tab.template
-        ? <TemplateDetailPanel template={tab.template} t={t} active={activeTab === tab.id} />
+        ? <TemplateDetailPanel reading={client.canvas(tab.id)} template={tab.template} t={t} active={activeTab === tab.id} />
       : tab.detail
-        ? <InstanceRunPanel detail={tab.detail} t={t} active={activeTab === tab.id} onOpenSession={onOpenSession}
-          onUpdate={updated => setOpened(current => current.map(item => item.id === updated.id && (updated.revision ?? 0) >= (item.revision ?? 0) ? { ...updated, drawerWidth: item.drawerWidth ?? updated.drawerWidth } : item))}
+        ? <InstanceRunPanel reading={client.canvas(tab.id)} selection={selection?.instanceId === tab.detail.id ? selection : undefined} detail={tab.detail} t={t} active={activeTab === tab.id} onOpenSession={onOpenSession}
+          onUpdate={updated => client.updateDetail(updated)}
           onWidthUpdate={width => setOpened(current => current.map(item => item.id === tab.detail!.id ? { ...item, drawerWidth: width } : item))} />
         : null}</div>)}
   </section>

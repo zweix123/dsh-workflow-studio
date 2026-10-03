@@ -130,6 +130,36 @@ dag: []
   assert.equal((await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Invalid', templateId: 'no-provider' })).status, 422)
 })
 
+test('session_agent sends a default initial message when its rendered prompt is blank', async () => {
+  for (const prompt of ['', ' \n\t ', '{{ value }}']) {
+    const sessions: string[] = []
+    const prompts: Array<{ sessionId: string; text: string }> = []
+    const f = await fixture({ sessionController: {
+      create: async ({ sessionId }: { sessionId: string }) => { sessions.push(sessionId) },
+      prompt: async (request: { sessionId: string; content: Array<{ text: string }> }) => {
+        prompts.push({ sessionId: request.sessionId, text: request.content[0]!.text })
+        return { accepted: true }
+      },
+    } })
+    await putTemplate(f.templateRoot, 'blank-prompt', `id: root\ntype: dag\ndag:\n  - id: input\n    type: node\n    node_kind: form\n    output_schema:\n      value: string\n  - id: task\n    type: node\n    node_kind: session_agent\n    prompt: ${JSON.stringify(prompt)}\n    input_schema:\n      value: string\n  - type: edge\n    from: input\n    to: task\n`)
+    const catalog = await (await fetch(f.url(TEMPLATES_PATH))).json() as any
+    assert.equal(catalog.templates[0].error, undefined)
+    const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Default prompt', templateId: 'blank-prompt' })).json() as any
+    const path = `${INSTANCES_PATH}/${created.id}`
+    const inputId = created.snapshot.instances.find((item: any) => item.definitionId === 'input').instanceId
+    assert.equal((await postJson(f.url(`${path}/nodes/${inputId}/actions/submit`), { value: '' })).status, 200)
+    const supplied = await (await fetch(f.url(path))).json() as any
+    const taskId = supplied.snapshot.instances.find((item: any) => item.definitionId === 'task').instanceId
+    assert.equal((await postJson(f.url(`${path}/nodes/${taskId}/actions/start`), {})).status, 200)
+    const ready = await untilDetail(f.url(path), detail => detail.executions?.[taskId]?.status === 'waiting')
+    assert.deepEqual(prompts, [{ sessionId: ready.executions[taskId].sessionId, text: '请先询问我希望处理什么任务。' }])
+    assert.equal(ready.snapshot.instances.find((item: any) => item.instanceId === taskId).status, 'ready')
+    assert.equal((await postJson(f.url(`${path}/nodes/${taskId}/actions/start`), {})).status, 200)
+    assert.equal(sessions.length, 1)
+    assert.equal(prompts.length, 1)
+  }
+})
+
 test('form accepts validated input once and sends its real result downstream', async () => {
   const f = await fixture()
   await putTemplate(f.templateRoot, 'form', `id: root\ntype: dag\ndag:\n  - id: answer\n    type: node\n    node_kind: form\n    output_schema:\n      choice: string\n      count: number\n      approved: boolean\n    schema:\n      properties:\n        choice:\n          enum: [yes, no]\n  - id: next\n    type: node\n    node_kind: bash\n    command: ''\n    input_schema:\n      choice: string\n      count: number\n      approved: boolean\n  - type: edge\n    from: answer\n    to: next\n`)
@@ -179,7 +209,7 @@ test('form keeps its accepted result when DAG submission fails and rejects chang
 
 test('only the selected kind validates its fields and form rejects unsupported controls', async () => {
   const f = await fixture()
-  await putTemplate(f.templateRoot, 'same-field', `id: root\ntype: dag\ndag:\n  - id: a\n    type: node\n    node_kind: session_agent\n    prompt: ''\n    command: 42\n  - id: b\n    type: node\n    node_kind: bash\n    command: ''\n    prompt: false\n`)
+  await putTemplate(f.templateRoot, 'same-field', `id: root\ntype: dag\ndag:\n  - id: a\n    type: node\n    node_kind: session_agent\n    prompt: Valid task\n    command: 42\n  - id: b\n    type: node\n    node_kind: bash\n    command: ''\n    prompt: false\n`)
   const accepted = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Same field', templateId: 'same-field' })).json() as any
   assert.equal(accepted.definition.dag[0].command, 42)
   assert.equal(accepted.definition.dag[1].prompt, false)
@@ -318,7 +348,7 @@ test('independent automatic bash nodes run together, reject duplicate starts and
   assert.equal((await fetch(f.url(path), { method: 'DELETE' })).status, 200)
 })
 
-test('session_agent creates one durable conversation, sends only a nonblank prompt, and completes only on user request', async () => {
+test('session_agent creates one durable conversation, preserves prompt content, and completes only on user request', async () => {
   const createdSessions: Array<{ sessionId: string; workspaceId: string }> = []
   const prompts: Array<{ sessionId: string; text: string }> = []
   const services = { sessionController: {
@@ -326,32 +356,35 @@ test('session_agent creates one durable conversation, sends only a nonblank prom
     prompt: async (request: { sessionId: string; content: Array<{ text: string }> }) => { prompts.push({ sessionId: request.sessionId, text: request.content[0]!.text }); return { accepted: true } },
   } }
   const f = await fixture(services)
-  await putTemplate(f.templateRoot, 'session_agent', `id: root\ntype: dag\ndag:\n  - id: first\n    type: node\n    node_kind: session_agent\n    prompt: 'Write a draft'\n  - id: blank\n    type: node\n    node_kind: session_agent\n    prompt: '   '\n`)
+  await putTemplate(f.templateRoot, 'session_agent', `id: root\ntype: dag\ndag:\n  - id: first\n    type: node\n    node_kind: session_agent\n    prompt: 'Write a draft'\n  - id: second\n    type: node\n    node_kind: session_agent\n    prompt: '  Review the draft  '\n`)
   const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Session agents', templateId: 'session_agent' })).json() as any
   const path = `${INSTANCES_PATH}/${created.id}`
-  const [first, blank] = created.snapshot.instances.filter((item: any) => item.type === 'node')
+  const [first, second] = created.snapshot.instances.filter((item: any) => item.type === 'node')
   assert.equal((await postJson(f.url(`${path}/nodes/${first.instanceId}/actions/start`), {})).status, 200)
-  assert.equal((await postJson(f.url(`${path}/nodes/${blank.instanceId}/actions/start`), {})).status, 200)
-  const ready = await untilDetail(f.url(path), detail => detail.executions?.[first.instanceId]?.status === 'waiting' && detail.executions?.[blank.instanceId]?.status === 'waiting')
+  assert.equal((await postJson(f.url(`${path}/nodes/${second.instanceId}/actions/start`), {})).status, 200)
+  const ready = await untilDetail(f.url(path), detail => detail.executions?.[first.instanceId]?.status === 'waiting' && detail.executions?.[second.instanceId]?.status === 'waiting')
   assert.equal(ready.executions[first.instanceId].kind, 'session_agent')
   assert.equal(createdSessions.length, 2)
   assert.deepEqual(createdSessions.map(row => row.workspaceId), ['workspace-a', 'workspace-a'])
   assert.notEqual(createdSessions[0]!.sessionId, createdSessions[1]!.sessionId)
-  assert.deepEqual(prompts, [{ sessionId: ready.executions[first.instanceId].sessionId, text: 'Write a draft' }])
+  assert.deepEqual(prompts, [
+    { sessionId: ready.executions[first.instanceId].sessionId, text: 'Write a draft' },
+    { sessionId: ready.executions[second.instanceId].sessionId, text: '  Review the draft  ' },
+  ])
   assert.equal(ready.snapshot.instances.find((item: any) => item.instanceId === first.instanceId).status, 'ready')
   assert.equal((await postJson(f.url(`${path}/nodes/${first.instanceId}/actions/start`), {})).status, 200)
   assert.equal(createdSessions.length, 2)
   assert.equal((await postJson(f.url(`${path}/nodes/${first.instanceId}/actions/complete`), {})).status, 200)
   const completed = await (await fetch(f.url(path))).json() as any
   assert.equal(completed.snapshot.instances.find((item: any) => item.instanceId === first.instanceId).status, 'completed')
-  assert.equal(completed.snapshot.instances.find((item: any) => item.instanceId === blank.instanceId).status, 'ready')
+  assert.equal(completed.snapshot.instances.find((item: any) => item.instanceId === second.instanceId).status, 'ready')
   await f.close()
   const restarted = await openHost(f.storageRoot, f.templateRoot, f.root, services)
   cleanups.push(restarted.close)
   const restored = await (await fetch(restarted.url(path))).json() as any
-  assert.equal(restored.executions[blank.instanceId].sessionId, ready.executions[blank.instanceId].sessionId)
+  assert.equal(restored.executions[second.instanceId].sessionId, ready.executions[second.instanceId].sessionId)
   assert.equal(createdSessions.length, 2)
-  assert.equal(prompts.length, 1)
+  assert.equal(prompts.length, 2)
   assert.equal((await fetch(restarted.url(path), { method: 'DELETE' })).status, 200)
   assert.equal(createdSessions.length, 2)
 })
@@ -392,10 +425,10 @@ test('for-expanded session_agent instances keep separate host conversations', as
   const sessions: string[] = []
   const services = { shell: successfulShell({ 'emit-jobs': '{"jobs":[{"key":"one","title":"One"},{"key":"two","title":"Two"}]}' }), sessionController: {
     create: async ({ sessionId }: { sessionId: string }) => { sessions.push(sessionId) },
-    prompt: async () => { throw new Error('Blank prompt must not be sent') },
+    prompt: async () => ({ accepted: true }),
   } }
   const f = await fixture(services)
-  await putTemplate(f.templateRoot, 'session_agent-items', `id: root\ntype: dag\ndag:\n  - id: source\n    type: node\n    node_kind: bash\n    command: emit-jobs\n    output_schema:\n      jobs:\n        type: array\n        items:\n          type: object\n          properties:\n            key: string\n            title: string\n  - id: each\n    type: node\n    node_kind: session_agent\n    prompt: ''\n    input_schema:\n      title: string\n  - type: edge\n    from: source\n    to: each\n    for: $.jobs\n`)
+  await putTemplate(f.templateRoot, 'session_agent-items', `id: root\ntype: dag\ndag:\n  - id: source\n    type: node\n    node_kind: bash\n    command: emit-jobs\n    output_schema:\n      jobs:\n        type: array\n        items:\n          type: object\n          properties:\n            key: string\n            title: string\n  - id: each\n    type: node\n    node_kind: session_agent\n    prompt: 'Discuss {{ title }}'\n    input_schema:\n      title: string\n  - type: edge\n    from: source\n    to: each\n    for: $.jobs\n`)
   const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Session agent items', templateId: 'session_agent-items' })).json() as any
   const path = `${INSTANCES_PATH}/${created.id}`
   const source = created.snapshot.instances.find((item: any) => item.definitionId === 'source').instanceId
@@ -409,6 +442,10 @@ test('for-expanded session_agent instances keep separate host conversations', as
   assert.equal(items.length, 2)
   for (const item of items) assert.equal((await postJson(host.url(`${path}/nodes/${item.instanceId}/actions/start`), {})).status, 200)
   const started = await untilDetail(host.url(path), value => items.every((item: any) => value.executions?.[item.instanceId]?.status === 'waiting'))
+  for (const item of items) {
+    const sessionId = started.executions[item.instanceId].sessionId
+    assert.deepEqual(await (await fetch(host.url(`/api/dsh-workflow-studio/conversations/${sessionId}/instance`))).json(), { target: { instanceId: created.id, nodeInstanceId: item.instanceId } })
+  }
   assert.equal(sessions.length, 2)
   assert.notEqual(started.executions[items[0].instanceId].sessionId, started.executions[items[1].instanceId].sessionId)
   assert.equal((await postJson(host.url(`${path}/nodes/${items[0].instanceId}/actions/complete`), {})).status, 200)
@@ -1198,4 +1235,42 @@ test('a result whose durable save fails is never reported accepted and restarts 
   assert.equal(restored.executions[run].output, undefined)
   assert.deepEqual(restored.snapshot, created.snapshot)
   assert.equal(calls, 1)
+})
+
+test('conversation ownership resolves the full instance and node identity without changing execution', async () => {
+  const sessions: string[] = []
+  const f = await fixture({ sessionController: {
+    create: async ({ sessionId }: { sessionId: string }) => { sessions.push(sessionId) },
+    prompt: async () => ({ accepted: true }),
+  } })
+  await putTemplate(f.templateRoot, 'navigation', `id: root\ntype: dag\ndag:\n  - id: task\n    type: node\n    node_kind: session_agent\n    prompt: Review navigation\n`)
+  const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Navigation', templateId: 'navigation' })).json() as any
+  const nodeId = created.snapshot.instances.find((item: any) => item.type === 'node').instanceId
+  const path = `${INSTANCES_PATH}/${created.id}`
+  await postJson(f.url(`${path}/nodes/${nodeId}/actions/start`), {})
+  const ready = await untilDetail(f.url(path), detail => detail.executions?.[nodeId]?.status === 'waiting')
+  const response = await fetch(f.url(`/api/dsh-workflow-studio/conversations/${sessions[0]}/instance`))
+  assert.equal(response.status, 200)
+  assert.deepEqual(await response.json(), { target: { instanceId: created.id, nodeInstanceId: nodeId } })
+  assert.deepEqual(await (await fetch(f.url(path))).json(), ready)
+  assert.equal(sessions.length, 1)
+  const peer = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Peer', templateId: 'navigation' })).json() as any
+  const peerNode = peer.snapshot.instances.find((item: any) => item.type === 'node').instanceId
+  await postJson(f.url(`${INSTANCES_PATH}/${peer.id}/nodes/${peerNode}/actions/start`), {})
+  const peerReady = await untilDetail(f.url(`${INSTANCES_PATH}/${peer.id}`), detail => detail.executions?.[peerNode]?.status === 'waiting')
+  const peerSession = peerReady.executions[peerNode].sessionId
+  assert.deepEqual(await (await fetch(f.url(`/api/dsh-workflow-studio/conversations/${peerSession}/instance`))).json(), { target: { instanceId: peer.id, nodeInstanceId: peerNode } })
+  await postJson(f.url(`${path}/nodes/${nodeId}/actions/complete`), {})
+  await f.close()
+  const restarted = await openHost(f.storageRoot, f.templateRoot, f.root, { sessionController: { create: async () => { throw new Error('Navigation must not create sessions') } } })
+  cleanups.push(restarted.close)
+  const query = (id: string) => fetch(restarted.url(`/api/dsh-workflow-studio/conversations/${id}/instance`))
+  assert.deepEqual(await (await query(sessions[0]!)).json(), { target: { instanceId: created.id, nodeInstanceId: nodeId } })
+  assert.deepEqual(await (await query('ordinary-session')).json(), { target: null })
+  assert.deepEqual(await (await query('fork-child')).json(), { target: null })
+  assert.equal((await fetch(restarted.url('/api/dsh-workflow-studio/conversations/%E0%A4/instance'))).status, 400)
+  assert.equal((await postJson(restarted.url(`/api/dsh-workflow-studio/conversations/${sessions[0]}/instance`), {})).status, 405)
+  await fetch(restarted.url(path), { method: 'DELETE' })
+  assert.deepEqual(await (await query(sessions[0]!)).json(), { target: null })
+  assert.equal(sessions.length, 2)
 })

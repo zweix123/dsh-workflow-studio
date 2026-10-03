@@ -4,7 +4,7 @@ import { createRequire } from 'node:module'
 import { runInNewContext } from 'node:vm'
 import { test } from 'node:test'
 
-test('browser artifact uses dsh factory and host React, registers panel and sidebar', async () => {
+test('browser artifact uses dsh factory and host React, registers panel, sidebar and session header action', async () => {
   const require = createRequire(import.meta.url)
   const modules: string[] = []
   let plugin: { name: string; inject: string[]; apply: (ctx: unknown) => void } | undefined
@@ -23,7 +23,7 @@ test('browser artifact uses dsh factory and host React, registers panel and side
   assert.equal(plugin!.name, 'dsh-workflow-studio')
   assert.ok(modules.includes('react'))
   assert.ok(modules.includes('react-dom'))
-  assert.deepEqual(Array.from(plugin!.inject), ['slots', 'locale', 'uiWorkspace'])
+  assert.deepEqual(Array.from(plugin!.inject), ['slots', 'locale', 'uiWorkspace', 'layout'])
   const entries: Record<string, unknown>[] = []
   let dictionaries: Record<string, Record<string, string>> = {}
   let active = 'zh'
@@ -51,12 +51,14 @@ test('browser artifact uses dsh factory and host React, registers panel and side
     },
     register(options: Record<string, unknown>) { entries.push(options); return () => {} },
   } })
-  assert.deepEqual(entries.map(entry => entry.name), ['main', 'sidebar.panellist'])
-  assert.equal(entries[0].key, entries[1].id)
+  assert.deepEqual(entries.map(entry => entry.name), ['conversation.session.header.actions', 'main', 'sidebar.panellist'])
   assert.equal(entries[0].locale, plugin!.name)
-  assert.equal(entries[0].inject, undefined)
+  assert.equal(entries[0].id, entries[1].key)
+  assert.equal(entries[1].key, entries[2].id)
+  assert.equal(entries[1].locale, plugin!.name)
+  assert.equal(entries[1].inject, undefined)
   assert.deepEqual(Object.keys(dictionaries.zh).sort(), Object.keys(dictionaries.en).sort())
-  const label = entries[1].label as () => string
+  const label = entries[2].label as () => string
   assert.equal(label(), dictionaries.zh.title)
   active = 'en'
   assert.equal(label(), dictionaries.en.title)
@@ -68,4 +70,6 @@ test('browser artifact uses dsh factory and host React, registers panel and side
   const manifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
   assert.ok(manifest.dsh.client.inject.includes('@deepseek-ai/dsh-client-locale'))
   assert.equal(manifest.devDependencies['@deepseek-ai/dsh-client-locale'], '0.2.0-rc.1')
+  assert.ok(manifest.dsh.client.inject.includes('@deepseek-ai/dsh-client-ui-conversation'))
+  assert.equal(manifest.devDependencies['@deepseek-ai/dsh-client-ui-conversation'], '0.2.0-rc.1')
 })

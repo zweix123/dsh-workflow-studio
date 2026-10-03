@@ -63,10 +63,10 @@ function ExpressionEdge(props: EdgeProps<CanvasEdge>) {
 export const nodeTypes = { workflow: WorkflowNode, dagGroup: DagGroupNode, aggregate: AggregateNode }
 export const edgeTypes = { expression: ExpressionEdge }
 
-export function CanvasNavigation({ nodes, candidates, active, ready, inspectorWidth, t, template = false }: { nodes: CanvasNode[]; candidates: WorkCandidate[]; active: boolean; ready: boolean; inspectorWidth: number; t: WorkflowTranslate; template?: boolean }) {
+export function CanvasNavigation({ nodes, candidates, active, ready, inspectorWidth, t, template = false, restored = false }: { nodes: CanvasNode[]; candidates: WorkCandidate[]; active: boolean; ready: boolean; inspectorWidth: number; t: WorkflowTranslate; template?: boolean; restored?: boolean }) {
   const { setViewport, zoomTo } = useReactFlow()
   const element = useRef<HTMLDivElement>(null)
-  const first = useRef(false)
+  const first = useRef(restored)
   const [listOpen, setListOpen] = useState(false)
   const [feedback, setFeedback] = useState('')
   const area = () => element.current?.closest('.dsh-workflow-graph') as HTMLDivElement | null

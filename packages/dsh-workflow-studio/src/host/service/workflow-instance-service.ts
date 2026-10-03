@@ -1,3 +1,4 @@
+import { associatedSession } from '../../../../dsh-workflow-node-session-agent/src/server.js'
 import { readdir, realpath } from 'node:fs/promises'
 import type { Dirent } from 'node:fs'
 import { randomUUID } from 'node:crypto'
@@ -9,7 +10,7 @@ import type { DagDefinition, JsonObject } from '../dag/index.js'
 import { WorkflowEngine, WorkflowInstanceError, initializeWorkflow, validateWorkflowNodes } from '../workflow/index.js'
 import { WorkflowInstanceStore, workflowInstanceDomain } from '../storage/workflow-instance-store.js'
 import { validateTemplateDirectory } from '../template-directory.js'
-import type { CreateInstanceInput, InstanceDetail, InstanceSummary, TemplateCatalog, TemplateDetail, TemplateRow } from '../../shared/types/workflow-instance.js'
+import type { ConversationInstance, CreateInstanceInput, InstanceDetail, InstanceSummary, TemplateCatalog, TemplateDetail, TemplateRow } from '../../shared/types/workflow-instance.js'
 import { inspectLayout } from '../../shared/layout.js'
 import { serverNodes } from '../nodes/registry.js'
 import type { ServerNode } from '../../contract/node/index.js'
@@ -85,6 +86,15 @@ export class WorkflowInstanceService {
     return [...this.store.entries()]
       .map(([, row]) => ({ id: row.id, workspaceId: row.workspaceId, name: row.name, templateId: row.templateId, createdAt: row.createdAt }))
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt) || left.id.localeCompare(right.id))
+  }
+
+  findConversationInstance(sessionId: string): ConversationInstance {
+    for (const [, row] of this.store.entries()) {
+      for (const [nodeInstanceId, fact] of Object.entries(row.executions ?? {})) {
+        if (associatedSession(fact) === sessionId) return { target: { instanceId: row.id, nodeInstanceId } }
+      }
+    }
+    return { target: null }
   }
 
   getInstance(id: string): InstanceDetail {

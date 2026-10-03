@@ -7,7 +7,7 @@ import { Simulate } from 'react-dom/test-utils'
 import type { WorkspaceSnapshot } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import { WorkflowStudioPanel } from '../src/client/pages/workflow-studio/WorkflowStudioPanel.js'
 import { getPluginStatus } from '../src/client/apis/plugin-status.js'
-import { createInstance, deleteInstance, getInstance, listInstances, listTemplates } from '../src/client/apis/workflow-instances.js'
+import { createInstance, deleteInstance, getConversationInstance, getInstance, listInstances, listTemplates } from '../src/client/apis/workflow-instances.js'
 import { en, zh, type WorkflowTranslate } from '../src/client/locales/index.js'
 
 const status = { plugin: 'dsh-workflow-studio', version: '0.1.0', status: 'ready' as const, serverTime: '2026-09-22T10:00:00.000Z' }
@@ -436,4 +436,25 @@ test('instance API uses the host routes and rejects malformed payloads', async (
   } finally {
     globalThis.fetch = original
   }
+})
+
+
+test('conversation query validates target identities and keeps failures distinct from no association', async () => {
+  const original = globalThis.fetch
+  try {
+    globalThis.fetch = async (url, init) => {
+      assert.equal(url, '/api/dsh-workflow-studio/conversations/session%2Fone/instance')
+      assert.equal(init?.cache, 'no-store')
+      return Response.json({ target: { instanceId: 'run', nodeInstanceId: 'n2' } })
+    }
+    assert.deepEqual(await getConversationInstance('session/one'), { target: { instanceId: 'run', nodeInstanceId: 'n2' } })
+    for (const value of [{}, { target: {} }, { target: { instanceId: '', nodeInstanceId: 'n2' } }, { target: { instanceId: 'run' } }]) {
+      globalThis.fetch = async () => Response.json(value)
+      await assert.rejects(getConversationInstance('session'), /Unexpected conversation instance/)
+    }
+    globalThis.fetch = async () => Response.json({ target: null })
+    assert.deepEqual(await getConversationInstance('session'), { target: null })
+    globalThis.fetch = async () => new Response('unavailable', { status: 503 })
+    await assert.rejects(getConversationInstance('session'), /HTTP 503/)
+  } finally { globalThis.fetch = original }
 })

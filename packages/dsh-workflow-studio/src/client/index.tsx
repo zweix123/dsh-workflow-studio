@@ -8,9 +8,12 @@ import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import { PANEL_ID, PLUGIN_NAME } from '../shared/constants.js'
 import { WorkflowStudioPanel } from './pages/workflow-studio/WorkflowStudioPanel.js'
 import { en, zh } from './locales/index.js'
+import { StudioClient } from './studio-client.js'
+import { ConversationInstanceAction } from './ConversationInstanceAction.js'
+import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 
 export const name = PLUGIN_NAME
-export const inject = ['slots', 'locale', 'uiWorkspace']
+export const inject = ['slots', 'locale', 'uiWorkspace', 'layout']
 
 function WorkflowIcon({ size }: PropsRuntime<'sidebar.panellist'>) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
@@ -21,12 +24,17 @@ function WorkflowIcon({ size }: PropsRuntime<'sidebar.panellist'>) {
 
 export function apply(ctx: Context): void {
   ctx.effect(() => ctx.locale.register(PLUGIN_NAME, { zh, en }))
+  const client = new StudioClient()
+  ctx.effect(() => () => client.dispose())
   const t = ctx.locale.bind(PLUGIN_NAME)
+  ctx.slots.inject('conversation.session.header.actions', () => ctx.slots.register({
+    name: 'conversation.session.header.actions', id: PANEL_ID, locale: PLUGIN_NAME, order: 10,
+  }, props => <ConversationInstanceAction key={String(props.sessionId)} sessionId={String(props.sessionId)} t={props.t} client={client} layout={ctx.layout} />))
   ctx.slots.inject('main', function* () {
     yield ctx.slots.register({
       name: 'main', key: PANEL_ID,
       locale: PLUGIN_NAME,
-    }, props => <WorkflowStudioPanel {...props} onOpenSession={sessionId => ctx.uiWorkspace.openSession(sessionId as Parameters<typeof ctx.uiWorkspace.openSession>[0])} />)
+    }, props => <WorkflowStudioPanel {...props} client={client} onOpenSession={sessionId => ctx.uiWorkspace.openSession(sessionId as Parameters<typeof ctx.uiWorkspace.openSession>[0])} />)
     yield ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({
       name: 'sidebar.panellist', id: PANEL_ID, order: 10, label: () => t('title'),
     }, WorkflowIcon))

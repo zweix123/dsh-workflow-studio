@@ -1,5 +1,5 @@
-import { INSTANCES_PATH, TEMPLATES_PATH } from '../../shared/constants.js'
-import type { CreateInstanceInput, ErrorResponse, InstanceDetail, InstanceErrorCode, InstanceSummary, TemplateCatalog, TemplateDetail } from '../../shared/types/workflow-instance.js'
+import { CONVERSATIONS_PATH, INSTANCES_PATH, TEMPLATES_PATH } from '../../shared/constants.js'
+import type { ConversationInstance, CreateInstanceInput, ErrorResponse, InstanceDetail, InstanceErrorCode, InstanceSummary, TemplateCatalog, TemplateDetail } from '../../shared/types/workflow-instance.js'
 
 const object = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value)
 const strings = (value: unknown): value is string[] => Array.isArray(value) && value.every(item => typeof item === 'string')
@@ -120,4 +120,12 @@ export async function setDrawerWidth(id: string, width: number): Promise<Instanc
 
 export async function deleteInstance(id: string): Promise<void> {
   await request(`${INSTANCES_PATH}/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}
+
+export async function getConversationInstance(sessionId: string): Promise<ConversationInstance> {
+  const value = await request(`${CONVERSATIONS_PATH}/${encodeURIComponent(sessionId)}/instance`)
+  if (!object(value) || !(value.target === null || (object(value.target)
+    && typeof value.target.instanceId === 'string' && value.target.instanceId
+    && typeof value.target.nodeInstanceId === 'string' && value.target.nodeInstanceId))) throw new Error('Unexpected conversation instance')
+  return value as unknown as ConversationInstance
 }

@@ -1,4 +1,11 @@
 export const zh = {
+  navigationInstanceMissing: '实例已不存在。',
+  returnToInstance: '返回实例',
+  findingInstance: '正在查找实例…',
+  returningToInstance: '正在返回实例…',
+  retryNavigation: '重试',
+  navigationFailed: '无法加载所属实例，请重试。',
+
   runState: '状态',
   runningInformation: '运行信息',
   definitionDetails: '定义详情',

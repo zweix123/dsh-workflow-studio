@@ -9,7 +9,8 @@ type SessionAgentState = { sessionId: string; requestId: string; sessionCreated?
 const state = (fact?: NodeFact): SessionAgentState | undefined => fact?.business as SessionAgentState | undefined
 
 function start(context: NodeContext) {
-  const prompt = renderTextTemplate(context.definition.prompt as string, context.input)
+  const renderedPrompt = renderTextTemplate(context.definition.prompt as string, context.input)
+  const prompt = renderedPrompt.trim() ? renderedPrompt : '请先询问我希望处理什么任务。'
   const previous = state(context.fact)
   if (context.fact?.status === 'succeeded') return { fact: context.fact }
   if (context.fact?.status === 'waiting' && previous?.sessionCreated) return { fact: context.fact }
@@ -24,7 +25,7 @@ function start(context: NodeContext) {
         business.sessionCreated = true
         await context.save({ kind: 'session_agent', status: 'running', business: { ...business } })
       }
-      if (prompt.trim() && !business.promptStarted) {
+      if (!business.promptStarted) {
         await context.services.sessionController.prompt({ sessionId, requestId: business.requestId as SessionRequestId, mode: 'queue', content: [{ type: 'text', text: prompt }] }, new AbortController().signal)
         business.promptStarted = true
         await context.save({ kind: 'session_agent', status: 'running', business: { ...business } })
@@ -32,6 +33,13 @@ function start(context: NodeContext) {
       return { kind: 'session_agent', status: 'waiting', business }
     },
   }
+}
+
+/** Only a successfully created direct conversation is a navigation association. */
+export function associatedSession(fact: NodeFact): string | undefined {
+  const business = state(fact)
+  return fact.kind === 'session_agent' && business?.sessionCreated === true
+    && typeof business.sessionId === 'string' && business.sessionId ? business.sessionId : undefined
 }
 
 export const sessionAgentNode: ServerNode = {

@@ -1,6 +1,12 @@
 import type { zh } from './zh.js'
 
 export const en: Record<keyof typeof zh, string> = {
+  navigationInstanceMissing: 'The instance no longer exists.',
+  returnToInstance: 'Return to instance',
+  findingInstance: 'Finding instance…',
+  returningToInstance: 'Returning to instance…',
+  retryNavigation: 'Retry',
+  navigationFailed: 'Unable to load the associated instance. Please retry.',
   runningInformation: 'Running information',
   definitionDetails: 'Definition details',
   definitionMissing: 'The definition for this object could not be found.',

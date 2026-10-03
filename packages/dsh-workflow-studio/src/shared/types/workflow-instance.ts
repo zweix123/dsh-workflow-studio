@@ -74,3 +74,12 @@ export type InstanceErrorCode =
 export interface ErrorResponse {
   error: { code: InstanceErrorCode; message: string }
 }
+
+export interface InstanceNavigationTarget {
+  instanceId: string
+  nodeInstanceId: string
+}
+
+export interface ConversationInstance {
+  target: InstanceNavigationTarget | null
+}

@@ -89,7 +89,7 @@ DAG 的内容由顶点和边组成。顶点分为节点（`node`）和 DAG（`da
 
 ### 3.1 工作流模板的节点字段
 
-工作流模板中的每个普通 `node` 必须显式提供 `node_kind`，当前接受 `session_agent`、`bash` 或 `form`。`session_agent` 必须提供字符串 `prompt`，`bash` 必须提供字符串 `command`；两者的 `is_auto_start` 可省略，默认 `false`，显式提供时必须是布尔值。空字符串和纯空白字符串合法，内容不被裁剪；空白 prompt 只创建对话，不发送初始消息。未声明输出的空白 command 作为空操作成功结束；声明输出时空命令仍因缺少 JSON 结果而失败。每种节点只校验当前 kind 的业务字段；其他自定义字段原样保留，但不获得业务或编排含义。
+工作流模板中的每个普通 `node` 必须显式提供 `node_kind`，当前接受 `session_agent`、`bash` 或 `form`。`session_agent` 必须提供字符串 `prompt`，`bash` 必须提供字符串 `command`；两者的 `is_auto_start` 可省略，默认 `false`，显式提供时必须是布尔值。`prompt` 和 `command` 都允许空字符串或纯空白字符串，原始配置不被裁剪。session_agent 运行时先渲染 prompt；结果为空或纯空白时发送默认提示词「请先询问我希望处理什么任务。」，否则原样发送渲染结果。未声明输出的空白 command 作为空操作成功结束；声明输出时空命令仍因缺少 JSON 结果而失败。每种节点只校验当前 kind 的业务字段；其他自定义字段原样保留，但不获得业务或编排含义。
 
 ```yaml
 id: example

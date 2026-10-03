@@ -1,3 +1,4 @@
+import type { CanvasReadingState } from '../../../studio-client.js'
 import { useEffect, useMemo, useState } from 'react'
 import { Controls, ReactFlow } from '@xyflow/react'
 import type { DagDefinition, DefinitionPath } from '../../../../host/dag/index.js'
@@ -6,7 +7,7 @@ import { CanvasNavigation, edgeTypes, nodeTypes } from '../canvas/CanvasElements
 import type { CanvasNode, CanvasEdge, Expression } from '../canvas/types.js'
 import { buildTemplateGraph } from './build-template-graph.js'
 
-export function TemplateCanvas({ definition, t, onInspect, active, inspectorWidth }: { definition: DagDefinition; t: WorkflowTranslate; onInspect: (path: DefinitionPath) => void; active: boolean; inspectorWidth: number }) {
+export function TemplateCanvas({ definition, t, onInspect, active, inspectorWidth, reading }: { reading?: CanvasReadingState; definition: DagDefinition; t: WorkflowTranslate; onInspect: (path: DefinitionPath) => void; active: boolean; inspectorWidth: number }) {
   const graph = useMemo(() => buildTemplateGraph(definition), [definition])
   const [ready, setReady] = useState(false)
   const [expression, setExpression] = useState<{ id: string; value: Expression }>()
@@ -29,11 +30,11 @@ export function TemplateCanvas({ definition, t, onInspect, active, inspectorWidt
     return () => document.removeEventListener('keydown', close)
   }, [expression])
   return <div className="dsh-workflow-graph dsh-workflow-template-graph" aria-label={t('templateGraph')}>
-    <ReactFlow<CanvasNode, CanvasEdge> nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} minZoom={0.05} maxZoom={2} onInit={() => setReady(true)}
+    <ReactFlow<CanvasNode, CanvasEdge> nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} defaultViewport={reading?.viewport} onMove={(_event, viewport) => { if (reading) reading.viewport = viewport }} minZoom={0.05} maxZoom={2} onInit={() => setReady(true)}
       panOnDrag zoomOnScroll nodesDraggable={false} nodesConnectable={false} nodesFocusable={false} edgesFocusable={false}
       elementsSelectable={false} onNodeClick={() => {}} deleteKeyCode={null} proOptions={{ hideAttribution: true }}>
       <Controls showInteractive={false} showFitView={false} />
-      <CanvasNavigation nodes={nodes} candidates={[]} active={active} ready={ready} inspectorWidth={inspectorWidth} t={t} template />
+      <CanvasNavigation restored={Boolean(reading?.viewport)} nodes={nodes} candidates={[]} active={active} ready={ready} inspectorWidth={inspectorWidth} t={t} template />
     </ReactFlow>
     {expression && <aside className="dsh-workflow-expression" role="dialog" aria-label={t('fullExpression')}><header><strong>{t('fullExpression')}</strong><button type="button" aria-label={t('closeExpression')} onClick={() => setExpression(undefined)}>×</button></header>
       {expression.value.condition && <><span>{t('conditionMark')} · if</span><pre>{expression.value.condition}</pre></>}
