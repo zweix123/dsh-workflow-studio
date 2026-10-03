@@ -1,5 +1,7 @@
 # 节点模块化与 form 节点：真实宿主验收记录
 
+依据：[节点模块契约与表单节点规格](../specs/node-modules.zh.md)。
+
 - 日期：2026-09-29
 - 宿主：本机 `dsh 0.2.0-rc.1`，通过 `dsh plugin --profile web add` 加载本仓库插件，`dsh web` 启动真实 Web 宿主
 - 环境：隔离的 `DSH_HOME` 位于 `/private/tmp/dsh-workflow-host.OPxVws`；插件由本仓库本地目录添加，未安装或修改 dsh CLI

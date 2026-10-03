@@ -1,6 +1,6 @@
 # 节点输入输出与统一顶点来源校验规格
 
-状态：正式规格，已确认并实施。本文是实施与代码审查的验收依据；验证结果和未验证项见[宿主验收记录](../node-input-output-host-acceptance.zh.md)。
+状态：正式规格，已确认并实施。本文是实施与代码审查的验收依据；验证结果和未验证项见[宿主验收记录](../acceptance/node-input-output.zh.md)。
 
 ## Problem Statement
 

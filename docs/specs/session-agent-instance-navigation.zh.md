@@ -1,6 +1,6 @@
 # Session agent 对话返回工作流实例规格
 
-状态：正式规格，需求与测试边界已确认，待实施（2026-10-03）。本文作为代码实现、测试与审查的验收依据，不表示功能已经交付。
+状态：已实施（2026-10-03），自动化检查通过，NAV-01～NAV-16 真实宿主验收全部通过，见[验收记录](../acceptance/session-agent-instance-navigation.zh.md)。本文作为代码实现、测试与审查的验收依据。
 
 ## Problem Statement
 

@@ -1,41 +1,17 @@
-# Session agent 返回实例实施与验收记录
+# Session agent 返回实例验收记录
 
-日期：2026-10-03。需求来源：[正式规格](specs/session-agent-instance-navigation.zh.md)。最终真实验收：**NAV-01～NAV-16 共 16 项通过，0 项失败，0 项未验证**。用户自行配置隔离宿主模型凭据后，已补齐默认提示词、真实运行中往返、独立故障与迟到响应、完整展示矩阵。原轮通过的 NAV-02～NAV-11 继续采用原真实证据；本轮复验其余项目。旧版失败与中间修复失败证据保留，不能混作最终结果。
+日期：2026-10-03。需求来源：[正式规格](../specs/session-agent-instance-navigation.zh.md)。最终真实验收：**NAV-01～NAV-16 共 16 项通过，0 项失败，0 项未验证**。用户自行配置隔离宿主模型凭据后，已补齐默认提示词、真实运行中往返、独立故障与迟到响应、完整展示矩阵。原轮通过的 NAV-02～NAV-11 继续采用原真实证据；本轮复验其余项目。旧版失败与中间修复失败证据保留，不能混作最终结果。
 
-## 实施基点与范围
+## 被测代码范围
 
-- 验收完成后，用户明确授权提交本任务的代码与文档。下文“未提交 Git”及 HEAD 未变的记录均指验收收尾时状态；本次提交仅包含本任务范围，其他任务差异仍留在工作区。
-- 开始实施 HEAD：`0ea2b155ac31159298099101031804bee8d458ba`；结束时 HEAD 相同，未提交 Git，未发布 Issue。
-- 开始时没有已跟踪文件差异。已有未跟踪文件为 `docs/specs/session-agent-instance-navigation.zh.md`、`docs/specs/template-plugin-distribution.zh.md`、`发心与愿景.md`。导航规格最初仅作为需求来源，本轮按用户最终决定同步默认提示词规则；另外两份文档未修改。
-- 执行期间新增了本任务未修改的工作区差异：`CONTEXT.md` 的模板标识/模板名称词汇，以及 `docs/specs/instance-tab.zh.md`、`docs/specs/template-management.zh.md`；保留，排除出本次实现及审查。
-- 追加真实验收期间，工作区还出现了 `docs/specs/node-plugin-registration.zh.md` 与 `docs/adrs/0006-independent-node-plugin-registry.md`；均非本任务修改，已保留。
-- 审查比较开工 HEAD 与当前工作区，包含本任务未提交修改及新增的 `ConversationInstanceAction.tsx`、`studio-client.ts`。本轮另将默认提示词对应的节点代码、既有 HTTP 测试、DAG 用户文档及相关规格更新纳入审查；开工前已有和其他任务差异继续排除。
-- 已阅读 AGENTS.md、CONTEXT.md、ADR 0001、0003、0005；同时确认 ADR 0002 的旧字段决定已被 ADR 0004 替代。
+实施基点：`0ea2b155ac31159298099101031804bee8d458ba`。本记录覆盖返回实例、客户端 Tab 与视角恢复、默认提示词及标题栏错误浮层的最终实现；验收时使用该基点上的本任务工作区构建。自动化日志与真实宿主结果见下文。
 
-## 已实现行为
-
-标题栏 `conversation.session.header.actions` 增加返回动作，使用固定版本宿主的 `layout.beginNavigation()` 和 `layout.selectPanel()`。只读 `GET /api/dsh-workflow-studio/conversations/:sessionId/instance` 反查现有持久执行事实：由 session_agent 解释已创建的直接 Session 关联，实例服务返回完整实例/节点身份。未增加持久反向表、Session metadata、URL 导航或节点业务动作。
-
-一个插件客户端生命周期内保留实例/模板详情 Tab、相对顺序和独立画布视角；关闭或删除释放视角，新客户端清空临时状态。返回前重新核实关联并加载详情，按 revision 合并最新事实；打开目标节点详情不会覆盖已有画布视角。查询/加载失败可重试，缺失实例会清理缓存并显示“实例已不存在”。
-
-## 检查与 TDD 证据
-
-沿用用户已确认的三个测试边界，没有为私有状态容器另建测试边界。
-
-- 归属 HTTP 行为：新增路由前测试实际失败 `404 !== 200`，最小实现后通过；查询前后详情相同，没有额外 Session 或执行动作。
-- 工坊卸载后的视角恢复：三个画布实际从 `1.2 / 1.44 / 1.728` 回退为 `1 / 1 / 1`；加入临时视角保存后通过，随后扩展鼠标平移验证。
-- 后续导航使请求失效：复现取消后按钮仍 disabled；修复独立请求生命周期后通过。
-- 审查回归：复现已保存抽屉宽度 `330` 被迟到详情回退为 `320`；统一详情合并规则后通过。
-- 期间运行类型检查和相关测试；最终 `npm run check` 完成类型检查、构建与完整测试：**110 通过、0 失败、0 跳过**。`git diff --check` 通过。
-- [完整检查日志](/Users/didi/.codex/visualizations/2026/10/03/01a100b6-d1ad-7e81-9270-60fa94ebe88d/session-agent-instance-navigation-check.log)已保留；日志无真实宿主的启动访问令牌。
-- 完整检查也更新了构建产物测试中的公开依赖和插槽预期，验证新增的标题栏动作与固定版本依赖；保留既有断言，没有跳过检查。
-
-## 用户最终补充决定与回归
+## 默认提示词与自动化验证
 
 2026-10-03，用户将本轮中间的静态拒绝与运行时报错方案替换为统一默认提示词：`prompt` 仍为必填字符串，空字符串及纯空白配置合法。session_agent 先渲染文本，结果为空或纯空白时发送「请先询问我希望处理什么任务。」，否则原样发送渲染结果。判断及发送完全归属节点自身，不增加状态或框架；沿用现有 Session/request 身份与 `promptStarted` 恢复规则。导航不触发发送，不自动完成节点，不修改历史实例快照。
 
 - TDD：既有 HTTP 入口的新行为测试先因旧静态拒绝返回 `Node task: prompt must not be blank` 而失败，最小实现后通过。覆盖空配置、纯空白配置、变量引用收到空字符串后渲染为空；断言初始默认消息仅一条、重复启动仅一个 Session、节点仍待人工完成。既有有效提示词测试验证首尾空白原样发送。
-- 最终 `npm run check`：类型检查、构建、**111 测试通过，0 失败，0 跳过**。HEAD 仍为开工基点，没有提交 Git。
+- 最终 `npm run check`：类型检查、构建、**111 测试通过，0 失败，0 跳过**。
 - [本轮完整检查日志](/Users/didi/.codex/visualizations/2026/10/03/01a100b6-d1ad-7e81-9270-60fa94ebe88d/default-prompt-final-check.log)。
 - code-review 独立最终复审：Standards 硬性违规 0、剩余判断性问题 0；Spec 剩余实现问题 0。本轮实际浏览器回归另见下表，未以代码审查代替真实验收。
 - 用户在隔离宿主 `DSH_HOME=/private/tmp/dsh-nav-auth-r1mbaau7`、端口 `31988` 自行配置模型凭据。沿用同一目录重启加载最终构建，真实 DeepSeek-V41-Flash 调用成功；未读取、复制或展示凭据。默认消息实际引发询问任务的交互，运行中导航使用连续输出数字的无工具测试任务。
@@ -73,7 +49,7 @@
 
 最新完整检查 `npm run check`：类型检查、构建及 **111 测试通过，0 失败，0 跳过**，[最终日志](/Users/didi/.codex/visualizations/2026/10/03/01a100b6-d1ad-7e81-9270-60fa94ebe88d/nav-final-check.log)。最终 Standards、Spec 独立复审剩余问题均为 0；Standards 的布局观察遗漏已修复并在真实延迟重试中回归。没有为 CSS 写只镜像实现的伪布局测试，失败与成功证据均来自实际浏览器。
 
-本轮收尾：已停止本次 31988 宿主并删除临时 DSH_HOME（含用户仅为验收配置的凭据），恢复浏览器视口、中文和跟随系统外观。只保留截图、DOM、故障事件与测试日志；未保存模型凭据或用户 profile。浏览器最终页面保留为静态可见结果，宿主停止后不能继续操作；可直接审阅本报告及证据。HEAD 未变，未提交 Git，其他任务差异保留。
+本轮收尾：已停止本次 31988 宿主并删除临时 DSH_HOME（含用户仅为验收配置的凭据），恢复浏览器视口、中文和跟随系统外观。只保留截图、DOM、故障事件与测试日志；未保存模型凭据或用户 profile。浏览器最终页面保留为静态可见结果，宿主停止后不能继续操作；可直接审阅本报告及证据。
 
 ## 验收证据索引
 
@@ -81,19 +57,19 @@
 
 | 证据 | 入口与观察 |
 | --- | --- |
-| H1 | [实例 HTTP 集成测试](../packages/dsh-workflow-studio/tests/workflow-instances.test.ts#L1207)：两个同定义实例的完整目标、查询无业务副作用、完成后关系、关闭并重开同一存储、普通/fork ID 无关系、非法请求、删除后无关系 |
-| H2 | [逐项 HTTP 测试](../packages/dsh-workflow-studio/tests/workflow-instances.test.ts#L391)：两个实际创建的 Session 分别反查到各自节点实例 |
-| C1 | [标题栏往返组件测试](../packages/dsh-workflow-studio/tests/node-card-interactions.test.tsx#L524)：未先打开目标时返回准确的逐项节点、双击与重复返回去重、视角保留、关闭后重开 |
-| C2 | [跨挂载组件测试](../packages/dsh-workflow-studio/tests/node-card-interactions.test.tsx#L584)：两个实例与一个模板 Tab、独立缩放及鼠标平移、卸载重挂保留顺序/选择/变换、新客户端清空 |
-| C3 | [导航取消测试](../packages/dsh-workflow-studio/tests/node-card-interactions.test.tsx#L637)：后续宿主导航使旧请求无效，当前动作可再次使用 |
-| C4 | [查询失败测试](../packages/dsh-workflow-studio/tests/node-card-interactions.test.tsx#L690)：查询错误可重试，与普通/fork 对话无入口区分 |
-| C5 | [详情失败与已完成节点测试](../packages/dsh-workflow-studio/tests/node-card-interactions.test.tsx#L706)：加载错误不导航，重试成功，已完成节点没有完成操作 |
-| C6 | [删除竞态测试](../packages/dsh-workflow-studio/tests/node-card-interactions.test.tsx#L727)：入口显示后关系失效，明确错误，清理详情 Tab，回到管理页不复活实例 |
-| C7 | [迟到请求测试](../packages/dsh-workflow-studio/tests/node-card-interactions.test.tsx#L751)：旧归属/详情响应不覆盖当前对话，不抢页面，释放客户端后不提交导航 |
-| C8 | [版本竞态测试](../packages/dsh-workflow-studio/tests/node-card-interactions.test.tsx#L777)：完成响应推进后，迟到的旧返回详情不能回退业务状态 |
-| C9 | [抽屉宽度竞态测试](../packages/dsh-workflow-studio/tests/node-card-interactions.test.tsx#L813)：迟到详情不能覆盖已保存的宽度偏好 |
-| A1 | [客户端协议测试](../packages/dsh-workflow-studio/tests/client.test.tsx#L442)：目标字段校验、合法无关联与服务故障区分 |
-| B1 | [构建产物测试](../packages/dsh-workflow-studio/tests/bundle.test.ts#L7)：宿主 React、标题栏公开插槽、layout 注入和 `0.2.0-rc.1` 依赖 |
+| H1 | [实例 HTTP 集成测试](../../packages/dsh-workflow-studio/tests/workflow-instances.test.ts#L1207)：两个同定义实例的完整目标、查询无业务副作用、完成后关系、关闭并重开同一存储、普通/fork ID 无关系、非法请求、删除后无关系 |
+| H2 | [逐项 HTTP 测试](../../packages/dsh-workflow-studio/tests/workflow-instances.test.ts#L391)：两个实际创建的 Session 分别反查到各自节点实例 |
+| C1 | [标题栏往返组件测试](../../packages/dsh-workflow-studio/tests/node-card-interactions.test.tsx#L524)：未先打开目标时返回准确的逐项节点、双击与重复返回去重、视角保留、关闭后重开 |
+| C2 | [跨挂载组件测试](../../packages/dsh-workflow-studio/tests/node-card-interactions.test.tsx#L584)：两个实例与一个模板 Tab、独立缩放及鼠标平移、卸载重挂保留顺序/选择/变换、新客户端清空 |
+| C3 | [导航取消测试](../../packages/dsh-workflow-studio/tests/node-card-interactions.test.tsx#L637)：后续宿主导航使旧请求无效，当前动作可再次使用 |
+| C4 | [查询失败测试](../../packages/dsh-workflow-studio/tests/node-card-interactions.test.tsx#L690)：查询错误可重试，与普通/fork 对话无入口区分 |
+| C5 | [详情失败与已完成节点测试](../../packages/dsh-workflow-studio/tests/node-card-interactions.test.tsx#L706)：加载错误不导航，重试成功，已完成节点没有完成操作 |
+| C6 | [删除竞态测试](../../packages/dsh-workflow-studio/tests/node-card-interactions.test.tsx#L727)：入口显示后关系失效，明确错误，清理详情 Tab，回到管理页不复活实例 |
+| C7 | [迟到请求测试](../../packages/dsh-workflow-studio/tests/node-card-interactions.test.tsx#L751)：旧归属/详情响应不覆盖当前对话，不抢页面，释放客户端后不提交导航 |
+| C8 | [版本竞态测试](../../packages/dsh-workflow-studio/tests/node-card-interactions.test.tsx#L777)：完成响应推进后，迟到的旧返回详情不能回退业务状态 |
+| C9 | [抽屉宽度竞态测试](../../packages/dsh-workflow-studio/tests/node-card-interactions.test.tsx#L813)：迟到详情不能覆盖已保存的宽度偏好 |
+| A1 | [客户端协议测试](../../packages/dsh-workflow-studio/tests/client.test.tsx#L442)：目标字段校验、合法无关联与服务故障区分 |
+| B1 | [构建产物测试](../../packages/dsh-workflow-studio/tests/bundle.test.ts#L7)：宿主 React、标题栏公开插槽、layout 注入和 `0.2.0-rc.1` 依赖 |
 
 ## 历史：凭据配置前的真实宿主验收（非最终结论）
 
@@ -156,14 +132,4 @@
 
 仅详情请求失败、强制迟到响应以及完整加载/错误组合尚未用真实浏览器故障注入执行；既有自动化结果继续单独记录。真实模型运行缺少凭据，未索取或复制凭据。
 
-结束时停止本次宿主进程、清理临时 DSH_HOME，并恢复浏览器 viewport 和外观偏好；截图与脱敏日志保留，主要浏览器标签页保留供查看页面最终状态。本次只追加验收记录，没有提交 Git。
-
-## Standards
-
-首次审查没有 AGENTS.md/ADR 硬性违规；发现一项 P2 判断性问题：详情版本合并逻辑重复且抽屉宽度规则不同，迟到的返回详情可能覆盖新保存的宽度。已通过失败测试复现，统一到 StudioClient 的详情合并方法；回归及独立复审确认解决，剩余 Standards 问题为 0。
-
-## Spec
-
-首次审查没有确定的实现缺陷或范围扩大；要求补足两个真实逐项 Session 各自反查完整身份的证据。已在原 HTTP 测试中补齐并复审确认。该轮自动化范围内的剩余代码发现为 0；随后追加的真实浏览器验收发现空关联对话缺少入口，详见 NAV-01。该轮 NAV-15 与若干故障/并发子场景当时未验证，现已由上方最终真实验收补齐。
-
-两轴审查都为只读独立 sub-agent；类型检查、构建和测试由主代理实际运行。没有将审查意见或自动化通过推断为生产行为或真实浏览器通过。
+结束时停止本次宿主进程、清理临时 DSH_HOME，并恢复浏览器 viewport 和外观偏好；截图与脱敏日志保留，主要浏览器标签页保留供查看页面最终状态。
