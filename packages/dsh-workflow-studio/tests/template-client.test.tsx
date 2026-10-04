@@ -44,7 +44,7 @@ test('template tab rescans, shows invalid entries, and reuses and closes read-on
   const root = createRoot(container)
   const tabs = () => [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
   try {
-    await act(async () => root.render(<WorkflowStudioPanel t={key => zh[key]} useWorkspaces={useWorkspaces} onOpenSession={() => {}} />))
+    await act(async () => root.render(<WorkflowStudioPanel t={key => zh[key]} useWorkspaces={useWorkspaces} />))
     await act(async () => tabs()[1]!.click())
     assert.equal(catalogLoads, 1)
     const invalid = container.querySelector<HTMLButtonElement>('[aria-label="打开模板 broken"]')!

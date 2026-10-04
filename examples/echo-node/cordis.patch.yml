@@ -1,0 +1,3 @@
+- insert:
+    - id: example-echo-node
+      name: './server.js'

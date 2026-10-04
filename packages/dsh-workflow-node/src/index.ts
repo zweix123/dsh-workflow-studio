@@ -1,3 +1,5 @@
+import type { NodeRegistry } from './server.js'
+declare module '@deepseek-ai/cordis' { interface Context { workflowNodes: NodeRegistry } }
 import type { Context } from '@deepseek-ai/cordis'
 
 export type NodeValue = null | boolean | number | string | NodeValue[] | { [key: string]: NodeValue }
@@ -28,8 +30,24 @@ export interface NodePlan {
   run?: () => Promise<NodeFact>
 }
 
+export type NodeText = { text: string } | { key: string; namespace: string }
+export interface NodeAction {
+  id: string
+  label: NodeText
+  target: { type: 'server' } | { type: 'details' } | { type: 'client'; handler: string }
+  primary?: boolean
+  disabled?: boolean
+}
+export interface NodePresentation { actions: NodeAction[]; data?: NodeData }
+export interface NodeDisplayContext { definition: NodeDefinition; input: NodeData; fact?: NodeFact; ready: boolean }
+export interface NodeRecord { instanceId: string; nodeInstanceId: string; workspaceId: string; definition: NodeDefinition; fact: NodeFact }
+
+export const nodeService = (kind: string): string => `workflowNode:${kind}`
+
 export interface ServerNode {
   kind: string
+  describe?: (context: NodeDisplayContext) => NodePresentation
+  validateFact?: (fact: NodeFact) => void
   requires: readonly (keyof Context)[]
   validate: (definition: NodeDefinition) => void
   ready: (context: NodeContext) => NodePlan | undefined
@@ -41,12 +59,12 @@ export interface ServerNode {
 
 export class NodeInputError extends Error {}
 
-export function nodeRegistry<T extends { kind: string }>(nodes: readonly T[]): ReadonlyMap<string, T> {
-  const registry = new Map<string, T>()
-  for (const node of nodes) {
-    if (typeof node.kind !== 'string' || !node.kind) throw new Error('Node kind must be a nonempty string')
-    if (registry.has(node.kind)) throw new Error(`Duplicate node kind: ${node.kind}`)
-    registry.set(node.kind, node)
-  }
-  return registry
+export interface NodeLookup {
+  get(kind: string): ServerNode | undefined
+  has(kind: string): boolean
+  identify?(kind: string): { source: string; token: string } | undefined
+  diagnose?(kind: string): { status: string; sources: string[] }
+  services?(kind: string): Context | undefined
+  acquire?(kind: string): (() => void) | undefined
+  subscribe?(listener: () => void): () => void
 }

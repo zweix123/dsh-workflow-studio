@@ -183,3 +183,7 @@ dag:
 - 涉及重要且不易逆转的取舍时，再记录 ADR。
 - 旧规格已标注由本文更新的规则；实施时同步更新面向用户的 DAG 文档及模板作者说明，使根 `id`、`name` 和 bundle 示例与实现一致。
 - 输入来源和节点能力校验继续遵循[节点输入输出规格](./node-input-output.zh.md)，模板只读图与定义详情继续遵循[模板管理](./template-management.zh.md)和[共享定义详情](./shared-definition-details.zh.md)。改为插件来源不恢复占位输入输出，也不装配模板业务操作。
+
+## 节点阶段衔接（2026-10-04）
+
+第一阶段节点公共接口及默认 bundle 的节点部分已实现，见[节点作者指南](../node-plugin-authoring.zh.md)和[节点阶段验收](../acceptance/node-plugin-registration.zh.md)。本规格的模板登记、通用加载及六份内置模板统一分发仍待实施；现有目录读取/复制和手动示例文件不能作为这些项目已通过的证据。节点与模板联合 bundle 的验收留待第二阶段。

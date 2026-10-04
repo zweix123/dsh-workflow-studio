@@ -1,3 +1,4 @@
+import type { NodeViews } from '../../nodes.js'
 import { StudioClient } from '../../studio-client.js'
 import { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react'
 import type { KeyboardEvent } from 'react'
@@ -14,7 +15,7 @@ import { styles } from './styles.js'
 
 type UseWorkspaces = <T>(selector: (snapshot: WorkspaceSnapshot) => T) => T
 
-export function WorkflowStudioPanel({ t, useWorkspaces, onOpenSession, client: suppliedClient }: { client?: StudioClient; t: WorkflowTranslate; useWorkspaces: UseWorkspaces; onOpenSession: (sessionId: string) => void }) {
+export function WorkflowStudioPanel({ nodes, t, useWorkspaces, client: suppliedClient }: { nodes?: NodeViews; client?: StudioClient; t: WorkflowTranslate; useWorkspaces: UseWorkspaces }) {
   const id = useId()
   const [localClient] = useState(() => new StudioClient())
   const client = suppliedClient ?? localClient
@@ -123,7 +124,7 @@ export function WorkflowStudioPanel({ t, useWorkspaces, onOpenSession, client: s
       : tab.template
         ? <TemplateDetailPanel reading={client.canvas(tab.id)} template={tab.template} t={t} active={activeTab === tab.id} />
       : tab.detail
-        ? <InstanceRunPanel reading={client.canvas(tab.id)} selection={selection?.instanceId === tab.detail.id ? selection : undefined} detail={tab.detail} t={t} active={activeTab === tab.id} onOpenSession={onOpenSession}
+        ? <InstanceRunPanel nodes={nodes} reading={client.canvas(tab.id)} selection={selection?.instanceId === tab.detail.id ? selection : undefined} detail={tab.detail} t={t} active={activeTab === tab.id}
           onUpdate={updated => client.updateDetail(updated)}
           onWidthUpdate={width => setOpened(current => current.map(item => item.id === tab.detail!.id ? { ...item, drawerWidth: width } : item))} />
         : null}</div>)}

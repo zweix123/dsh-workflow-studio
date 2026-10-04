@@ -11,6 +11,7 @@ export interface CanvasNodeView {
   onInspect: () => void
   statusLabel?: string
   displayStatus?: string
+  summary?: ReactNode
   control?: ReactNode
 }
 type NodeData = { label: string; direction?: LayoutDirection; segment?: number }

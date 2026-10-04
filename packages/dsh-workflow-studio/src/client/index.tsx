@@ -4,16 +4,13 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
-import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import { PANEL_ID, PLUGIN_NAME } from '../shared/constants.js'
 import { WorkflowStudioPanel } from './pages/workflow-studio/WorkflowStudioPanel.js'
 import { en, zh } from './locales/index.js'
 import { StudioClient } from './studio-client.js'
-import { ConversationInstanceAction } from './ConversationInstanceAction.js'
-import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 
 export const name = PLUGIN_NAME
-export const inject = ['slots', 'locale', 'uiWorkspace', 'layout']
+export const inject = ['slots', 'locale', 'workflowNodeViews', 'layout']
 
 function WorkflowIcon({ size }: PropsRuntime<'sidebar.panellist'>) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
@@ -27,14 +24,16 @@ export function apply(ctx: Context): void {
   const client = new StudioClient()
   ctx.effect(() => () => client.dispose())
   const t = ctx.locale.bind(PLUGIN_NAME)
-  ctx.slots.inject('conversation.session.header.actions', () => ctx.slots.register({
-    name: 'conversation.session.header.actions', id: PANEL_ID, locale: PLUGIN_NAME, order: 10,
-  }, props => <ConversationInstanceAction key={String(props.sessionId)} sessionId={String(props.sessionId)} t={props.t} client={client} layout={ctx.layout} />))
+  ctx.provide('workflowNavigation', { open: async (target, signal) => {
+    const opened = await client.open(target, signal)
+    if (opened && !signal.aborted) ctx.layout.selectPanel(PANEL_ID as Parameters<typeof ctx.layout.selectPanel>[0])
+    return opened
+  }, remove: id => client.remove(id) })
   ctx.slots.inject('main', function* () {
     yield ctx.slots.register({
       name: 'main', key: PANEL_ID,
       locale: PLUGIN_NAME,
-    }, props => <WorkflowStudioPanel {...props} client={client} onOpenSession={sessionId => ctx.uiWorkspace.openSession(sessionId as Parameters<typeof ctx.uiWorkspace.openSession>[0])} />)
+    }, props => <WorkflowStudioPanel nodes={ctx.workflowNodeViews} {...props} client={client} />)
     yield ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({
       name: 'sidebar.panellist', id: PANEL_ID, order: 10, label: () => t('title'),
     }, WorkflowIcon))

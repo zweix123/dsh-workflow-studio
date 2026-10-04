@@ -24,11 +24,14 @@ git clone https://github.com/zweix123/dsh-workflow-studio.git
 cd dsh-workflow-studio
 npm ci --registry=https://registry.npmjs.org
 npm run build
-dsh plugin --profile web add ./packages/dsh-workflow-studio
+dsh plugin --profile web add ./packages/dsh-workflow-bundle
 dsh web
 ```
 
-DSH itself is not bundled with this plugin.
+If this profile previously installed `packages/dsh-workflow-studio` directly, stop its host, remove the old plugin entry with `dsh plugin --profile web remove dsh-workflow-studio`, add the default bundle above, then restart. Use the same profile for both commands. Installing Studio alone leaves its node registry dependencies missing; the Web page can report `waiting for service: workflowNodeViews`. This changes plugin assembly, not instance files.
+
+
+DSH itself is not bundled with this plugin. The default bundle installs the public node registry, Studio, and three node plugins. See the [node author guide](docs/node-plugin-authoring.zh.md) and [minimal external example](examples/echo-node/README.zh.md). Common template distribution is the next implementation stage.
 
 ## Create a workflow
 
@@ -65,5 +68,5 @@ npm run check
 This runs type checking, the build, and tests. Product specifications live in [`docs/specs/`](docs/specs/), and repository conventions are in [`AGENTS.md`](AGENTS.md).
 
 ```sh
-dsh plugin --profile web remove dsh-workflow-studio
+dsh plugin --profile web remove dsh-workflow-bundle
 ```

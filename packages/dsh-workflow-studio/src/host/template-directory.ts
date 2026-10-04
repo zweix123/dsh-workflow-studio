@@ -3,15 +3,14 @@ import { join } from 'node:path'
 import { parseDocument } from 'yaml'
 import { compile, type DagDefinition } from './dag/index.js'
 import { validateWorkflowNodes } from './workflow/index.js'
-import type { ServerNode } from '../contract/node/index.js'
-import { serverNodes } from './nodes/registry.js'
+import type { NodeLookup } from 'dsh-workflow-node/contract'
 
-export async function validateTemplateDirectory(directory: string, nodes: ReadonlyMap<string, ServerNode> = serverNodes): Promise<{ definition: DagDefinition } | { error: string }> {
+export async function validateTemplateDirectory(directory: string, nodes?: NodeLookup): Promise<{ definition: DagDefinition } | { error: string }> {
   try {
     const document = parseDocument(await readFile(join(directory, 'workflow.yaml'), 'utf8'))
     if (document.errors.length) throw document.errors[0]
     const definition = compile(document.toJS(), {}).getDefinition()
-    validateWorkflowNodes(definition, nodes)
+    if (nodes) validateWorkflowNodes(definition, nodes)
     return { definition }
   } catch (error) {
     return { error: error instanceof Error ? error.message : String(error) }

@@ -1,6 +1,6 @@
 import type { ServerResponse } from 'node:http'
 import type { WebRoute } from '@deepseek-ai/dsh-host-webserver'
-import { API_PREFIX, CONVERSATIONS_PATH, INSTANCES_PATH, TEMPLATES_PATH } from '../../shared/constants.js'
+import { API_PREFIX, INSTANCES_PATH, TEMPLATES_PATH } from '../../shared/constants.js'
 import { WorkflowInstanceError, type WorkflowInstanceService } from '../service/workflow-instance-service.js'
 
 function json(response: ServerResponse, status: number, value: unknown): void {
@@ -34,14 +34,6 @@ export function createWorkflowInstancesRoute(service: WorkflowInstanceService): 
     async handler(request, response) {
       try {
         const path = new URL(request.url ?? '/', 'http://localhost').pathname
-        const conversation = path.match(new RegExp(`^${CONVERSATIONS_PATH}/([^/]+)/instance$`))
-        if (conversation) {
-          if (request.method !== 'GET') return json(response, 405, { error: { code: 'method-not-allowed', message: 'Method not allowed' } })
-          let sessionId: string
-          try { sessionId = decodeURIComponent(conversation[1]!) }
-          catch { throw new WorkflowInstanceError('invalid-request', 'Invalid conversation ID') }
-          return json(response, 200, service.findConversationInstance(sessionId))
-        }
         if (path === TEMPLATES_PATH) {
           if (request.method !== 'GET') return json(response, 405, { error: { code: 'method-not-allowed', message: 'Method not allowed' } })
           return json(response, 200, await service.listTemplates())
@@ -67,7 +59,7 @@ export function createWorkflowInstancesRoute(service: WorkflowInstanceService): 
           const action = path.match(new RegExp(`^${INSTANCES_PATH}/([^/]+)/nodes/([^/]+)/actions/([^/]+)$`))
           if (action) {
             if (request.method !== 'POST') return json(response, 405, { error: { code: 'method-not-allowed', message: 'Method not allowed' } })
-            return json(response, 200, await service.actionNode(decodeURIComponent(action[1]!), decodeURIComponent(action[2]!), decodeURIComponent(action[3]!), await body(request)))
+            return json(response, 200, await service.actionNode(decodeURIComponent(action[1]!), decodeURIComponent(action[2]!), decodeURIComponent(action[3]!), await body(request), typeof request.headers['x-workflow-node'] === 'string' ? request.headers['x-workflow-node'] : undefined))
           }
           const id = decodeURIComponent(path.slice(INSTANCES_PATH.length + 1))
           if (request.method === 'GET') return json(response, 200, service.getInstance(id))

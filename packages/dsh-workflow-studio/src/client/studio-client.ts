@@ -1,6 +1,6 @@
 import type { Viewport } from '@xyflow/react'
 import type { InstanceDetail, TemplateDetail, InstanceNavigationTarget } from '../shared/types/workflow-instance.js'
-import { getConversationInstance, getInstance, WorkflowInstanceApiError } from './apis/workflow-instances.js'
+import { getInstance, WorkflowInstanceApiError } from './apis/workflow-instances.js'
 
 export type CanvasReadingState = { viewport?: Viewport }
 
@@ -45,13 +45,10 @@ export class StudioClient {
       activeTab: current.activeTab === `instance-${instanceId}` ? 'instances' : current.activeTab,
       selection: current.selection?.instanceId === instanceId ? undefined : current.selection }))
   }
-  async returnToInstance(sessionId: string, previous: InstanceNavigationTarget, signal: AbortSignal): Promise<boolean> {
+  async open(target: InstanceNavigationTarget, signal: AbortSignal): Promise<boolean> {
     const request = ++this.navigation
     const valid = () => !this.disposed && !signal.aborted && request === this.navigation
     try {
-      const { target } = await getConversationInstance(sessionId)
-      if (!valid()) return false
-      if (!target) throw new WorkflowInstanceApiError('instance-missing', 'Workflow instance not found')
       const detail = await getInstance(target.instanceId)
       if (!valid()) return false
       this.set(current => {
@@ -63,7 +60,7 @@ export class StudioClient {
       return true
     } catch (error) {
       if (!valid()) return false
-      if (error instanceof WorkflowInstanceApiError && error.code === 'instance-missing') this.remove(previous.instanceId)
+      if (error instanceof WorkflowInstanceApiError && error.code === 'instance-missing') this.remove(target.instanceId)
       throw error
     }
   }

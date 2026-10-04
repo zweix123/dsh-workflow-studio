@@ -1,0 +1,11 @@
+- insert:
+    - id: workflow-nodes
+      name: dsh-workflow-node
+    - id: workflow-node-bash
+      name: '@dsh-workflow/node-bash'
+    - id: workflow-node-session-agent
+      name: '@dsh-workflow/node-session-agent'
+    - id: workflow-node-form
+      name: '@dsh-workflow/node-form'
+    - id: workflow-studio
+      name: dsh-workflow-studio

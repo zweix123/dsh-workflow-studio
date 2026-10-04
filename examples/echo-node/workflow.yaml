@@ -1,0 +1,20 @@
+id: example-echo
+name: Echo example
+type: dag
+dag:
+  - id: echo
+    type: node
+    node_kind: example_echo
+    message: Hello from a third-party node
+    output_schema:
+      message: string
+  - id: answer
+    type: node
+    node_kind: form
+    input_schema:
+      message: string
+    output_schema:
+      message: string
+  - type: edge
+    from: echo
+    to: answer

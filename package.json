@@ -9,11 +9,11 @@
     "node": "^22.19.0 || >=24.0.0"
   },
   "scripts": {
-    "build": "npm run build --workspace=dsh-workflow-studio",
+    "build": "node scripts/build-nodes.mjs && npm run build --workspace=dsh-workflow-studio",
     "typecheck": "npm run typecheck --workspace=dsh-workflow-studio",
     "test": "npm run test --workspace=dsh-workflow-studio",
     "check": "npm run typecheck && npm run build && npm test",
-    "install:local": "npm run build && dsh plugin --profile web add ./packages/dsh-workflow-studio"
+    "install:local": "npm run build && dsh plugin --profile web add ./packages/dsh-workflow-bundle"
   },
   "devDependencies": {
     "@types/node": "^22.20.0",

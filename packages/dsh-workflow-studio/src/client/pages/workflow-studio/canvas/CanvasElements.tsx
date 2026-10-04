@@ -20,6 +20,7 @@ const WorkflowNode = memo(function WorkflowNode({ data }: NodeProps<CanvasNode>)
     <div className="dsh-workflow-node-top"><span className="dsh-workflow-node-kind">{view.kindLabel}</span>{data.source !== 'template' && <span className="dsh-workflow-node-status"><i aria-hidden="true" />{view.statusLabel}</span>}</div>
     <strong title={data.label}>{data.label}</strong>
     {forItem && <small title={forItem.key}>{forItem.key} #{forItem.index + 1}</small>}
+    {view.summary}
     <div className="dsh-workflow-node-actions">
       {view.control}
       <button type="button" className="nodrag nopan" aria-label={`${view.detailsLabel} ${data.label}${forItem ? ` ${forItem.key}` : ''}`} onClick={event => { event.stopPropagation(); view.onInspect() }}>ⓘ {view.detailsLabel}</button>

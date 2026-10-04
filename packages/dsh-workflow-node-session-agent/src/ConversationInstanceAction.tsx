@@ -1,12 +1,13 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ILayout } from '@deepseek-ai/dsh-client-ui-layout/client'
-import type { InstanceNavigationTarget } from '../shared/types/workflow-instance.js'
-import { getConversationInstance, WorkflowInstanceApiError } from './apis/workflow-instances.js'
-import type { WorkflowTranslate } from './locales/index.js'
-import { StudioClient } from './studio-client.js'
-import { PANEL_ID } from '../shared/constants.js'
+import type { InstanceNavigationTarget } from './association.js'
+import type { NodeNavigation } from 'dsh-workflow-node/ui'
+import { getConversationInstance } from './association.js'
+import { en } from './locales.js'
+type WorkflowTranslate = (key: keyof typeof en) => string
+const PANEL_ID = 'dsh-workflow-studio'
 
-type Props = { sessionId: string; t: WorkflowTranslate; client: StudioClient; layout: Pick<ILayout, 'beginNavigation' | 'selectPanel'> }
+type Props = { sessionId: string; t: WorkflowTranslate; client: NodeNavigation; layout: Pick<ILayout, 'beginNavigation' | 'selectPanel'> }
 const css = `
 .dsh-workflow-return { position:relative; display:flex; align-items:center; min-width:0; }
 .dsh-workflow-return button { min-height:28px; padding:3px 5px; border:0; border-radius:var(--dsw-radius-sm); background:transparent; color:var(--dsw-alias-label-tertiary); font:inherit; font-size:12px; line-height:18px; cursor:pointer; white-space:nowrap; }
@@ -76,10 +77,13 @@ export function ConversationInstanceAction({ sessionId, t, client, layout }: Pro
     life.signal.addEventListener('abort', abort, { once: true })
     signal.addEventListener('abort', abort, { once: true })
     try {
-      const returned = await client.returnToInstance(sessionId, current.target, controller.signal)
+      const { target } = await getConversationInstance(sessionId)
+      if (controller.signal.aborted) return
+      if (!target) { client.remove(current.target.instanceId); setResult({ sessionId, target: current.target, error: 'navigationInstanceMissing' }); return }
+      const returned = await client.open(target, controller.signal)
       if (returned && !controller.signal.aborted && !signal.aborted) layout.selectPanel(PANEL_ID as Parameters<ILayout['selectPanel']>[0])
     } catch (error) {
-      if (!controller.signal.aborted) setResult({ sessionId, target: current.target, error: error instanceof WorkflowInstanceApiError && error.code === 'instance-missing' ? 'navigationInstanceMissing' : 'navigationFailed' })
+      if (!controller.signal.aborted) setResult({ sessionId, target: current.target, error: error instanceof Error && 'code' in error && error.code === 'instance-missing' ? 'navigationInstanceMissing' : 'navigationFailed' })
     } finally {
       signal.removeEventListener('abort', abort)
       life.signal.removeEventListener('abort', abort)

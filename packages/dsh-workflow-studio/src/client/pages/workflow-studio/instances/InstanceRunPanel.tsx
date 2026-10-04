@@ -1,5 +1,5 @@
 import type { CanvasReadingState } from '../../../studio-client.js'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { InstanceDetail, InstanceNavigationTarget } from '../../../../shared/types/workflow-instance.js'
 import { getInstance, nodeAction, setDrawerWidth, WorkflowInstanceApiError } from '../../../apis/workflow-instances.js'
 import type { WorkflowKey, WorkflowTranslate } from '../../../locales/index.js'
@@ -9,9 +9,9 @@ import { inspectLayout } from '../../../../shared/layout.js'
 import { LayoutNotices } from '../LayoutNotices.js'
 import { DagCanvas } from './DagCanvas.js'
 import { canvasStatusLabel } from '../canvas/CanvasElements.js'
-import { clientNodes } from '../../../nodes.js'
-import type { NodeViewProps } from '../../../../contract/node/client.js'
-import type { NodeData, NodeDefinition } from '../../../../contract/node/index.js'
+import { emptyNodeViews, NodeButton, NodeBoundary, visibleActions, type NodeViews } from '../../../nodes.js'
+import type { NodeViewProps } from 'dsh-workflow-node/ui'
+import type { NodeData, NodeDefinition } from 'dsh-workflow-node/contract'
 
 function visibleWidth(preference: number, available: number): number {
   if (!available) return preference
@@ -19,12 +19,28 @@ function visibleWidth(preference: number, available: number): number {
   return Math.min(Math.max(300, preference), Math.max(300, Math.floor(available * 0.7)))
 }
 
-export function InstanceRunPanel({ detail, t, onUpdate, onWidthUpdate, onOpenSession, active = true, selection, reading }: { reading?: CanvasReadingState; selection?: InstanceNavigationTarget & { request: number }; detail: InstanceDetail; t: WorkflowTranslate; onUpdate: (detail: InstanceDetail) => void; onWidthUpdate: (width: number) => void; onOpenSession: (sessionId: string) => void; active?: boolean }) {
+export function InstanceRunPanel({ nodes = emptyNodeViews, detail, t, onUpdate, onWidthUpdate, active = true, selection, reading }: { nodes?: NodeViews; reading?: CanvasReadingState; selection?: InstanceNavigationTarget & { request: number }; detail: InstanceDetail; t: WorkflowTranslate; onUpdate: (detail: InstanceDetail) => void; onWidthUpdate: (width: number) => void; active?: boolean }) {
+  const registryRevision = useSyncExternalStore(nodes.subscribe, nodes.snapshot)
+  const draftOwners = useRef(new Map<string, number>())
+  const [draftDiscarded, setDraftDiscarded] = useState(false)
   const [selected, setSelected] = useState<string | null>(null)
   useEffect(() => { if (selection) setSelected(selection.nodeInstanceId) }, [selection])
   const [pending, setPending] = useState<string[]>([])
   const [error, setError] = useState<{ key: WorkflowKey; message?: string }>()
   const [drafts, setDrafts] = useState<Record<string, NodeData>>({})
+  useEffect(() => {
+    setDrafts(current => {
+      const next = { ...current }
+      let discarded = false
+      for (const id of Object.keys(current)) {
+        const item = detail.snapshot.instances.find(item => item.instanceId === id)
+        const definition = item && definitionAt(detail.definition, item.definitionPath)
+        if (nodes.get(String(definition?.node_kind), detail.nodeViews?.[id]?.source)?.generation !== draftOwners.current.get(id)) { delete next[id]; draftOwners.current.delete(id); discarded = true }
+      }
+      if (discarded) setDraftDiscarded(true)
+      return discarded ? next : current
+    })
+  }, [nodes, registryRevision, detail])
   const busy = useRef(new Set<string>())
   const runArea = useRef<HTMLDivElement>(null)
   const dragCleanup = useRef<() => void>(() => {})
@@ -50,23 +66,18 @@ export function InstanceRunPanel({ detail, t, onUpdate, onWidthUpdate, onOpenSes
   }, [])
   useEffect(() => () => dragCleanup.current(), [])
   useEffect(() => {
-    const polling = detail.snapshot.instances.some(row => row.type === 'node' && row.status === 'ready' && (
-      detail.executions?.[row.instanceId]?.status === 'running'
-      || (detail.executions?.[row.instanceId]?.status === 'succeeded' && !detail.executions[row.instanceId]?.error)
-      || (detail.executions?.[row.instanceId] === undefined && definitionAt(detail.definition, row.definitionPath)?.is_auto_start === true)
-    ))
-    if (!polling) return
-    let active = true
+    if (!active) return
+    let current = true
     let waiting = false
     const timer = window.setInterval(() => {
       if (waiting) return
       waiting = true
       void getInstance(detail.id).then(value => {
-        if (active) onUpdate(value)
+        if (current) onUpdate(value)
       }, () => {}).finally(() => { waiting = false })
     }, 600)
-    return () => { active = false; window.clearInterval(timer) }
-  }, [detail, onUpdate])
+    return () => { current = false; window.clearInterval(timer) }
+  }, [detail, onUpdate, active])
 
   async function saveWidth(width: number) {
     try {
@@ -128,7 +139,7 @@ export function InstanceRunPanel({ detail, t, onUpdate, onWidthUpdate, onOpenSes
     setPending(current => [...current, nodeId])
     setError(undefined)
     try {
-      onUpdate(await nodeAction(detail.id, nodeId, action, payload))
+      onUpdate(await nodeAction(detail.id, nodeId, action, payload, detail.nodeViews?.[nodeId]?.token))
     } catch (failure) {
       if (failure instanceof WorkflowInstanceApiError) {
         if (failure.latest) onUpdate(failure.latest)
@@ -141,16 +152,44 @@ export function InstanceRunPanel({ detail, t, onUpdate, onWidthUpdate, onOpenSes
     }
   }
 
+  function propsFor(id: string): NodeViewProps | undefined {
+    const item = detail.snapshot.instances.find(item => item.instanceId === id && item.type === 'node')
+    const definition = item && definitionAt(detail.definition, item.definitionPath)
+    if (!item || definition?.type !== 'node') return
+    const entry = nodes.get(String(definition.node_kind), detail.nodeViews?.[id]?.source)
+    const execution = detail.executions?.[id]
+    return { data: detail.nodeViews?.[id]?.data, instanceId: detail.id, nodeInstanceId: id, label: item.definitionId, definition: definition as NodeDefinition, input: item.input as NodeData,
+      output: (item.status === 'completed' ? item.output : execution?.status === 'succeeded' ? execution.output : undefined) as NodeData | undefined,
+      execution: execution as NodeViewProps['execution'], ready: item.status === 'ready', pending: Boolean(detail.incompatible) || pending.includes(id),
+      t: entry?.t ?? (key => key), action: (name, payload) => void run(id, name, payload), draft: drafts[id],
+      setDraft: value => { if (entry) draftOwners.current.set(id, entry.generation); setDrafts(current => ({ ...current, [id]: value })) },
+    }
+  }
+  async function invoke(id: string, name: string): Promise<void> {
+    const props = propsFor(id)
+    if (!props) return
+    const view = detail.nodeViews?.[id]
+    const action = visibleActions(view?.actions ?? [], nodes, String(props.definition.node_kind), view?.source).find(action => action.id === name)
+    if (!action || action.disabled) return
+    if (action.target.type === 'details') { setSelected(id); return }
+    if (action.target.type === 'server') { await run(id, name, {}); return }
+    if (busy.current.has(id)) return
+    busy.current.add(id); setPending(current => [...current, id]); setError(undefined)
+    try { await nodes.get(String(props.definition.node_kind), view?.source)?.node.handlers?.[action.target.handler]?.(props) }
+    catch (error) { setError({ key: 'requestFailed', message: error instanceof Error ? error.message : String(error) }) }
+    finally { busy.current.delete(id); setPending(current => current.filter(value => value !== id)) }
+  }
   const inspectionStatus = canvasStatusLabel(inspection?.status ?? 'waiting', execution?.status, t)
   const layoutReport = useMemo(() => inspectLayout(detail.definition), [detail.definition])
   return <section className="dsh-workflow-detail" aria-label={detail.name}>
     <header className="dsh-workflow-detail-header"><div><h2>{detail.name}</h2><p>{detail.templateId}</p></div><button type="button" className="dsh-workflow-button" onClick={() => setSelected(detail.snapshot.rootInstanceId)}>{t('rootDagDetails')}</button></header>
     {error && <p className="dsh-workflow-run-error" role="alert">{t(error.key)} {error.message}</p>}
+    {draftDiscarded && <p role="alert">{t('draftDiscarded')}</p>}
     {detail.incompatible && <p className="dsh-workflow-run-error" role="alert">{t('instanceIncompatible')} {detail.incompatible}</p>}
     <LayoutNotices report={layoutReport} t={t} surface="instance" />
     <p className="dsh-workflow-run-note">{t('resultNotice')}</p>
     <div ref={runArea} className="dsh-workflow-run">
-      <DagCanvas reading={reading} detail={detail} t={t} onAction={(id, name, payload) => void run(id, name, payload)} onInspect={setSelected} pending={pending} active={active} inspectorWidth={inspection ? visibleWidth(dragWidth ?? detail.drawerWidth ?? 320, areaWidth) : 0} />
+      <DagCanvas nodes={nodes} reading={reading} detail={detail} t={t} onAction={(id, name) => void invoke(id, name)} onInspect={setSelected} pending={pending} active={active} inspectorWidth={inspection ? visibleWidth(dragWidth ?? detail.drawerWidth ?? 320, areaWidth) : 0} />
       {inspection && <aside className="dsh-workflow-inspector" aria-label={`${t('nodeDetails')} ${inspection.definitionId}`} style={{ width: `${visibleWidth(dragWidth ?? detail.drawerWidth ?? 320, areaWidth)}px` }}>
         <div className="dsh-workflow-inspector-resize" role="separator" tabIndex={0} aria-label={t('resizeNodeDetails')} aria-orientation="vertical" aria-valuemin={areaWidth ? Math.min(300, areaWidth) : undefined} aria-valuemax={areaWidth ? Math.max(Math.min(300, areaWidth), Math.floor(areaWidth * 0.7)) : undefined} aria-valuenow={visibleWidth(dragWidth ?? detail.drawerWidth ?? 320, areaWidth)} onPointerDown={startResize} onKeyDown={resizeByKeyboard} />
         <header><div><h3>{inspection.definitionId}</h3><p>{inspectionStatus}</p></div><button type="button" aria-label={t('closeNodeDetails')} onClick={() => setSelected(null)}>×</button></header>
@@ -167,14 +206,16 @@ export function InstanceRunPanel({ detail, t, onUpdate, onWidthUpdate, onOpenSes
               ...(output !== undefined ? [[t('nodeOutput'), output] as [string, unknown]] : []),
             ]} />
           {item?.type === 'node' && definition?.type === 'node' && (() => {
-            const Panel = clientNodes.get(String(definition.node_kind))?.Panel
-            if (!Panel) return null
-            const props: NodeViewProps = { label: item.definitionId, definition: definition as NodeDefinition, input: item.input as NodeData, output: output as NodeData | undefined,
-              execution: execution as NodeViewProps['execution'], ready: item.status === 'ready', pending: Boolean(detail.incompatible) || pending.includes(item.instanceId),
-              t: key => t(key as Parameters<WorkflowTranslate>[0]), action: (name, payload) => void run(item.instanceId, name, payload),
-              openSession: onOpenSession, draft: drafts[item.instanceId],
-              setDraft: value => setDrafts(current => ({ ...current, [item.instanceId]: value })) }
-            return <Panel key={item.instanceId} {...props} />
+            const view = detail.nodeViews?.[item.instanceId]
+            const entry = nodes.get(String(definition.node_kind), view?.source)
+            const Panel = entry?.node.Panel
+            const props = propsFor(item.instanceId)!
+            return <>
+              <div className="dsh-workflow-business-actions">{visibleActions(view?.actions ?? [], nodes, String(definition.node_kind), view?.source).map(action => <NodeButton key={action.id} action={action} nodes={nodes} pending={pending.includes(item.instanceId)} blocked={Boolean(detail.incompatible)} onClick={() => void invoke(item.instanceId, action.id)} />)}</div>
+              {Panel && entry ? <NodeBoundary key={`${item.instanceId}:${entry.generation}`} message={t('nodeViewFailed')}><Panel {...props} /></NodeBoundary> : null}
+              {!Panel && (view?.data || execution) ? <pre>{JSON.stringify(view?.data ?? execution, null, 2)}</pre> : null}
+              {execution?.error ? <p role="alert">{execution.error}</p> : null}
+            </>
           })()}
           </section>
           <section aria-label={t('definitionDetails')}>

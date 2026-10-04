@@ -1,0 +1,46 @@
+id: e2e-builtins
+name: Node plugin acceptance
+type: dag
+dag:
+  - id: input
+    type: node
+    node_kind: form
+    output_schema:
+      note: string
+  - id: command
+    type: node
+    node_kind: bash
+    input_schema:
+      note: string
+    command: >-
+      printf '%s' '{"message":"bash result","count":0,"accepted":false}'
+    output_schema:
+      message: string
+      count: number
+      accepted: boolean
+  - id: confirm
+    type: node
+    node_kind: form
+    input_schema:
+      message: string
+      count: number
+      accepted: boolean
+    output_schema:
+      message: string
+      count: number
+      accepted: boolean
+  - id: scratch
+    type: node
+    node_kind: form
+    output_schema:
+      memo: string
+  - id: conversation
+    type: node
+    node_kind: session_agent
+    prompt: ''
+  - type: edge
+    from: input
+    to: command
+  - type: edge
+    from: command
+    to: confirm

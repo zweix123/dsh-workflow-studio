@@ -1,3 +1,4 @@
+import { getConversationInstance } from '../../dsh-workflow-node-session-agent/src/association.js'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { JSDOM } from 'jsdom'
@@ -7,8 +8,8 @@ import { Simulate } from 'react-dom/test-utils'
 import type { WorkspaceSnapshot } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import { WorkflowStudioPanel } from '../src/client/pages/workflow-studio/WorkflowStudioPanel.js'
 import { getPluginStatus } from '../src/client/apis/plugin-status.js'
-import { createInstance, deleteInstance, getConversationInstance, getInstance, listInstances, listTemplates } from '../src/client/apis/workflow-instances.js'
-import { en, zh, type WorkflowTranslate } from '../src/client/locales/index.js'
+import { createInstance, deleteInstance, getInstance, listInstances, listTemplates } from '../src/client/apis/workflow-instances.js'
+import { en, zh, type WorkflowTranslate } from './locales.js'
 
 const status = { plugin: 'dsh-workflow-studio', version: '0.1.0', status: 'ready' as const, serverTime: '2026-09-22T10:00:00.000Z' }
 const emptyWorkspaces = {
@@ -35,7 +36,7 @@ for (const [language, initial, other] of [['zh', zh, en], ['en', en, zh]] as con
     const root = createRoot(container)
     let dictionary = initial
     const t: WorkflowTranslate = key => dictionary[key]
-    const render = () => root.render(<WorkflowStudioPanel t={t} useWorkspaces={useEmptyWorkspaces} onOpenSession={() => {}} />)
+    const render = () => root.render(<WorkflowStudioPanel t={t} useWorkspaces={useEmptyWorkspaces} />)
     const tabs = () => [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
     const panels = () => [...container.querySelectorAll<HTMLElement>('[role="tabpanel"]')]
     const assertSelection = (selected: number) => {
@@ -99,7 +100,7 @@ for (const [language, initial, other] of [['zh', zh, en], ['en', en, zh]] as con
       await act(async () => render())
       assertSelection(0)
       // Multiple mounted copies must not share tab/panel IDs.
-      await act(async () => root.render(<><WorkflowStudioPanel t={t} useWorkspaces={useEmptyWorkspaces} onOpenSession={() => {}} /><WorkflowStudioPanel t={t} useWorkspaces={useEmptyWorkspaces} onOpenSession={() => {}} /></>))
+      await act(async () => root.render(<><WorkflowStudioPanel t={t} useWorkspaces={useEmptyWorkspaces} /><WorkflowStudioPanel t={t} useWorkspaces={useEmptyWorkspaces} /></>))
       const ids = [...container.querySelectorAll('[id]')].map(element => element.id)
       assert.equal(new Set(ids).size, ids.length)
       assert.ok(requests >= initialRequests)
@@ -229,7 +230,7 @@ test('instance cards and creation dialog preserve drafts, then open details only
     await act(async () => Simulate.change(element))
   }
   try {
-    await act(async () => root.render(<WorkflowStudioPanel t={key => zh[key]} useWorkspaces={useWorkspaces} onOpenSession={() => {}} />))
+    await act(async () => root.render(<WorkflowStudioPanel t={key => zh[key]} useWorkspaces={useWorkspaces} />))
     const headings = [...container.querySelectorAll('.dsh-workflow-workspace h3')].map(node => node.textContent)
     assert.deepEqual(headings, ['工作区 A', '工作区 B', '未关联工作区'])
     assert.equal(container.querySelectorAll('.dsh-workflow-workspace').length, 3)

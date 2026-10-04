@@ -1,3 +1,7 @@
+import { bashNode } from '../../dsh-workflow-node-bash/src/server.js'
+import { formNode } from '../../dsh-workflow-node-form/src/server.js'
+import { sessionAgentNode } from '../../dsh-workflow-node-session-agent/src/server.js'
+const builtinNodes = new Map([bashNode, formNode, sessionAgentNode].map(node => [node.kind, node]))
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
@@ -18,7 +22,7 @@ test('bundled templates have valid English and Chinese counterparts', async () =
     'openspec-workflow', 'openspec-workflow.zh',
   ])
   for (const name of names) {
-    const result = await validateTemplateDirectory(join(root, name))
+    const result = await validateTemplateDirectory(join(root, name), builtinNodes)
     assert.equal('definition' in result, true, `${name}: ${'error' in result ? result.error : ''}`)
     if ('definition' in result) for (const key of ['source', 'references', 'playground']) assert.equal(Object.hasOwn(result.definition, key), false, `${name}: ${key}`)
   }
@@ -45,12 +49,12 @@ test('workflow node fields are validated at the template boundary without droppi
   const root = await mkdtemp(join(tmpdir(), 'dsh-business-fields-'))
   try {
     await writeFile(join(root, 'workflow.yaml'), validYaml.replace('command: ""', 'command: "  "\n    custom_note: keep'))
-    const valid = await validateTemplateDirectory(root)
+    const valid = await validateTemplateDirectory(root, builtinNodes)
     assert.equal('definition' in valid && (valid.definition.dag[0] as any).custom_note, 'keep')
     await writeFile(join(root, 'workflow.yaml'), validYaml.replace('node_kind: bash\n    command: ""', 'node_kind: session_agent\n    prompt: ""'))
-    assert.equal('definition' in await validateTemplateDirectory(root), true)
+    assert.equal('definition' in await validateTemplateDirectory(root, builtinNodes), true)
     await writeFile(join(root, 'workflow.yaml'), validYaml.replace('command: ""', 'command: ""\n    prompt: nope'))
-    assert.equal('definition' in await validateTemplateDirectory(root), true)
+    assert.equal('definition' in await validateTemplateDirectory(root, builtinNodes), true)
     for (const [fragment, expected] of [
       ['node_kind: unknown\n    command: ""', /node_kind/],
       ['node_kind: chat\n    prompt: ""', /node_kind/],
@@ -62,7 +66,7 @@ test('workflow node fields are validated at the template boundary without droppi
     ] as const) {
       const yaml = validYaml.replace('node_kind: bash\n    command: ""', fragment)
       await writeFile(join(root, 'workflow.yaml'), yaml)
-      const result = await validateTemplateDirectory(root)
+      const result = await validateTemplateDirectory(root, builtinNodes)
       assert.equal('error' in result, true, fragment)
       if ('error' in result) assert.match(result.error, expected)
     }
@@ -86,10 +90,10 @@ test('validates a template directory and copies every bundled directory over its
     await writeFile(join(installed, 'first', 'old.txt'), 'removed on overwrite')
     await writeFile(join(installed, 'custom', 'workflow.yaml'), validYaml)
 
-    const valid = await validateTemplateDirectory(join(bundled, 'first'))
+    const valid = await validateTemplateDirectory(join(bundled, 'first'), builtinNodes)
     assert.equal('definition' in valid && valid.definition.id, 'example')
     await writeFile(join(installed, 'custom', 'workflow.yaml'), 'type: dag\ndag: []\n')
-    const invalid = await validateTemplateDirectory(join(installed, 'custom'))
+    const invalid = await validateTemplateDirectory(join(installed, 'custom'), builtinNodes)
     assert.equal('error' in invalid && /Missing id/.test(invalid.error), true)
     await copyBuiltinTemplates(bundled, installed)
     assert.deepEqual((await readdir(installed)).sort(), ['custom', 'first', 'second'])

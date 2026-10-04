@@ -4,7 +4,7 @@ import { JSDOM } from 'jsdom'
 import React, { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { LayoutNotices } from '../src/client/pages/workflow-studio/LayoutNotices.js'
-import { en, zh, type WorkflowTranslate } from '../src/client/locales/index.js'
+import { en, zh, type WorkflowTranslate } from './locales.js'
 import type { LayoutReport } from '../src/shared/layout.js'
 
 const report: LayoutReport = { layers: [

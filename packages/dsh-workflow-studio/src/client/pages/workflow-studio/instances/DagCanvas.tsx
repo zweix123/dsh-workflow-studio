@@ -8,11 +8,11 @@ import { workCandidates } from '../canvas/navigation.js'
 import { definitionAt } from '../DefinitionDetails.js'
 import { CanvasNavigation, edgeTypes, nodeTypes, canvasStatusLabel } from '../canvas/CanvasElements.js'
 import type { CanvasNode, CanvasEdge, Expression } from '../canvas/types.js'
-import { clientNodes } from '../../../nodes.js'
-import type { NodeCardProps } from '../../../../contract/node/client.js'
-import type { NodeData, NodeDefinition } from '../../../../contract/node/index.js'
+import { emptyNodeViews, NodeButton, NodeBoundary, type NodeViews, visibleActions } from '../../../nodes.js'
+import type { NodeCardProps } from 'dsh-workflow-node/ui'
+import type { NodeData, NodeDefinition } from 'dsh-workflow-node/contract'
 
-export function DagCanvas({ detail, t, onAction, onInspect, pending, active = true, inspectorWidth = 0, reading }: { reading?: CanvasReadingState; detail: InstanceDetail; t: WorkflowTranslate; onAction: (id: string, name: string, payload: unknown) => void; onInspect: (id: string) => void; pending?: string[]; active?: boolean; inspectorWidth?: number }) {
+export function DagCanvas({ nodes: nodeViews = emptyNodeViews, detail, t, onAction, onInspect, pending, active = true, inspectorWidth = 0, reading }: { nodes?: NodeViews; reading?: CanvasReadingState; detail: InstanceDetail; t: WorkflowTranslate; onAction: (id: string, name: string, payload: unknown) => void; onInspect: (id: string) => void; pending?: string[]; active?: boolean; inspectorWidth?: number }) {
   const [expression, setExpression] = useState<{ id: string; value: Expression } | null>(null)
   const [ready, setReady] = useState(false)
   const graph = useMemo(() => buildCanvasGraph(detail), [detail])
@@ -28,16 +28,21 @@ export function DagCanvas({ detail, t, onAction, onInspect, pending, active = tr
       statusLabel: canvasStatusLabel(status, execution?.status, t),
       kindLabel: node.data.kind === 'dag' ? 'DAG' : node.data.kind === 'node' ? t('node') : '',
       detailsLabel: t('nodeDetails'), onInspect: () => onInspect(node.id),
+      summary: (() => {
+        const item = detail.snapshot.instances.find(item => item.instanceId === node.id && item.type === 'node')
+        const definition = item && definitionAt(detail.definition, item.definitionPath)
+        const view = detail.nodeViews?.[node.id]
+        const entry = nodeViews.get(String(definition?.node_kind), view?.source)
+        const Summary = entry?.node.Summary
+        return Summary && entry && item && definition?.type === 'node' ? <NodeBoundary key={entry.generation} message={t('nodeViewFailed')}><Summary definition={definition as NodeDefinition} input={item.input as NodeData} output={item.status === 'completed' ? item.output as NodeData : undefined} execution={execution as NodeCardProps['execution']} data={view?.data} t={entry.t} /></NodeBoundary> : null
+      })(),
       control: (() => {
         const item = detail.snapshot.instances.find(row => row.instanceId === node.id)
         const definition = item?.type === 'node' ? definitionAt(detail.definition, item.definitionPath) : undefined
-        const Client = clientNodes.get(String(definition?.node_kind))?.Card
-        if (!Client || definition?.type !== 'node' || item?.type !== 'node') return null
-        const props: NodeCardProps = { label: `${node.data.label}${item.forItem ? ` ${item.forItem.key}` : ''}`, definition: definition as NodeDefinition, input: item.input as NodeData, output: item.status === 'completed' ? item.output as NodeData : undefined,
-          execution: execution && { ...execution }, ready: item.status === 'ready',
-          pending: Boolean(detail.incompatible) || Boolean(pending?.includes(node.id)), t: key => t(key as Parameters<WorkflowTranslate>[0]),
-          action: (name, payload) => onAction(node.id, name, payload), inspect: () => onInspect(node.id) }
-        return <Client {...props} />
+        if (definition?.type !== 'node' || item?.type !== 'node') return null
+        const view = detail.nodeViews?.[item.instanceId]
+        const primary = visibleActions(view?.actions ?? [], nodeViews, String(definition.node_kind), view?.source).find(action => action.primary)
+        return primary ? <NodeButton action={primary} nodes={nodeViews} label={`${node.data.label}${item.forItem ? ` ${item.forItem.key}` : ''}`} pending={Boolean(pending?.includes(node.id))} blocked={Boolean(detail.incompatible)} onClick={() => onAction(node.id, primary.id, {})} /> : null
       })(),
     } } }
   })

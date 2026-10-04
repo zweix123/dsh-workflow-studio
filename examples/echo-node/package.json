@@ -1,0 +1,14 @@
+{
+  "name": "@example/workflow-echo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "peerDependencies": {
+    "dsh-workflow-node": "0.1.0"
+  }
+}

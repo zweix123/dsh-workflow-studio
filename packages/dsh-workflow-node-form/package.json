@@ -3,5 +3,27 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "exports": { "./server": "./src/server.ts", "./client": "./src/client.tsx" }
+  "exports": {
+    ".": {
+      "types": "./lib/types/dsh-workflow-node-form/src/server.d.ts",
+      "default": "./lib/server.js"
+    },
+    "./server": "./lib/server.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "main": "lib/server.js",
+  "types": "lib/types/dsh-workflow-node-form/src/server.d.ts",
+  "dependencies": {
+    "dsh-workflow-node": "0.1.0"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "inject": [
+        "dsh-workflow-node",
+        "@deepseek-ai/dsh-client-locale"
+      ]
+    }
+  }
 }

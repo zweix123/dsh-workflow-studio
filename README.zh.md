@@ -24,11 +24,14 @@ git clone https://github.com/zweix123/dsh-workflow-studio.git
 cd dsh-workflow-studio
 npm ci --registry=https://registry.npmjs.org
 npm run build
-dsh plugin --profile web add ./packages/dsh-workflow-studio
+dsh plugin --profile web add ./packages/dsh-workflow-bundle
 dsh web
 ```
 
-本插件不内置 DSH。
+如果此 profile 之前直接安装的是 `packages/dsh-workflow-studio`，先停止对应宿主，执行 `dsh plugin --profile web remove dsh-workflow-studio` 移除旧插件入口，再按上面的命令添加默认 bundle 并重启。两条命令使用相同 profile。仅安装 Studio 单包会缺少节点登记依赖，Web 页面可能提示 `waiting for service: workflowNodeViews`。这些操作只调整插件装配，不迁移或删除实例文件。
+
+
+本插件不内置 DSH。默认 bundle 装配公共节点登记、Studio 和三个节点插件；第三方节点见[作者指南](docs/node-plugin-authoring.zh.md)及[最小示例](examples/echo-node/README.zh.md)。模板通过通用加载插件分发留待下一阶段。
 
 ## 创建工作流
 
@@ -65,5 +68,5 @@ npm run check
 该命令执行类型检查、构建和测试。产品规格见 [`docs/specs/`](docs/specs/)，仓库约定见 [`AGENTS.md`](AGENTS.md)。
 
 ```sh
-dsh plugin --profile web remove dsh-workflow-studio
+dsh plugin --profile web remove dsh-workflow-bundle
 ```

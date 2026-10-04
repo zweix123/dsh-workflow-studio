@@ -1,3 +1,11 @@
+import { Context } from '@deepseek-ai/cordis'
+import { BrowserNodeRegistry } from '../../dsh-workflow-node/src/browser.js'
+import { bashClient } from '../../dsh-workflow-node-bash/src/client.js'
+import { formClient } from '../../dsh-workflow-node-form/src/client.js'
+import { sessionAgentClient } from '../../dsh-workflow-node-session-agent/src/client.js'
+import { bashNode } from '../../dsh-workflow-node-bash/src/server.js'
+import { formNode } from '../../dsh-workflow-node-form/src/server.js'
+import { sessionAgentNode } from '../../dsh-workflow-node-session-agent/src/server.js'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import React, { act } from 'react'
@@ -8,10 +16,31 @@ import type { WorkspaceSnapshot } from '@deepseek-ai/dsh-api-workspace-controlle
 import { WorkflowStudioPanel } from '../src/client/pages/workflow-studio/WorkflowStudioPanel.js'
 import { InstanceRunPanel } from '../src/client/pages/workflow-studio/instances/InstanceRunPanel.js'
 import { StudioClient } from '../src/client/studio-client.js'
-import { ConversationInstanceAction } from '../src/client/ConversationInstanceAction.js'
-import { en, zh } from '../src/client/locales/index.js'
+import { ConversationInstanceAction } from '../../dsh-workflow-node-session-agent/src/ConversationInstanceAction.js'
+import { en, zh } from './locales.js'
+
+let testLanguage = zh
+let testNodes: BrowserNodeRegistry
+let testOpenSession: ((id: string) => void) | undefined
+function withNodeViews(value: any): any {
+  if (!value || !value.snapshot || value.nodeViews) return value
+  return { ...value, nodeViews: Object.fromEntries(value.snapshot.instances.filter((item: any) => item.type === 'node').map((item: any) => {
+    let definition = value.definition
+    for (const key of item.definitionPath) definition = definition?.[key]
+    const node = [bashNode, formNode, sessionAgentNode].find(node => node.kind === definition?.node_kind)
+    const execution = value.executions?.[item.instanceId]
+    const fact = execution && { ...execution, business: execution.business ?? execution }
+    const folder = node?.kind === 'session_agent' ? 'session-agent' : node?.kind
+    return [item.instanceId, { source: `@dsh-workflow/node-${folder}`, token: 'test', ...node?.describe?.({ definition, input: item.input, fact, ready: item.status === 'ready' }) }]
+  })) }
+}
+const nodeResponse = (value: any) => Response.json(withNodeViews(value))
 
 function testDom(onResize?: (callback: ResizeObserverCallback) => void) {
+  testLanguage = zh
+  const context = new Context()
+  testNodes = new BrowserNodeRegistry((_namespace, key) => testLanguage[key as keyof typeof zh] ?? key)
+  for (const [source, node] of [['bash', bashClient], ['form', formClient], ['session-agent', { ...sessionAgentClient, handlers: { openSession: (props: any) => testOpenSession?.(props.execution.sessionId) } }]] as const) testNodes.register(context, `@dsh-workflow/node-${source}`, node)
   const dom = new JSDOM('<!doctype html><div id="root"></div>')
   const names = ['window', 'document', 'IS_REACT_ACT_ENVIRONMENT', 'fetch', 'requestAnimationFrame', 'cancelAnimationFrame', 'ResizeObserver'] as const
   const previous = names.map(name => [name, Object.getOwnPropertyDescriptor(globalThis, name)] as const)
@@ -21,7 +50,7 @@ function testDom(onResize?: (callback: ResizeObserverCallback) => void) {
   globalThis.requestAnimationFrame = callback => setTimeout(() => callback(Date.now()), 0) as unknown as number
   globalThis.cancelAnimationFrame = handle => clearTimeout(handle)
   globalThis.ResizeObserver = class { constructor(callback: ResizeObserverCallback) { onResize?.(callback) } observe() {} unobserve() {} disconnect() {} }
-  return { dom, cleanup: () => {
+  return { dom, context, cleanup: () => {
     dom.window.close()
     for (const [name, descriptor] of previous) {
       if (descriptor) Object.defineProperty(globalThis, name, descriptor)
@@ -65,11 +94,11 @@ test('every graph object exposes its snapshot definition below the correct runni
   const requests: string[] = []
   globalThis.fetch = async url => {
     requests.push(String(url))
-    return Response.json({ id: detail.templateId, definition: { ...detail.definition, dag: [{ id: 'same', type: 'node', node_kind: 'bash', command: 'changed source command' }] } })
+    return nodeResponse({ id: detail.templateId, definition: { ...detail.definition, dag: [{ id: 'same', type: 'node', node_kind: 'bash', command: 'changed source command' }] } })
   }
   const container = dom.window.document.getElementById('root')!
   const root = createRoot(container)
-  const render = async (value = detail, language = zh) => act(async () => root.render(<InstanceRunPanel detail={value} t={key => language[key]} onUpdate={() => {}} onWidthUpdate={() => {}} onOpenSession={() => {}} />))
+  const render = async (value = detail, language = zh) => act(async () => root.render(<InstanceRunPanel nodes={testNodes} detail={withNodeViews(value)} t={key => { testLanguage = language; return language[key] }} onUpdate={() => {}} onWidthUpdate={() => {}} />))
   const inspect = async (id: string) => act(async () => {
     container.querySelector<HTMLButtonElement>(`.react-flow__node[data-id="${id}"] [aria-label^="详情 "]`)!.click()
   })
@@ -148,7 +177,7 @@ test('for instances share definition fields and retain independent identities an
   const container = dom.window.document.getElementById('root')!
   const root = createRoot(container)
   try {
-    await act(async () => root.render(<InstanceRunPanel detail={detail} t={key => zh[key]} onUpdate={() => {}} onWidthUpdate={() => {}} onOpenSession={() => {}} />))
+    await act(async () => root.render(<InstanceRunPanel nodes={testNodes} detail={withNodeViews(detail)} t={key => { testLanguage = zh; return zh[key] }} onUpdate={() => {}} onWidthUpdate={() => {}} />))
     for (const [index, id, value] of [[0, 'first-i', 0], [1, 'second-i', false]] as const) {
       await act(async () => container.querySelector<HTMLButtonElement>(`.react-flow__node[data-id="${id}"] [aria-label^="详情 worker"]`)!.click())
       const running = fields(inspectorSection(container, '运行信息'))
@@ -173,14 +202,14 @@ test('an invalid definition reference keeps running information and shows a loca
   const container = dom.window.document.getElementById('root')!
   const root = createRoot(container)
   try {
-    await act(async () => root.render(<InstanceRunPanel detail={detail} t={key => zh[key]} onUpdate={() => {}} onWidthUpdate={() => {}} onOpenSession={() => {}} />))
+    await act(async () => root.render(<InstanceRunPanel nodes={testNodes} detail={withNodeViews(detail)} t={key => { testLanguage = zh; return zh[key] }} onUpdate={() => {}} onWidthUpdate={() => {}} />))
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="详情 missing"]')!.click())
     assert.equal(fields(inspectorSection(container, '运行信息'))['定义 ID'], 'missing')
     const definitionSection = inspectorSection(container, '定义详情')
     assert.equal(definitionSection.querySelector('p')!.textContent, '无法定位此对象的定义。')
     assert.deepEqual(fields(definitionSection), {})
     assert.equal(inspectorSection(container, '运行信息').querySelector('button'), null)
-    await act(async () => root.render(<InstanceRunPanel detail={detail} t={key => en[key]} onUpdate={() => {}} onWidthUpdate={() => {}} onOpenSession={() => {}} />))
+    await act(async () => root.render(<InstanceRunPanel nodes={testNodes} detail={withNodeViews(detail)} t={key => { testLanguage = en; return en[key] }} onUpdate={() => {}} onWidthUpdate={() => {}} />))
     assert.equal(inspectorSection(container, 'Definition details').querySelector('p')!.textContent, en.definitionMissing)
   } finally { await act(async () => root.unmount()); cleanup() }
 })
@@ -210,13 +239,13 @@ test('cards execute independently and the inspector follows the selected graph o
   let rejectWidth = false
   const calls: string[] = []
   globalThis.fetch = async (url, init) => {
-    if (url === '/api/dsh-workflow-studio/instances' && !init?.method) return Response.json([row])
-    if (url === '/api/dsh-workflow-studio/instances/run' && !init?.method) return Response.json(current)
+    if (url === '/api/dsh-workflow-studio/instances' && !init?.method) return nodeResponse([row])
+    if (url === '/api/dsh-workflow-studio/instances/run' && !init?.method) return nodeResponse(current)
     if (url === '/api/dsh-workflow-studio/instances/run/drawer-width' && init?.method === 'POST') {
       widthPosts++
-      if (rejectWidth) return Response.json({ error: 'unavailable' }, { status: 500 })
+      if (rejectWidth) return nodeResponse({ error: 'unavailable' }, { status: 500 })
       current = { ...current, drawerWidth: JSON.parse(String(init.body)).width }
-      return Response.json(current)
+      return nodeResponse(current)
     }
     const match = String(url).match(/\/nodes\/(i[234])\/actions\/start$/)
     if (match && init?.method === 'POST') {
@@ -228,7 +257,7 @@ test('cards execute independently and the inspector follows the selected graph o
         current.snapshot.waitingPositions = []
         current.snapshot.instances.push({ instanceId: 'i4', definitionId: 'later', definitionPath: ['dag', 2], parentInstanceId: 'i1', input: {}, type: 'node', status: 'ready' })
       }
-      return Response.json(current)
+      return nodeResponse(current)
     }
     return new Response('missing', { status: 404 })
   }
@@ -236,7 +265,7 @@ test('cards execute independently and the inspector follows the selected graph o
   const root = createRoot(container)
   const card = (id: string) => container.querySelector<HTMLElement>(`[data-definition-id="${id}"]`)!
   try {
-    await act(async () => root.render(<WorkflowStudioPanel t={key => zh[key]} useWorkspaces={useWorkspaces} onOpenSession={() => {}} />))
+    await act(async () => root.render(<WorkflowStudioPanel nodes={testNodes} t={key => { testLanguage = zh; return zh[key] }} useWorkspaces={useWorkspaces} />))
     await act(async () => container.querySelector<HTMLButtonElement>('.dsh-workflow-instance-row')!.click())
     const runArea = container.querySelector<HTMLElement>('.dsh-workflow-run')!
     Object.defineProperty(runArea, 'clientWidth', { get: () => areaWidth })
@@ -352,7 +381,7 @@ test('cards execute independently and the inspector follows the selected graph o
     assert.match(container.querySelector('.dsh-workflow-inspector')!.textContent!, /later.*就绪/)
     await act(async () => card('later').querySelector<HTMLButtonElement>('button[aria-label^="执行"]')!.click())
     assert.match(container.querySelector('.dsh-workflow-inspector')!.textContent!, /later.*已完成/)
-    await act(async () => root.render(<WorkflowStudioPanel t={key => en[key]} useWorkspaces={useWorkspaces} onOpenSession={() => {}} />))
+    await act(async () => root.render(<WorkflowStudioPanel nodes={testNodes} t={key => { testLanguage = en; return en[key] }} useWorkspaces={useWorkspaces} />))
     assert.match(card('first').textContent!, /Completed/)
     assert.equal(card('inner').querySelector<HTMLButtonElement>('[aria-label="Details inner"]')?.textContent?.trim(), 'ⓘ Details')
     assert.match(container.querySelector('.dsh-workflow-inspector')!.textContent!, /later.*Completed/)
@@ -380,13 +409,14 @@ test('workflow node inspector opens the existing session_agent, completes it, an
   globalThis.fetch = async (url, init) => {
     if (String(url).endsWith('/nodes/session_agent-i/actions/complete') && init?.method === 'POST') {
       completed++
-      return Response.json({ ...base, snapshot: { ...base.snapshot, instances: base.snapshot.instances.map((item: any) => item.instanceId === 'session_agent-i' ? { ...item, status: 'completed', output: {} } : item) } })
+      return nodeResponse({ ...base, snapshot: { ...base.snapshot, instances: base.snapshot.instances.map((item: any) => item.instanceId === 'session_agent-i' ? { ...item, status: 'completed', output: {} } : item) } })
     }
     return new Response('missing', { status: 404 })
   }
   const container = dom.window.document.getElementById('root')!
   const root = createRoot(container)
-  const render = async (detail: any) => act(async () => root.render(<InstanceRunPanel detail={detail} t={key => zh[key]} onUpdate={value => { latest = value }} onWidthUpdate={() => {}} onOpenSession={id => opened.push(id)} />))
+  testOpenSession = id => opened.push(id)
+  const render = async (detail: any) => act(async () => root.render(<InstanceRunPanel nodes={testNodes} detail={withNodeViews(detail)} t={key => { testLanguage = zh; return zh[key] }} onUpdate={value => { latest = value }} onWidthUpdate={() => {}} />))
   const assertStatus = (expected: string) => {
     assert.equal(fields(inspectorSection(container, '运行信息'))['状态'], expected)
     assert.equal(container.querySelector('.dsh-workflow-inspector > header p')!.textContent, expected)
@@ -439,8 +469,8 @@ test('a late response from one branch cannot replace a newer parallel graph', as
   } })
   const pending = new Map<string, (response: Response) => void>()
   globalThis.fetch = async (url, init) => {
-    if (url === '/api/dsh-workflow-studio/instances' && !init?.method) return Response.json([row])
-    if (url === '/api/dsh-workflow-studio/instances/run' && !init?.method) return Response.json(base)
+    if (url === '/api/dsh-workflow-studio/instances' && !init?.method) return nodeResponse([row])
+    if (url === '/api/dsh-workflow-studio/instances/run' && !init?.method) return nodeResponse(base)
     const node = String(url).match(/\/nodes\/(left-i|right-i)\/actions\/start$/)?.[1]
     if (node) return new Promise<Response>(resolve => pending.set(node, resolve))
     return new Response('missing', { status: 404 })
@@ -450,15 +480,15 @@ test('a late response from one branch cannot replace a newer parallel graph', as
   const container = dom.window.document.getElementById('root')!
   const root = createRoot(container)
   try {
-    await act(async () => root.render(<WorkflowStudioPanel t={key => en[key]} useWorkspaces={useWorkspaces} onOpenSession={() => {}} />))
+    await act(async () => root.render(<WorkflowStudioPanel nodes={testNodes} t={key => { testLanguage = en; return en[key] }} useWorkspaces={useWorkspaces} />))
     await act(async () => container.querySelector<HTMLButtonElement>('.dsh-workflow-instance-row')!.click())
     await act(async () => {
       container.querySelector<HTMLButtonElement>('[aria-label="Execute left"]')!.click()
       container.querySelector<HTMLButtonElement>('[aria-label="Execute right"]')!.click()
     })
     assert.equal(pending.size, 2)
-    await act(async () => pending.get('right-i')!(Response.json(completed(4, ['left', 'right']))))
-    await act(async () => pending.get('left-i')!(Response.json(completed(3, ['left']))))
+    await act(async () => pending.get('right-i')!(nodeResponse(completed(4, ['left', 'right']))))
+    await act(async () => pending.get('left-i')!(nodeResponse(completed(3, ['left']))))
     assert.equal(container.querySelector<HTMLElement>('[data-definition-id="left"]')!.dataset.status, 'completed')
     assert.equal(container.querySelector<HTMLElement>('[data-definition-id="right"]')!.dataset.status, 'completed')
   } finally {
@@ -482,15 +512,15 @@ test('form keeps a page draft, submits through the node action, then becomes rea
     if (String(url).endsWith('/nodes/form-i/actions/submit')) {
       requests++
       const value = JSON.parse(String(init?.body))
-      if (requests === 1) return Response.json({ error: { code: 'node-input-invalid', message: 'Try again' }, latest }, { status: 422 })
+      if (requests === 1) return nodeResponse({ error: { code: 'node-input-invalid', message: 'Try again' }, latest }, { status: 422 })
       latest = { ...base, revision: 2, snapshot: { ...base.snapshot, instances: base.snapshot.instances.map((item: any) => item.instanceId === 'form-i' ? { ...item, status: 'completed', output: value } : item) }, executions: { 'form-i': { kind: 'form', status: 'succeeded', output: value } } }
-      return Response.json(latest)
+      return nodeResponse(latest)
     }
     return new Response('missing', { status: 404 })
   }
   const container = dom.window.document.getElementById('root')!
   const root = createRoot(container)
-  const render = async () => act(async () => root.render(<InstanceRunPanel detail={latest} t={key => en[key]} onUpdate={value => { latest = value }} onWidthUpdate={() => {}} onOpenSession={() => {}} />))
+  const render = async () => act(async () => root.render(<InstanceRunPanel nodes={testNodes} detail={withNodeViews(latest)} t={key => { testLanguage = en; return en[key] }} onUpdate={value => { latest = value }} onWidthUpdate={() => {}} />))
   try {
     await render()
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Details answer"]')!.click())
@@ -537,19 +567,19 @@ test('conversation header returns to the latest instance and exact node after st
   const calls: string[] = []
   globalThis.fetch = async url => {
     calls.push(String(url))
-    if (String(url).includes('/conversations/')) return Response.json({ target: { instanceId: 'run', nodeInstanceId: 'node-2' } })
-    if (String(url).endsWith('/instances/run')) return Response.json(detail)
-    if (String(url).endsWith('/templates')) return Response.json({ directory: '/templates', templates: [] })
-    return Response.json([])
+    if (String(url).includes('/conversations/')) return nodeResponse({ target: { instanceId: 'run', nodeInstanceId: 'node-2' } })
+    if (String(url).endsWith('/instances/run')) return nodeResponse(detail)
+    if (String(url).endsWith('/templates')) return nodeResponse({ directory: '/templates', templates: [] })
+    return nodeResponse([])
   }
   const container = dom.window.document.getElementById('root')!
   const root = createRoot(container)
-  const studio = () => <WorkflowStudioPanel client={client} t={key => zh[key]} useWorkspaces={useWorkspaces} onOpenSession={() => {}} />
+  const studio = () => <WorkflowStudioPanel nodes={testNodes} client={client} t={key => { testLanguage = zh; return zh[key] }} useWorkspaces={useWorkspaces} />
   let returns = 0
   const layout = { beginNavigation: () => new AbortController().signal, selectPanel: () => { returns++; root.render(studio()) } }
   try {
     await act(async () => root.render(studio()))
-    await act(async () => root.render(<ConversationInstanceAction client={client} layout={layout} sessionId="session-2" t={key => zh[key]} />))
+    await act(async () => root.render(<ConversationInstanceAction client={client} layout={layout} sessionId="session-2" t={key => { testLanguage = zh; return zh[key] }} />))
     const back = [...container.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === '返回实例')!
     assert.ok(back)
     await act(async () => { back.click(); back.click() })
@@ -564,13 +594,13 @@ test('conversation header returns to the latest instance and exact node after st
     await act(async () => container.querySelector<HTMLButtonElement>('.react-flow__controls-zoomin')!.click())
     await act(async () => { await new Promise(resolve => setTimeout(resolve, 230)) })
     const view = container.querySelector<HTMLElement>('.react-flow__viewport')!.style.transform
-    await act(async () => root.render(<ConversationInstanceAction client={client} layout={layout} sessionId="session-2" t={key => zh[key]} />))
+    await act(async () => root.render(<ConversationInstanceAction client={client} layout={layout} sessionId="session-2" t={key => { testLanguage = zh; return zh[key] }} />))
     await act(async () => container.querySelector<HTMLButtonElement>('button')!.click())
     assert.equal(container.querySelectorAll('[role="tab"]').length, 3)
     assert.equal(container.querySelector<HTMLElement>('.react-flow__viewport')!.style.transform, view)
     assert.equal(fields(inspectorSection(container, '运行信息'))['实例 ID'], 'node-2')
     await act(async () => container.querySelector<HTMLButtonElement>('.dsh-workflow-tab-close')!.click())
-    await act(async () => root.render(<ConversationInstanceAction client={client} layout={layout} sessionId="session-2" t={key => zh[key]} />))
+    await act(async () => root.render(<ConversationInstanceAction client={client} layout={layout} sessionId="session-2" t={key => { testLanguage = zh; return zh[key] }} />))
     await act(async () => container.querySelector<HTMLButtonElement>('button')!.click())
     assert.equal(container.querySelectorAll('[role="tab"]').length, 3)
     assert.notEqual(container.querySelector<HTMLElement>('.react-flow__viewport')!.style.transform, view)
@@ -592,14 +622,14 @@ test('one plugin client preserves ordered instance and template tabs and indepen
       { instanceId: 'root-i', definitionId: 'root', definitionPath: [], parentInstanceId: null, type: 'dag', status: 'running', input: {} },
     ], waitingPositions: [], skippedPositions: [], edges: [], instanceConnections: [] } })
   globalThis.fetch = async url => {
-    if (String(url).endsWith('/instances')) return Response.json([detail('A'), detail('B')])
-    if (String(url).endsWith('/templates')) return Response.json({ directory: '/templates', templates: [{ id: 'flow' }] })
-    if (String(url).endsWith('/templates/flow')) return Response.json({ id: 'flow', definition: detail('A').definition })
-    return Response.json(detail(String(url).split('/').at(-1)!))
+    if (String(url).endsWith('/instances')) return nodeResponse([detail('A'), detail('B')])
+    if (String(url).endsWith('/templates')) return nodeResponse({ directory: '/templates', templates: [{ id: 'flow' }] })
+    if (String(url).endsWith('/templates/flow')) return nodeResponse({ id: 'flow', definition: detail('A').definition })
+    return nodeResponse(detail(String(url).split('/').at(-1)!))
   }
   const container = dom.window.document.getElementById('root')!
   const root = createRoot(container)
-  const render = (value = client) => root.render(<WorkflowStudioPanel client={value} t={key => zh[key]} useWorkspaces={useWorkspaces} onOpenSession={() => {}} />)
+  const render = (value = client) => root.render(<WorkflowStudioPanel nodes={testNodes} client={value} t={key => { testLanguage = zh; return zh[key] }} useWorkspaces={useWorkspaces} />)
   const tabs = () => [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
   const click = async (button: HTMLButtonElement) => act(async () => button.click())
   const viewport = (index: number) => container.querySelectorAll<HTMLElement>('.react-flow__viewport')[index].style.transform
@@ -642,19 +672,19 @@ test('superseded host navigation leaves the current conversation return action u
   let delay = true
   let selected = false
   globalThis.fetch = async url => {
-    if (String(url).includes('/conversations/')) return Response.json({ target: { instanceId: 'run', nodeInstanceId: 'node' } })
+    if (String(url).includes('/conversations/')) return nodeResponse({ target: { instanceId: 'run', nodeInstanceId: 'node' } })
     if (delay) return new Promise<Response>(resolve => { delayed = resolve })
-    return Response.json({ id: 'run', workspaceId: 'w', name: 'Run', templateId: 'flow', createdAt: '2026-10-03T00:00:00Z', definition: { id: 'root', type: 'dag', dag: [] }, input: {}, snapshot: { rootInstanceId: 'root', instances: [], waitingPositions: [], skippedPositions: [], edges: [] } })
+    return nodeResponse({ id: 'run', workspaceId: 'w', name: 'Run', templateId: 'flow', createdAt: '2026-10-03T00:00:00Z', definition: { id: 'root', type: 'dag', dag: [] }, input: {}, snapshot: { rootInstanceId: 'root', instances: [], waitingPositions: [], skippedPositions: [], edges: [] } })
   }
   const container = dom.window.document.getElementById('root')!
   const root = createRoot(container)
   let first = true
   const layout = { beginNavigation: () => { if (first) { first = false; return controller.signal } return new AbortController().signal }, selectPanel: () => { selected = true } }
   try {
-    await act(async () => root.render(<ConversationInstanceAction sessionId="session" client={client} layout={layout} t={key => zh[key]} />))
+    await act(async () => root.render(<ConversationInstanceAction sessionId="session" client={client} layout={layout} t={key => { testLanguage = zh; return zh[key] }} />))
     await act(async () => container.querySelector<HTMLButtonElement>('button')!.click())
     assert.equal(container.querySelector<HTMLButtonElement>('button')!.disabled, true)
-    await act(async () => { controller.abort(); delayed(Response.json({})); await Promise.resolve() })
+    await act(async () => { controller.abort(); delayed(nodeResponse({})); await Promise.resolve() })
     assert.equal(selected, false)
     assert.equal(container.querySelector<HTMLButtonElement>('button')!.disabled, false)
     delay = false
@@ -671,12 +701,12 @@ function returnPage() {
   const root = createRoot(container)
   const workspaces = { items: [], phase: 'ready' } as unknown as WorkspaceSnapshot
   let navigation = new AbortController()
-  const studio = () => <WorkflowStudioPanel client={client} t={key => zh[key]} useWorkspaces={selector => selector(workspaces)} onOpenSession={() => {}} />
+  const studio = () => <WorkflowStudioPanel nodes={testNodes} client={client} t={key => { testLanguage = zh; return zh[key] }} useWorkspaces={selector => selector(workspaces)} />
   const layout = { beginNavigation: () => { navigation.abort(); navigation = new AbortController(); return navigation.signal },
     selectPanel: () => root.render(studio()) }
   return { container, client,
     showStudio: () => act(async () => root.render(studio())),
-    header: (sessionId: string) => act(async () => root.render(<ConversationInstanceAction sessionId={sessionId} client={client} layout={layout} t={key => zh[key]} />)),
+    header: (sessionId: string) => act(async () => root.render(<ConversationInstanceAction sessionId={sessionId} client={client} layout={layout} t={key => { testLanguage = zh; return zh[key] }} />)),
     close: async () => { await act(async () => root.unmount()); client.dispose(); cleanup() } }
 }
 const returnDetail = (id = 'run', nodeId = 'n2'): any => ({ id, workspaceId: 'w', name: id, templateId: 'flow', revision: 3, createdAt: '2026-10-03T00:00:00Z', input: {},
@@ -691,7 +721,7 @@ test('conversation query errors are retryable and ordinary and fork conversation
   const page = returnPage()
   let fail = true
   globalThis.fetch = async url => String(url).includes('/conversations/ordinary/') || String(url).includes('/conversations/fork/')
-    ? Response.json({ target: null }) : fail ? new Response('unavailable', { status: 503 }) : Response.json({ target: { instanceId: 'run', nodeInstanceId: 'n2' } })
+    ? nodeResponse({ target: null }) : fail ? new Response('unavailable', { status: 503 }) : nodeResponse({ target: { instanceId: 'run', nodeInstanceId: 'n2' } })
   try {
     await page.header('session')
     assert.equal(page.container.querySelector('[role="alert"]')!.textContent, zh.navigationFailed)
@@ -707,9 +737,9 @@ test('detail loading errors can retry the return and completed nodes remain read
   const page = returnPage()
   let fail = true
   globalThis.fetch = async url => {
-    if (String(url).includes('/conversations/')) return Response.json({ target: { instanceId: 'run', nodeInstanceId: 'n2' } })
-    if (String(url).endsWith('/instances/run')) return fail ? new Response('unavailable', { status: 503 }) : Response.json(returnDetail())
-    return Response.json([])
+    if (String(url).includes('/conversations/')) return nodeResponse({ target: { instanceId: 'run', nodeInstanceId: 'n2' } })
+    if (String(url).endsWith('/instances/run')) return fail ? new Response('unavailable', { status: 503 }) : nodeResponse(returnDetail())
+    return nodeResponse([])
   }
   try {
     await page.header('session')
@@ -728,9 +758,9 @@ test('deletion between showing the action and clicking it clears cached details 
   const page = returnPage()
   let deleted = false
   globalThis.fetch = async url => {
-    if (String(url).includes('/conversations/')) return Response.json({ target: deleted ? null : { instanceId: 'run', nodeInstanceId: 'n2' } })
-    if (String(url).endsWith('/instances/run')) return Response.json(returnDetail())
-    return Response.json([])
+    if (String(url).includes('/conversations/')) return nodeResponse({ target: deleted ? null : { instanceId: 'run', nodeInstanceId: 'n2' } })
+    if (String(url).endsWith('/instances/run')) return nodeResponse(returnDetail())
+    return nodeResponse([])
   }
   try {
     await page.header('session')
@@ -754,21 +784,21 @@ test('late ownership and detail responses never replace the current conversation
   let oldDetail: (value: Response) => void = () => {}
   globalThis.fetch = async url => {
     if (String(url).includes('/conversations/first/')) return new Promise<Response>(resolve => { oldQuery = resolve })
-    if (String(url).includes('/conversations/')) return Response.json({ target: { instanceId: 'second', nodeInstanceId: 'n2' } })
+    if (String(url).includes('/conversations/')) return nodeResponse({ target: { instanceId: 'second', nodeInstanceId: 'n2' } })
     if (String(url).endsWith('/instances/second')) return new Promise<Response>(resolve => { oldDetail = resolve })
-    return Response.json([])
+    return nodeResponse([])
   }
   try {
     await page.header('first'); await page.header('second')
-    await act(async () => oldQuery(Response.json({ target: { instanceId: 'first', nodeInstanceId: 'n1' } })))
+    await act(async () => oldQuery(nodeResponse({ target: { instanceId: 'first', nodeInstanceId: 'n1' } })))
     await act(async () => page.container.querySelector<HTMLButtonElement>('button')!.click())
     await page.header('third')
-    await act(async () => oldDetail(Response.json(returnDetail('second'))))
+    await act(async () => oldDetail(nodeResponse(returnDetail('second'))))
     assert.equal(page.container.querySelector('[role="tab"]'), null)
     assert.equal(page.container.querySelector('button')!.textContent, zh.returnToInstance)
     page.client.dispose()
     await act(async () => page.container.querySelector<HTMLButtonElement>('button')!.click())
-    await act(async () => oldDetail(Response.json(returnDetail('second'))))
+    await act(async () => oldDetail(nodeResponse(returnDetail('second'))))
     assert.equal(page.container.querySelector('[role="tab"]'), null)
   } finally { await page.close() }
 })
@@ -785,13 +815,13 @@ test('return uses the newest revision when an older detail response arrives afte
   waiting.snapshot.instances[0].status = 'running'
   waiting.snapshot.instances[1].status = 'ready'
   globalThis.fetch = async (url, init) => {
-    if (String(url).includes('/conversations/')) return Response.json({ target: { instanceId: 'run', nodeInstanceId: 'n2' } })
+    if (String(url).includes('/conversations/')) return nodeResponse({ target: { instanceId: 'run', nodeInstanceId: 'n2' } })
     if (init?.method === 'POST') return new Promise<Response>(resolve => { actionDone = resolve })
     if (String(url).endsWith('/instances/run')) {
       loads++
-      return loads === 1 ? Response.json(waiting) : new Promise<Response>(resolve => { oldLoaded = resolve })
+      return loads === 1 ? nodeResponse(waiting) : new Promise<Response>(resolve => { oldLoaded = resolve })
     }
-    return Response.json([])
+    return nodeResponse([])
   }
   try {
     await page.header('session')
@@ -801,8 +831,8 @@ test('return uses the newest revision when an older detail response arrives afte
     await act(async () => complete.click())
     await page.header('session')
     await act(async () => page.container.querySelector<HTMLButtonElement>('button')!.click())
-    await act(async () => actionDone(Response.json(returnDetail())))
-    await act(async () => oldLoaded(Response.json(waiting)))
+    await act(async () => actionDone(nodeResponse(returnDetail())))
+    await act(async () => oldLoaded(nodeResponse(waiting)))
     assert.equal(fields(inspectorSection(page.container, '运行信息'))['状态'], zh.statusCompleted)
     assert.equal(page.container.querySelectorAll('[role="tab"]').length, 3)
     assert.equal(page.container.querySelector('.dsh-workflow-inspector button[aria-label^="完成"]'), null)
@@ -817,10 +847,10 @@ test('an older return detail cannot overwrite a drawer width saved while navigat
   let oldLoaded: (value: Response) => void = () => {}
   const initial = { ...returnDetail(), revision: 2, drawerWidth: 320 }
   globalThis.fetch = async (url, init) => {
-    if (String(url).includes('/conversations/')) return Response.json({ target: { instanceId: 'run', nodeInstanceId: 'n2' } })
+    if (String(url).includes('/conversations/')) return nodeResponse({ target: { instanceId: 'run', nodeInstanceId: 'n2' } })
     if (init?.method === 'POST') return new Promise<Response>(resolve => { widthSaved = resolve })
-    if (String(url).endsWith('/instances/run')) return ++loads === 1 ? Response.json(initial) : new Promise<Response>(resolve => { oldLoaded = resolve })
-    return Response.json([])
+    if (String(url).endsWith('/instances/run')) return ++loads === 1 ? nodeResponse(initial) : new Promise<Response>(resolve => { oldLoaded = resolve })
+    return nodeResponse([])
   }
   try {
     await page.header('session')
@@ -828,8 +858,111 @@ test('an older return detail cannot overwrite a drawer width saved while navigat
     await act(async () => page.container.querySelector('[role="separator"]')!.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true })))
     await page.header('session')
     await act(async () => page.container.querySelector<HTMLButtonElement>('button')!.click())
-    await act(async () => widthSaved(Response.json({ ...initial, revision: 3, drawerWidth: 330 })))
-    await act(async () => oldLoaded(Response.json(initial)))
+    await act(async () => widthSaved(nodeResponse({ ...initial, revision: 3, drawerWidth: 330 })))
+    await act(async () => oldLoaded(nodeResponse(initial)))
     assert.equal(page.container.querySelector('[role="separator"]')!.getAttribute('aria-valuenow'), '330')
   } finally { await page.close() }
+})
+
+
+test('third-party server actions get one public card button and missing client handlers are hidden', async () => {
+  const { dom, cleanup } = testDom()
+  const detail: any = { id: 'third-party', workspaceId: 'w', name: 'Third party', templateId: 't', createdAt: '2026-10-04T00:00:00Z', input: {},
+    definition: { id: 'root', type: 'dag', dag: [{ id: 'external', type: 'node', node_kind: 'external' }] },
+    snapshot: { rootInstanceId: 'root-i', instances: [{ instanceId: 'root-i', definitionId: 'root', definitionPath: [], type: 'dag', status: 'running', input: {}, parentInstanceId: null }, { instanceId: 'external-i', definitionId: 'external', definitionPath: ['dag', 0], type: 'node', status: 'ready', input: {}, parentInstanceId: 'root-i' }], waitingPositions: [], skippedPositions: [], edges: [] },
+    nodeViews: { 'external-i': { source: 'external-package', token: 'current', actions: [
+      { id: 'start', label: { text: 'Run external' }, target: { type: 'server' }, primary: true },
+      { id: 'inspect', label: { text: 'Inspect external' }, target: { type: 'details' } },
+      { id: 'open', label: { text: 'Missing handler' }, target: { type: 'client', handler: 'open' } },
+    ] } },
+  }
+  const container = dom.window.document.getElementById('root')!
+  const root = createRoot(container)
+  const calls: unknown[] = []
+  globalThis.fetch = async (url, init) => { calls.push({ url: String(url), body: JSON.parse(String(init?.body)) }); return nodeResponse(detail) }
+  try {
+    await act(async () => root.render(<InstanceRunPanel nodes={testNodes} detail={withNodeViews(detail)} t={key => { testLanguage = zh; return zh[key] }} onUpdate={() => {}} onWidthUpdate={() => {}} />))
+    const card = container.querySelector('.react-flow__node[data-id="external-i"]')!
+    assert.deepEqual([...card.querySelectorAll('button')].map(button => button.textContent?.trim()), ['Run external', 'ⓘ 详情'])
+    await act(async () => card.querySelector<HTMLButtonElement>('button')!.click())
+    assert.equal(calls.length, 1)
+    assert.equal(container.querySelector('.dsh-workflow-inspector'), null)
+    await act(async () => card.querySelector<HTMLButtonElement>('[aria-label="详情 external"]')!.click())
+    const runtime = inspectorSection(container, '运行信息')
+    assert.match(runtime.textContent!, /Run external.*Inspect external/s)
+    assert.doesNotMatch(runtime.textContent!, /Missing handler/)
+    assert.equal(fields(inspectorSection(container, '定义详情')).node_kind, 'external')
+  } finally { await act(async () => root.unmount()); cleanup() }
+})
+
+
+test('frontend unload clears its drafts with feedback, and a new frontend keeps saved output intact', async () => {
+  const { dom, context, cleanup } = testDom()
+  const detail: any = { id: 'draft-run', workspaceId: 'w', name: 'Draft', templateId: 't', createdAt: '2026-10-04T00:00:00Z', input: {},
+    definition: { id: 'root', type: 'dag', dag: [{ id: 'answer', type: 'node', node_kind: 'form', output_schema: { message: 'string' } }] },
+    snapshot: { rootInstanceId: 'r', instances: [{ instanceId: 'r', type: 'dag', status: 'running', definitionId: 'root', definitionPath: [], parentInstanceId: null, input: {} }, { instanceId: 'a', type: 'node', status: 'ready', definitionId: 'answer', definitionPath: ['dag', 0], parentInstanceId: 'r', input: {} }], waitingPositions: [], skippedPositions: [], edges: [] },
+  }
+  const container = dom.window.document.getElementById('root')!
+  const root = createRoot(container)
+  const render = () => act(async () => root.render(<InstanceRunPanel nodes={testNodes} detail={withNodeViews(detail)} t={key => zh[key]} onUpdate={() => {}} onWidthUpdate={() => {}} />))
+  try {
+    await render()
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="详情 answer"]')!.click())
+    const input = container.querySelector<HTMLInputElement>('.dsh-workflow-form input')!
+    await act(async () => { input.value = 'temporary'; Simulate.change(input) })
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="关闭详情"]')!.click())
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="详情 answer"]')!.click())
+    assert.equal(container.querySelector<HTMLInputElement>('.dsh-workflow-form input')!.value, 'temporary')
+    await act(async () => context.fiber.dispose())
+    assert.match(container.textContent!, /未提交草稿已清除/)
+    assert.equal(container.querySelector('.dsh-workflow-form'), null)
+    const fresh = new Context()
+    await act(async () => testNodes.register(fresh, '@dsh-workflow/node-form', formClient))
+    assert.equal(container.querySelector<HTMLInputElement>('.dsh-workflow-form input')!.value, '')
+    detail.snapshot.instances[1].status = 'completed'
+    detail.snapshot.instances[1].output = { message: 'accepted' }
+    await render()
+    assert.equal(container.querySelector<HTMLInputElement>('.dsh-workflow-form input')!.value, 'accepted')
+    assert.equal(container.querySelector<HTMLInputElement>('.dsh-workflow-form input')!.disabled, true)
+    await act(async () => fresh.fiber.dispose())
+    await act(async () => testNodes.register(new Context(), '@dsh-workflow/node-form', formClient))
+    assert.equal(container.querySelector<HTMLInputElement>('.dsh-workflow-form input')!.value, 'accepted')
+  } finally { await act(async () => root.unmount()); cleanup() }
+})
+
+test('browser contributions match their source and isolate component and synchronous or asynchronous action failures', async () => {
+  const { dom, cleanup } = testDom()
+  const detail: any = { id: 'local-errors', workspaceId: 'w', name: 'Local errors', templateId: 't', createdAt: '2026-10-04T00:00:00Z', input: {},
+    definition: { id: 'root', type: 'dag', dag: [{ id: 'custom', type: 'node', node_kind: 'custom' }] },
+    snapshot: { rootInstanceId: 'r', instances: [{ instanceId: 'r', type: 'dag', status: 'running', definitionId: 'root', definitionPath: [], parentInstanceId: null, input: {} }, { instanceId: 'c', type: 'node', status: 'completed', definitionId: 'custom', definitionPath: ['dag', 0], parentInstanceId: 'r', input: {}, output: {} }], waitingPositions: [], skippedPositions: [], edges: [] },
+    incompatible: 'missing another required type',
+    nodeViews: { c: { source: 'correct-package', token: 'now', actions: [{ id: 'sync', label: { text: 'Sync navigation' }, target: { type: 'client', handler: 'sync' }, primary: true }, { id: 'async', label: { text: 'Async navigation' }, target: { type: 'client', handler: 'async' } }] } },
+  }
+  const container = dom.window.document.getElementById('root')!
+  const root = createRoot(container)
+  const render = () => act(async () => root.render(<InstanceRunPanel nodes={testNodes} detail={detail} t={key => zh[key]} onUpdate={() => {}} onWidthUpdate={() => {}} />))
+  const wrong = new Context(), correct = new Context()
+  const oldError = console.error
+  console.error = () => {}
+  try {
+    testNodes.register(wrong, 'wrong-package', { kind: 'custom', Panel: () => <p>Wrong business</p>, handlers: { sync: () => {} } })
+    await render()
+    assert.doesNotMatch(container.textContent!, /Sync navigation|Wrong business/)
+    await act(async () => testNodes.register(correct, 'correct-package', { kind: 'custom',
+      Panel: () => { throw new Error('render failure') },
+      handlers: { sync: () => { throw new Error('sync failure') }, async: async () => { throw new Error('async failure') } },
+    }))
+    const navigate = container.querySelector<HTMLButtonElement>('[aria-label="Sync navigation custom"]')!
+    assert.equal(navigate.disabled, false, 'navigation remains usable on completed and paused history')
+    await act(async () => navigate.click())
+    assert.match(container.textContent!, /sync failure/)
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="详情 custom"]')!.click())
+    assert.match(inspectorSection(container, '运行信息').textContent!, /节点业务界面发生错误/)
+    assert.equal(fields(inspectorSection(container, '定义详情')).node_kind, 'custom')
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Async navigation"]')!.click())
+    assert.match(container.textContent!, /async failure/)
+    await act(async () => correct.fiber.dispose())
+    assert.doesNotMatch(inspectorSection(container, '运行信息').textContent!, /Sync navigation|Wrong business/)
+    assert.ok(container.querySelector('[aria-label="关闭详情"]'))
+  } finally { console.error = oldError; await act(async () => root.unmount()); await wrong.fiber.dispose(); cleanup() }
 })

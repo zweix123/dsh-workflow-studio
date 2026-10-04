@@ -1,9 +1,9 @@
-import { validateTextTemplate, renderTextTemplate } from '../../dsh-workflow-studio/src/contract/node/text-template.js'
+import { validateTextTemplate, renderTextTemplate } from 'dsh-workflow-node/text-template'
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-shell'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import { WorkspaceId } from '@deepseek-ai/dsh-workspace'
-import type { ServerNode, NodeFact, NodeContext } from '../../dsh-workflow-studio/src/contract/node/index.js'
+import type { ServerNode, NodeFact, NodeContext } from 'dsh-workflow-node/contract'
 
 interface Result { ok: boolean; stdout: string; stderr: string; exitCode: number | null; error?: string; stdoutTruncated?: boolean }
 
@@ -56,6 +56,9 @@ function start(context: NodeContext): { fact: NodeFact; run?: () => Promise<Node
 
 export const bashNode: ServerNode = {
   kind: 'bash',
+  describe({ ready, fact }) { return { actions: ready && fact?.status !== 'running' ? [{ id: 'start', label: { namespace: name, key: 'executeNode' }, target: { type: 'server' }, primary: true }] : [] } },
+  validateFact(fact) { if (fact.business !== undefined && (fact.business === null || typeof fact.business !== 'object' || Array.isArray(fact.business))) throw new Error('Invalid bash business state') },
+
   requires: ['workspaceRegistry', 'shell', 'sandboxPolicy'],
   validate(node) {
     if (typeof node.command !== 'string') throw new Error(`Node ${node.id}: command must be a string`)
@@ -71,3 +74,7 @@ export const bashNode: ServerNode = {
   project(fact) { return (fact.business ?? {}) as Record<string, never> },
   blocksDeletion(_fact, active) { return active },
 }
+
+export const name = '@dsh-workflow/node-bash'
+export const inject = ["workflowNodes", "workspaceRegistry", "shell", "sandboxPolicy"]
+export function apply(ctx: import('@deepseek-ai/cordis').Context): void { ctx.workflowNodes.register(ctx, name, bashNode) }

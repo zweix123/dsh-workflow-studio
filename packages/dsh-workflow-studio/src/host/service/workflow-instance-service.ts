@@ -1,4 +1,3 @@
-import { associatedSession } from '../../../../dsh-workflow-node-session-agent/src/server.js'
 import { readdir, realpath } from 'node:fs/promises'
 import type { Dirent } from 'node:fs'
 import { randomUUID } from 'node:crypto'
@@ -7,13 +6,12 @@ import type { Context } from '@deepseek-ai/cordis'
 import { WorkspaceId } from '@deepseek-ai/dsh-workspace'
 import { z } from 'zod'
 import type { DagDefinition, JsonObject } from '../dag/index.js'
-import { WorkflowEngine, WorkflowInstanceError, initializeWorkflow, validateWorkflowNodes } from '../workflow/index.js'
+import { WorkflowEngine, WorkflowInstanceError, initializeWorkflow, nodeDefinitionAt, validateWorkflowNodes } from '../workflow/index.js'
 import { WorkflowInstanceStore, workflowInstanceDomain } from '../storage/workflow-instance-store.js'
 import { validateTemplateDirectory } from '../template-directory.js'
-import type { ConversationInstance, CreateInstanceInput, InstanceDetail, InstanceSummary, TemplateCatalog, TemplateDetail, TemplateRow } from '../../shared/types/workflow-instance.js'
+import type { CreateInstanceInput, InstanceDetail, InstanceSummary, TemplateCatalog, TemplateDetail, TemplateRow } from '../../shared/types/workflow-instance.js'
 import { inspectLayout } from '../../shared/layout.js'
-import { serverNodes } from '../nodes/registry.js'
-import type { ServerNode } from '../../contract/node/index.js'
+import type { NodeLookup, NodeRecord } from 'dsh-workflow-node/contract'
 
 export { WorkflowInstanceError, workflowInstanceDomain }
 
@@ -26,13 +24,15 @@ export class WorkflowInstanceService {
     private readonly workspaceRegistry: Context['workspaceRegistry'],
     private readonly engine: WorkflowEngine,
     private readonly templateDirectory: string,
-    private readonly nodes: ReadonlyMap<string, ServerNode>,
+    private readonly nodes: NodeLookup,
   ) {}
 
-  static async create(ctx: Context, templateRoot: string, templateDirectory = join(templateRoot, '<template-id>', 'workflow.yaml'), nodes: ReadonlyMap<string, ServerNode> = serverNodes): Promise<WorkflowInstanceService> {
+  static async create(ctx: Context, templateRoot: string, templateDirectory = join(templateRoot, '<template-id>', 'workflow.yaml'), nodes: NodeLookup = ctx.workflowNodes): Promise<WorkflowInstanceService> {
     const store = new WorkflowInstanceStore(await ctx.storageDomain.open(workflowInstanceDomain))
     const engine = new WorkflowEngine(store, ctx, nodes)
     const service = new WorkflowInstanceService(store, templateRoot, ctx.workspaceRegistry, engine, templateDirectory, nodes)
+    if (nodes.subscribe) ctx.effect(() => nodes.subscribe!(() => { void service.resume().catch(error => console.error('Node dependency recovery failed', error)) }))
+    if (ctx.get('workflowNodes')) ctx.workflowNodes.readWith(ctx, kind => service.records(kind))
     for (const [, row] of store.entries()) {
       try {
         validateWorkflowNodes(row.definition as DagDefinition, nodes)
@@ -43,6 +43,21 @@ export class WorkflowInstanceService {
     return service
   }
 
+  private async resume(): Promise<void> {
+    await this.store.serial(async () => {
+      for (const [, row] of this.store.entries()) {
+        try { validateWorkflowNodes(row.definition as DagDefinition, this.nodes); await this.engine.recoverInstance(row.id); this.engine.scheduleReady(row.id) } catch { /* Retain unavailable facts for inspection. */ }
+      }
+    })
+  }
+  records(kind: string): NodeRecord[] {
+    return [...this.store.entries()].flatMap(([, row]) => Object.entries(row.executions ?? {}).filter(([, fact]) => fact.kind === kind).map(([nodeInstanceId, fact]) => {
+      const item = (row.snapshot as unknown as InstanceDetail['snapshot']).instances.find(item => item.instanceId === nodeInstanceId)
+      const definition = nodeDefinitionAt(row.definition, item?.definitionPath ?? [])
+      if (!definition) throw new Error(`Missing saved node definition for ${nodeInstanceId}`)
+      return { instanceId: row.id, nodeInstanceId, workspaceId: row.workspaceId, definition, fact }
+    }))
+  }
   async listTemplates(): Promise<TemplateCatalog> {
     let entries: Dirent[]
     try {
@@ -88,15 +103,6 @@ export class WorkflowInstanceService {
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt) || left.id.localeCompare(right.id))
   }
 
-  findConversationInstance(sessionId: string): ConversationInstance {
-    for (const [, row] of this.store.entries()) {
-      for (const [nodeInstanceId, fact] of Object.entries(row.executions ?? {})) {
-        if (associatedSession(fact) === sessionId) return { target: { instanceId: row.id, nodeInstanceId } }
-      }
-    }
-    return { target: null }
-  }
-
   getInstance(id: string): InstanceDetail {
     const row = this.store.get(id)
     if (!row) throw new WorkflowInstanceError('instance-missing', 'Workflow instance not found')
@@ -115,7 +121,7 @@ export class WorkflowInstanceService {
   deleteInstance(id: string): Promise<void> {
     return this.store.serial(async () => {
       if (this.engine.isDeletionBlocked(id)) {
-        throw new WorkflowInstanceError('instance-running', 'A bash command is still running')
+        throw new WorkflowInstanceError('instance-running', 'A node is still running')
       }
       if (!await this.store.delete(id)) {
         throw new WorkflowInstanceError('instance-missing', 'Workflow instance not found')
@@ -123,8 +129,8 @@ export class WorkflowInstanceService {
     })
   }
 
-  actionNode(id: string, nodeInstanceId: string, action: string, value: unknown): Promise<InstanceDetail> {
-    return this.engine.actionNode(id, nodeInstanceId, action, value)
+  actionNode(id: string, nodeInstanceId: string, action: string, value: unknown, token?: string): Promise<InstanceDetail> {
+    return this.engine.actionNode(id, nodeInstanceId, action, value, token)
   }
 
   setDrawerWidth(id: string, value: unknown): Promise<InstanceDetail> {
@@ -140,8 +146,9 @@ export class WorkflowInstanceService {
     })
   }
 
-  close(): Promise<void> {
-    return this.store.close()
+  async close(): Promise<void> {
+    await this.engine.close()
+    await this.store.close()
   }
 
   private async readTemplate(id: string): Promise<ScannedTemplate> {

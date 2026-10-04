@@ -1,4 +1,4 @@
-import { NodeInputError, type NodeData, type NodeDefinition, type NodeFact, type NodeValue, type ServerNode } from '../../dsh-workflow-studio/src/contract/node/index.js'
+import { NodeInputError, type NodeData, type NodeDefinition, type NodeFact, type NodeValue, type ServerNode } from 'dsh-workflow-node/contract'
 
 const object = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value)
 const primitive = (value: unknown): value is 'string' | 'number' | 'boolean' => value === 'string' || value === 'number' || value === 'boolean'
@@ -45,6 +45,12 @@ function validateSubmission(node: NodeDefinition, payload: unknown): NodeData {
 
 export const formNode: ServerNode = {
   kind: 'form',
+  describe({ ready, fact }) { return { actions: [
+    ...(ready ? [{ id: 'fill', label: { namespace: name, key: 'formOpen' }, target: { type: 'details' as const }, primary: true }] : []),
+    ...(ready && fact?.status === 'succeeded' ? [{ id: 'retry', label: { namespace: name, key: 'formRetry' }, target: { type: 'server' as const } }] : []),
+  ] } },
+  validateFact(fact) { if (fact.status === 'succeeded' && (fact.business === null || typeof fact.business !== 'object' || Array.isArray(fact.business) || fact.business?.submitted !== true)) throw new Error('Invalid form business state') },
+
   requires: [],
   validate(node) {
     const fields = formFields(node)
@@ -63,3 +69,7 @@ export const formNode: ServerNode = {
   recover(fact) { return fact },
   project() { return {} },
 }
+
+export const name = '@dsh-workflow/node-form'
+export const inject = ["workflowNodes"]
+export function apply(ctx: import('@deepseek-ai/cordis').Context): void { ctx.workflowNodes.register(ctx, name, formNode) }

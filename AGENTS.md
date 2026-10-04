@@ -6,7 +6,7 @@
 - npm 源故障处理：安装公开依赖时，默认在安装命令中追加 `--registry=https://registry.npmjs.org`，显示使用公共 npm 源；保持依赖版本约束，不修改全局 npm 源配置。
 - 安装与分发：仅开发插件，不内置或安装 dsh CLI；用户自行安装本机 dsh，再通过本地目录添加插件。当前不维护分发或发布流程。
 - 按需建设：没有实现需求时，不创建预留目录或增加抽象。
-- 模块依赖：`workflow/` 选择并调用 `nodes/` 中的节点能力，负责工作流执行状态与持久化协调；`nodes/` 不依赖 `workflow/`、`dag/` 或工作流实例状态类型。
+- 模块依赖：`workflow/` 通过公共登记选择并调用独立节点插件的能力，负责工作流执行状态与持久化协调；节点插件不依赖 Studio 的 `workflow/`、`dag/` 或工作流实例状态类型。
 - 模板 i18n：`packages/dsh-workflow-studio/templates/<name>/workflow.yaml` 为英文版，`packages/dsh-workflow-studio/templates/<name>.zh/workflow.yaml` 为对应中文版；两版使用相同的 DAG 结构、字段和外部能力，中文模板迭代时同步落实到英文版。目录名中的 `.zh` 是语言后缀，`<name>` 保持一致。
 
 ## 验收文档约定
@@ -28,11 +28,9 @@ packages/dsh-workflow-studio/
 │   │   ├── apply.ts              # 服务装配和生命周期
 │   │   ├── dag/                  # DAG 编译、图状态与结果提交
 │   │   ├── workflow/             # 节点选择、执行状态与恢复
-│   │   ├── nodes/                # 节点服务端装配登记
 │   │   ├── routes/plugin-status.ts    # GET /api/dsh-workflow-studio/status
 │   │   ├── service/              # 模板与工作流实例管理
 │   │   └── storage/              # 工作流实例持久化与串行写入
-│   ├── contract/node/            # studio 提供的公共节点契约
 │   └── client/
 │       ├── index.tsx             # dsh 插槽注册
 │       ├── pages/                # 顶层页面，其他页面与工坊并列
@@ -49,6 +47,8 @@ packages/dsh-workflow-studio/
 ├── scripts/build.mjs
 ├── package.json
 └── cordis.patch.yml
+packages/dsh-workflow-node/      # 公共节点契约、profile 级登记与可选浏览器能力
+packages/dsh-workflow-bundle/    # 普通 dsh 默认装配，模板部分留待下一阶段
 packages/dsh-workflow-node-session-agent/      # session_agent 节点服务端与前端
 packages/dsh-workflow-node-bash/      # bash 节点服务端与前端
 packages/dsh-workflow-node-form/      # form 节点服务端与前端

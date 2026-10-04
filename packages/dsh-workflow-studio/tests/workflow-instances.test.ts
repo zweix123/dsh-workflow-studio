@@ -13,24 +13,30 @@ import * as storageJson from '@deepseek-ai/dsh-storage-json'
 import { WorkflowInstanceService, workflowInstanceDomain } from '../src/host/service/workflow-instance-service.js'
 import { createWorkflowInstancesRoute } from '../src/host/routes/workflow-instances.js'
 import { INSTANCES_PATH, TEMPLATES_PATH } from '../src/shared/constants.js'
-import { nodeRegistry, type ServerNode } from '../src/contract/node/index.js'
+import * as nodePlugin from '../../dsh-workflow-node/src/server.js'
+import { bashNode } from '../../dsh-workflow-node-bash/src/server.js'
+import * as sessionPlugin from '../../dsh-workflow-node-session-agent/src/server.js'
+import { sessionAgentNode } from '../../dsh-workflow-node-session-agent/src/server.js'
+import { formNode } from '../../dsh-workflow-node-form/src/server.js'
+import { type ServerNode } from 'dsh-workflow-node/contract'
 
 const cleanups: Array<() => Promise<void>> = []
 afterEach(async () => {
   while (cleanups.length) await cleanups.pop()!()
 })
 
-async function fixture(services: Record<string, unknown> = {}, nodes?: ReadonlyMap<string, ServerNode>) {
+async function fixture(services: Record<string, unknown> = {}, nodes?: ReadonlyMap<string, ServerNode>, storageFault?: (value: unknown) => void) {
   const root = await mkdtemp(join(tmpdir(), 'dsh-workflow-studio-'))
   const templateRoot = join(root, 'home', 'dsh-workflow-studio', 'templates')
   const storageRoot = join(root, 'storage')
   await mkdir(templateRoot, { recursive: true })
-  const host = await openHost(storageRoot, templateRoot, root, services, nodes)
+  const host = await openHost(storageRoot, templateRoot, root, services, nodes, storageFault)
   cleanups.push(async () => {
     await host.close()
     await rm(root, { recursive: true, force: true })
   })
   return {
+    ctx: host.ctx,
     root,
     storageRoot,
     templateRoot,
@@ -39,18 +45,32 @@ async function fixture(services: Record<string, unknown> = {}, nodes?: ReadonlyM
   }
 }
 
-async function openHost(storageRoot: string, templateRoot: string, workspacePath: string, services: Record<string, unknown> = {}, nodes?: ReadonlyMap<string, ServerNode>) {
+async function openHost(storageRoot: string, templateRoot: string, workspacePath: string, services: Record<string, unknown> = {}, nodes?: ReadonlyMap<string, ServerNode>, storageFault?: (value: unknown) => void) {
   const ctx = new Context()
   await ctx.plugin(WebServer, { host: '127.0.0.1', port: 0 })
   await ctx.plugin(Storage)
   await ctx.plugin(storageJson, { root: storageRoot })
+  if (storageFault) {
+    const facet = ctx.storage.backend.get('json').kv!
+    const open = facet.open.bind(facet)
+    facet.open = async descriptor => {
+      const unit = await open(descriptor)
+      const put = unit.putRecord.bind(unit)
+      unit.putRecord = async (table, key, value) => { storageFault(value); await put(table, key, value) }
+      return unit
+    }
+  }
   await ctx.plugin(storageDomain, { backend: 'json' })
   ctx.provide('workspaceRegistry', {
-    get: (id: string) => id === 'workspace-a' ? { id, path: workspacePath, title: 'Workspace A' } : undefined,
+    get: (id: string) => ['workspace-a', 'workspace-b'].includes(id) ? { id, path: workspacePath, title: 'Workspace A' } : undefined,
   } as never)
   ctx.provide('sandboxPolicy', { resolve: () => ({ mode: 'workspace-write', workspaceRoot: '/fallback' }) } as never)
   if (!Object.hasOwn(services, 'shell')) ctx.provide('shell', { sandboxMode: true } as never)
   for (const [name, service] of Object.entries(services)) ctx.provide(name as never, service as never)
+  await ctx.plugin(nodePlugin)
+  if (ctx.get('sessionController')) await ctx.plugin(sessionPlugin)
+  else await ctx.plugin({ inject: ['workflowNodes'], apply(c: Context) { c.workflowNodes.register(c, '@dsh-workflow/node-session-agent', sessionAgentNode) } })
+  for (const node of [bashNode, formNode]) await ctx.plugin({ inject: ['workflowNodes', ...node.requires], apply(c: Context) { c.workflowNodes.register(c, `@dsh-workflow/node-${node.kind}`, node) } })
   const service = await WorkflowInstanceService.create(ctx, templateRoot, undefined, nodes)
   const unregister = ctx.webServer.register(createWorkflowInstancesRoute(service))
   let active = true
@@ -62,6 +82,7 @@ async function openHost(storageRoot: string, templateRoot: string, workspacePath
     await ctx.fiber.dispose()
   }
   return {
+    ctx,
     close,
     url: (path: string) => `http://127.0.0.1:${ctx.webServer.port}${path}`,
   }
@@ -79,6 +100,12 @@ async function postJson(url: string, value: unknown) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(value),
   })
+}
+
+function stableDetail(value: any): any {
+  const copy = structuredClone(value)
+  for (const view of Object.values(copy.nodeViews ?? {}) as any[]) delete view.token
+  return copy
 }
 
 async function untilDetail(url: string, check: (detail: any) => boolean): Promise<any> {
@@ -225,8 +252,7 @@ test('an assembled node owns its actions and cancellation never submits a succes
       if (name === 'finish') return { fact: { kind: 'test', status: 'succeeded', output: { done: true } } }
       throw new Error('Action denied')
     }, recover(fact) { return fact }, project() { return {} } }
-  assert.throws(() => nodeRegistry([testNode, testNode]), /Duplicate node kind/)
-  const f = await fixture({}, nodeRegistry([testNode]))
+  const f = await fixture({}, new Map([[testNode.kind, testNode]]))
   await putTemplate(f.templateRoot, 'test', `id: root\ntype: dag\ndag:\n  - id: task\n    type: node\n    node_kind: test\n    note: ready\n    output_schema:\n      done: boolean\n`)
   const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Custom', templateId: 'test' })).json() as any
   const nodeId = created.snapshot.instances.find((item: any) => item.definitionId === 'task').instanceId
@@ -256,7 +282,7 @@ test('startup persists node recovery instead of projecting it only for a read', 
     },
     project() { return {} },
   }
-  const nodes = nodeRegistry([recoverable])
+  const nodes = new Map([[recoverable.kind, recoverable]])
   const f = await fixture({}, nodes)
   await putTemplate(f.templateRoot, 'recovery', `id: root\ntype: dag\ndag:\n  - id: task\n    type: node\n    node_kind: recoverable\n`)
   const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Recovery', templateId: 'recovery' })).json() as any
@@ -480,7 +506,15 @@ test('restart preserves a successful command awaiting DAG submission and exposes
   const secondNode = second.snapshot.instances.find((item: any) => item.definitionId === 'run').instanceId
   await untilDetail(f.url(secondPath), detail => detail.executions?.[secondNode]?.status === 'running')
   assert.deepEqual(calls, ['success', 'uncertain'])
+  // Graceful close now drains calls. Fail the outstanding result save so durable
+  // evidence remains running, just as after an interrupted process.
+  const interrupted = `${f.storageRoot}-interrupted`
+  await rename(f.storageRoot, interrupted)
+  await writeFile(f.storageRoot, 'blocked storage path')
+  pending[1]!(0)
   await f.close()
+  await rm(f.storageRoot)
+  await rename(interrupted, f.storageRoot)
   const restarted = await openHost(f.storageRoot, f.templateRoot, f.root, services)
   cleanups.push(restarted.close)
   const restored = await (await fetch(restarted.url(secondPath))).json() as any
@@ -494,7 +528,7 @@ test('restart preserves a successful command awaiting DAG submission and exposes
   await untilDetail(restarted.url(secondPath), detail => detail.snapshot.instances.find((item: any) => item.instanceId === secondNode).status === 'completed')
 })
 
-test('an old incompatible instance keeps its snapshot visible but cannot execute', async () => {
+test('an incompatible current-contract instance keeps its snapshot visible but cannot execute', async () => {
   const f = await fixture()
   await putTemplate(f.templateRoot, 'old', `id: root\ntype: dag\ndag:\n  - id: task\n    type: node\n    node_kind: bash\n    command: ''\n`)
   const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Old', templateId: 'old' })).json() as any
@@ -656,7 +690,7 @@ test('saved definition, input and graph survive a host restart without the sourc
 
   const restarted = await openHost(f.storageRoot, f.templateRoot, f.root)
   cleanups.push(restarted.close)
-  assert.deepEqual(await (await fetch(restarted.url(`${INSTANCES_PATH}/${expected.id}`))).json(), expected)
+  assert.deepEqual(stableDetail(await (await fetch(restarted.url(`${INSTANCES_PATH}/${expected.id}`))).json()), stableDetail(expected))
 })
 
 test('deleting an instance removes its stored snapshot and frees its name', async () => {
@@ -698,7 +732,7 @@ test('execute advances one ready node, keeps its identity after restart, and rej
   await rm(join(f.templateRoot, 'writer'), { recursive: true, force: true })
   const restarted = await openHost(f.storageRoot, f.templateRoot, f.root)
   cleanups.push(restarted.close)
-  assert.deepEqual(await (await fetch(restarted.url(path))).json(), advanced)
+  assert.deepEqual(stableDetail(await (await fetch(restarted.url(path))).json()), stableDetail(advanced))
   const completed = await postJson(restarted.url(`${path}/nodes/${finish.instanceId}/actions/start`), {})
   assert.equal(completed.status, 200)
   assert.equal((await completed.json() as any).snapshot.instances.find((item: any) => item.instanceId === finish.instanceId).status, 'completed')
@@ -829,7 +863,7 @@ dag:
   await host.close()
   host = await openHost(f.storageRoot, f.templateRoot, f.root, services)
   cleanups.push(host.close)
-  assert.deepEqual(await (await fetch(host.url(path))).json(), partial)
+  assert.deepEqual(stableDetail(await (await fetch(host.url(path))).json()), stableDetail(partial))
 
   const second = await postJson(host.url(`${path}/nodes/${items[1].instanceId}/actions/start`), {})
   assert.equal(second.status, 200)
@@ -909,7 +943,7 @@ test('drawer width belongs to its instance and survives execution and host resta
   await f.close()
   const restarted = await openHost(f.storageRoot, f.templateRoot, f.root)
   cleanups.push(restarted.close)
-  assert.deepEqual(await (await fetch(restarted.url(path))).json(), resized)
+  assert.deepEqual(stableDetail(await (await fetch(restarted.url(path))).json()), stableDetail(resized))
 })
 
 test('selected nodes reject unsupported output, prefill and text references before creation', async () => {
@@ -1273,4 +1307,257 @@ test('conversation ownership resolves the full instance and node identity withou
   await fetch(restarted.url(path), { method: 'DELETE' })
   assert.deepEqual(await (await query(sessions[0]!)).json(), { target: null })
   assert.equal(sessions.length, 2)
+})
+
+
+test('a missing type anywhere in the snapshot pauses new calls while an in-flight result is saved and submitted', async () => {
+  const f = await fixture()
+  let finish!: () => void
+  let started = 0
+  const external: ServerNode = {
+    kind: 'external', requires: [], validate() {}, ready() { return undefined },
+    describe() { return { actions: [{ id: 'start', label: { text: 'Run external' }, primary: true, target: { type: 'server' } }] } },
+    action() { started++; return { fact: { kind: 'external', status: 'running' }, run: async () => { await new Promise<void>(resolve => { finish = resolve }); return { kind: 'external', status: 'succeeded', output: {} } } } },
+    recover(fact) { return fact.status === 'running' ? { ...fact, status: 'unknown' } : fact }, project() { return {} },
+  }
+  const install = (source: string, node: ServerNode) => f.ctx.plugin({ inject: ['workflowNodes'], apply(c: Context) { c.workflowNodes.register(c, source, node) } })
+  const externalFiber = install('external-package', external)
+  const dormant = install('dormant-package', { ...external, kind: 'dormant' })
+  await externalFiber; await dormant
+  await putTemplate(f.templateRoot, 'external', `id: root
+type: dag
+dag:
+  - id: first
+    type: node
+    node_kind: external
+  - id: next
+    type: node
+    node_kind: bash
+    command: ''
+    is_auto_start: true
+  - id: dormant
+    type: node
+    node_kind: dormant
+  - type: edge
+    from: first
+    to: next
+  - type: edge
+    from: next
+    to: dormant
+`)
+  const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'External', templateId: 'external' })).json() as any
+  assert.ok(created.snapshot, JSON.stringify(created))
+  const path = `${INSTANCES_PATH}/${created.id}`
+  const first = created.snapshot.instances.find((item: any) => item.definitionId === 'first').instanceId
+  assert.equal(created.nodeViews[first].actions[0].label.text, 'Run external')
+  assert.equal(started, 0, 'presentation must not execute business')
+  assert.equal((await postJson(f.url(`${path}/nodes/${first}/actions/start`), {})).status, 200)
+  await dormant.dispose()
+  const paused = await (await fetch(f.url(path))).json() as any
+  assert.match(paused.incompatible, /dormant/)
+  assert.equal((await postJson(f.url(`${path}/nodes/${first}/actions/start`), {})).status, 409)
+  let unloaded = false
+  const disposing = externalFiber.dispose().then(() => { unloaded = true })
+  await new Promise(resolve => setTimeout(resolve, 20))
+  assert.equal(unloaded, false)
+  finish()
+  await disposing
+  const settled = await (await fetch(f.url(path))).json() as any
+  assert.equal(settled.executions[first].status, 'succeeded')
+  const next = settled.snapshot.instances.find((item: any) => item.definitionId === 'next')
+  assert.equal(next.status, 'ready')
+  assert.equal(settled.executions[next.instanceId], undefined)
+  const restored = install('external-package', external)
+  const restoredDormant = install('dormant-package', { ...external, kind: 'dormant' })
+  await restored; await restoredDormant
+  const resumed = await untilDetail(f.url(path), value => value.snapshot.instances.find((item: any) => item.definitionId === 'next')?.status === 'completed')
+  assert.equal(resumed.incompatible, undefined)
+  assert.equal(started, 1, 'accepted business must never run again')
+})
+
+
+test('an unload with a result save fault reports failure and restarts from persisted unknown facts without repeating business', async () => {
+  const f = await fixture()
+  let finish!: () => void
+  let calls = 0
+  const errors: unknown[][] = []
+  const previousError = console.error
+  console.error = (...args) => { errors.push(args) }
+  const node: ServerNode = {
+    kind: 'save_fault', requires: [], validate() {}, ready(context) { return context.fact ? undefined : this.action(context, 'start', {}) },
+    action() { calls++; return { fact: { kind: 'save_fault', status: 'running' }, run: async () => { await new Promise<void>(resolve => { finish = resolve }); return { kind: 'save_fault', status: 'succeeded', output: {} } } } },
+    recover(fact) { return fact.status === 'running' ? { ...fact, status: 'unknown' } : fact }, project() { return {} },
+  }
+  try {
+    const fiber = f.ctx.plugin({ inject: ['workflowNodes'], apply(c: Context) { c.workflowNodes.register(c, 'save-fault-package', node) } })
+    await fiber
+    await putTemplate(f.templateRoot, 'save-fault', `id: root
+type: dag
+dag:
+  - id: fault
+    type: node
+    node_kind: save_fault
+`)
+    const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Fault', templateId: 'save-fault' })).json() as any
+    const path = `${INSTANCES_PATH}/${created.id}`
+    const id = created.snapshot.instances.find((item: any) => item.type === 'node').instanceId
+    await untilDetail(f.url(path), detail => detail.executions?.[id]?.status === 'running')
+    const held = `${f.storageRoot}-held`
+    await rename(f.storageRoot, held)
+    await writeFile(f.storageRoot, 'blocked storage path')
+    const disposed = fiber.dispose()
+    finish()
+    await disposed
+    assert.ok(errors.some(args => String(args[0]).includes('save')))
+    const detail = await (await fetch(f.url(path))).json() as any
+    assert.equal(detail.executions[id].status, 'running')
+    assert.equal(detail.snapshot.instances.find((item: any) => item.instanceId === id).status, 'ready')
+    await rm(f.storageRoot)
+    await rename(held, f.storageRoot)
+    await f.close()
+    const restarted = await openHost(f.storageRoot, f.templateRoot, f.root, {}, new Map([[node.kind, node]]))
+    cleanups.push(restarted.close)
+    const recovered = await (await fetch(restarted.url(path))).json() as any
+    assert.equal(recovered.executions[id].status, 'unknown')
+    assert.equal(calls, 1)
+  } finally { console.error = previousError }
+})
+
+
+test('third-party success must satisfy declared outputs before it becomes an accepted business fact', async () => {
+  const f = await fixture()
+  const node: ServerNode = { kind: 'bad_output', requires: [], validate() {}, ready() { return undefined },
+    action() { return { fact: { kind: 'bad_output', status: 'running' }, run: async () => ({ kind: 'bad_output', status: 'succeeded', output: { message: 42 } }) } },
+    recover(fact) { return fact }, project() { return {} },
+  }
+  await f.ctx.plugin({ inject: ['workflowNodes'], apply(c: Context) { c.workflowNodes.register(c, 'bad-output-package', node) } })
+  await putTemplate(f.templateRoot, 'bad-output', `id: root
+type: dag
+dag:
+  - id: first
+    type: node
+    node_kind: bad_output
+    output_schema:
+      message: string
+`)
+  const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Bad output', templateId: 'bad-output' })).json() as any
+  const id = created.snapshot.instances.find((item: any) => item.type === 'node').instanceId
+  const path = `${INSTANCES_PATH}/${created.id}`
+  await postJson(f.url(`${path}/nodes/${id}/actions/start`), {})
+  const settled = await untilDetail(f.url(path), detail => detail.executions?.[id]?.status !== 'running')
+  assert.equal(settled.executions[id].status, 'failed')
+  assert.equal(settled.executions[id].output, undefined)
+  assert.equal(settled.snapshot.instances.find((item: any) => item.instanceId === id).status, 'ready')
+  assert.match(settled.executions[id].error, /INVALID_FIELD_TYPE/)
+})
+
+
+test('public projection hides private business fields and cannot override contribution identity', async () => {
+  const f = await fixture()
+  const node: ServerNode = { kind: 'private_business', requires: [], validate() {}, ready() { return undefined },
+    describe() { return { actions: [], source: 'foreign-package', token: 'forged-token' } },
+    action() { return { fact: { kind: 'private_business', status: 'succeeded', business: { internal: 'not-for-browser', visible: 'public' }, output: {} } } },
+    recover(fact) { return fact }, project() { return { visible: 'public' } },
+  }
+  await f.ctx.plugin({ name: 'private-node', inject: ['workflowNodes'], apply(c: Context) { c.workflowNodes.register(c, 'private-node', node) } })
+  await putTemplate(f.templateRoot, 'private-node', 'id: root\ntype: dag\ndag:\n  - id: first\n    type: node\n    node_kind: private_business\n')
+  const detail = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Private', templateId: 'private-node' })).json() as any
+  const id = detail.snapshot.instances.find((item: any) => item.type === 'node').instanceId
+  const result = await (await postJson(f.url(`${INSTANCES_PATH}/${detail.id}/nodes/${id}/actions/start`), {})).json() as any
+  assert.equal(result.executions[id].visible, 'public')
+  assert.equal(result.nodeViews[id].source, 'private-node')
+  assert.notEqual(result.nodeViews[id].token, 'forged-token')
+  assert.ok(!JSON.stringify(result).includes('not-for-browser'))
+})
+
+test('node-owned cleanup waits for the call and durable result, while waiting business does not hold unload', async () => {
+  const f = await fixture()
+  let finish!: () => void
+  let cleaned = false
+  const node: ServerNode = { kind: 'managed', requires: [], validate() {}, ready() { return undefined },
+    action() { return { fact: { kind: 'managed', status: 'running' }, run: async () => { await new Promise<void>(resolve => { finish = resolve }); assert.equal(cleaned, false); return { kind: 'managed', status: 'waiting', business: { waiting: true } } } } },
+    recover(fact) { return fact }, project() { return {} },
+  }
+  const plugin = f.ctx.plugin({ name: 'managed-node', inject: ['workflowNodes'], apply(c: Context) {
+    c.workflowNodes.register(c, 'managed-node', node, { dispose: () => { cleaned = true } })
+  } })
+  await plugin
+  await putTemplate(f.templateRoot, 'managed', 'id: root\ntype: dag\ndag:\n  - id: first\n    type: node\n    node_kind: managed\n')
+  const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Managed', templateId: 'managed' })).json() as any
+  const id = created.snapshot.instances.find((item: any) => item.type === 'node').instanceId
+  const path = `${INSTANCES_PATH}/${created.id}`
+  await postJson(f.url(`${path}/nodes/${id}/actions/start`), {})
+  const disposed = plugin.dispose()
+  await new Promise(resolve => setTimeout(resolve, 10))
+  assert.equal(cleaned, false)
+  assert.equal((await postJson(f.url(`${path}/nodes/${id}/actions/start`), {})).status, 409)
+  finish()
+  await disposed
+  assert.equal(cleaned, true)
+  assert.equal((await (await fetch(f.url(path))).json() as any).executions[id].status, 'waiting')
+  const replacement = f.ctx.plugin({ name: 'managed-node', inject: ['workflowNodes'], apply(c: Context) { c.workflowNodes.register(c, 'managed-node', node) } })
+  await replacement
+  await replacement.dispose()
+  assert.equal((await (await fetch(f.url(path))).json() as any).executions[id].status, 'waiting')
+})
+
+
+test('saved business success survives a real DAG-state write fault and restart without a repeated call', async () => {
+  let failed = false, calls = 0
+  const f = await fixture({}, undefined, value => {
+    const row = value as any
+    if (!failed && Object.values(row.executions ?? {}).some((fact: any) => fact.status === 'succeeded') && row.snapshot.instances.some((item: any) => item.type === 'node' && item.status === 'completed')) {
+      failed = true
+      throw new Error('Injected DAG-state storage fault')
+    }
+  })
+  const node: ServerNode = { kind: 'accepted', requires: [], validate() {}, ready() { return undefined },
+    action() { calls++; return { fact: { kind: 'accepted', status: 'running' }, run: async () => ({ kind: 'accepted', status: 'succeeded', output: {} }) } },
+    recover(fact) { return fact }, project() { return {} },
+  }
+  const install = (c: Context) => c.plugin({ name: 'accepted-node', inject: ['workflowNodes'], apply(owner: Context) { owner.workflowNodes.register(owner, 'accepted-node', node) } })
+  await install(f.ctx)
+  await putTemplate(f.templateRoot, 'accepted', 'id: root\ntype: dag\ndag:\n  - id: first\n    type: node\n    node_kind: accepted\n')
+  const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-b', name: 'Accepted', templateId: 'accepted' })).json() as any
+  assert.equal(created.workspaceId, 'workspace-b')
+  const id = created.snapshot.instances.find((item: any) => item.type === 'node').instanceId
+  const path = `${INSTANCES_PATH}/${created.id}`
+  await postJson(f.url(`${path}/nodes/${id}/actions/start`), {})
+  const persisted = await untilDetail(f.url(path), detail => detail.executions?.[id]?.status === 'succeeded')
+  assert.equal(failed, true)
+  assert.equal(persisted.snapshot.instances.find((item: any) => item.instanceId === id).status, 'ready')
+  await f.close()
+  const restarted = await openHost(f.storageRoot, f.templateRoot, f.root, {}, new Map([[node.kind, node]]))
+  cleanups.push(restarted.close)
+  const recovered = await (await fetch(restarted.url(path))).json() as any
+  assert.equal(recovered.snapshot.instances.find((item: any) => item.instanceId === id).status, 'completed')
+  assert.equal(calls, 1)
+})
+
+test('a conflict in an already completed kind pauses the full definition and a stale action token is rejected after replacement', async () => {
+  const f = await fixture()
+  const node: ServerNode = { kind: 'first_completed', requires: [], validate() {}, ready() { return undefined },
+    action() { return { fact: { kind: 'first_completed', status: 'succeeded', output: {} } } }, recover(fact) { return fact }, project() { return {} },
+  }
+  const install = (source: string) => f.ctx.plugin({ name: source, inject: ['workflowNodes'], apply(c: Context) { c.workflowNodes.register(c, source, node) } })
+  const original = install('first-original'); await original
+  await putTemplate(f.templateRoot, 'completed-dependency', 'id: root\ntype: dag\ndag:\n  - id: first\n    type: node\n    node_kind: first_completed\n  - id: second\n    type: node\n    node_kind: form\n  - type: edge\n    from: first\n    to: second\n')
+  const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Completed dependency', templateId: 'completed-dependency' })).json() as any
+  const firstId = created.snapshot.instances.find((item: any) => item.definitionId === 'first').instanceId
+  const path = `${INSTANCES_PATH}/${created.id}`
+  const result = await (await postJson(f.url(`${path}/nodes/${firstId}/actions/start`), {})).json() as any
+  const secondId = result.snapshot.instances.find((item: any) => item.definitionId === 'second').instanceId
+  const conflict = install('first-conflict'); await conflict
+  const paused = await (await fetch(f.url(path))).json() as any
+  assert.match(paused.incompatible, /conflict/)
+  assert.equal((await postJson(f.url(`${path}/nodes/${secondId}/actions/submit`), {})).status, 409)
+  await conflict.dispose()
+  assert.equal((await (await fetch(f.url(path))).json() as any).incompatible, undefined)
+  const fresh = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Stale', templateId: 'completed-dependency' })).json() as any
+  const staleId = fresh.snapshot.instances.find((item: any) => item.definitionId === 'first').instanceId
+  const token = fresh.nodeViews[staleId].token
+  await original.dispose()
+  await install('first-replacement')
+  const stale = await fetch(f.url(`${INSTANCES_PATH}/${fresh.id}/nodes/${staleId}/actions/start`), { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Workflow-Node': token }, body: '{}' })
+  assert.equal(stale.status, 409)
 })

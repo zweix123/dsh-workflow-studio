@@ -30,22 +30,17 @@ export interface InstanceDetail extends InstanceSummary {
   input: JsonObject
   snapshot: ExecutionSnapshot
   drawerWidth?: number
+  nodeViews?: Record<string, import('dsh-workflow-node/contract').NodePresentation & { source?: string; token?: string }>
   executions?: Record<string, NodeExecution>
   incompatible?: string
 }
 
 export interface NodeExecution {
+  [key: string]: unknown
   kind: string
   status: 'running' | 'waiting' | 'succeeded' | 'failed' | 'unknown' | 'cancelled'
   output?: JsonObject
-  sessionId?: string
-  requestId?: string
-  sessionCreated?: boolean
-  promptStarted?: boolean
   error?: string
-  stdout?: string
-  stderr?: string
-  exitCode?: number | null
 }
 
 export interface CreateInstanceInput {
@@ -78,8 +73,4 @@ export interface ErrorResponse {
 export interface InstanceNavigationTarget {
   instanceId: string
   nodeInstanceId: string
-}
-
-export interface ConversationInstance {
-  target: InstanceNavigationTarget | null
 }

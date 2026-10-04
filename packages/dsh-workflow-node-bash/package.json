@@ -3,8 +3,36 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "exports": { "./server": "./src/server.ts", "./client": "./src/client.tsx" },
+  "exports": {
+    ".": {
+      "types": "./lib/types/dsh-workflow-node-bash/src/server.d.ts",
+      "default": "./lib/server.js"
+    },
+    "./server": "./lib/server.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
   "devDependencies": {
+    "@deepseek-ai/dsh-shell": "0.2.0-rc.1",
+    "@deepseek-ai/dsh-sandbox-policy": "0.2.0-rc.1",
+    "@deepseek-ai/dsh-workspace": "0.2.0-rc.1"
+  },
+  "main": "lib/server.js",
+  "types": "lib/types/dsh-workflow-node-bash/src/server.d.ts",
+  "dependencies": {
+    "dsh-workflow-node": "0.1.0"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "inject": [
+        "dsh-workflow-node",
+        "@deepseek-ai/dsh-client-locale"
+      ]
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "~4.0.4",
     "@deepseek-ai/dsh-shell": "0.2.0-rc.1",
     "@deepseek-ai/dsh-sandbox-policy": "0.2.0-rc.1",
     "@deepseek-ai/dsh-workspace": "0.2.0-rc.1"

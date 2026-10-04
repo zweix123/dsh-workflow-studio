@@ -1,0 +1,41 @@
+{
+  "name": "dsh-workflow-node",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "lib/server.js",
+  "types": "lib/types/dsh-workflow-node/src/server.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/dsh-workflow-node/src/server.d.ts",
+      "default": "./lib/server.js"
+    },
+    "./contract": {
+      "types": "./lib/types/dsh-workflow-node/src/index.d.ts",
+      "default": "./lib/contract.js"
+    },
+    "./ui": {
+      "types": "./lib/types/dsh-workflow-node/src/client.d.ts",
+      "default": "./lib/ui.js"
+    },
+    "./text-template": {
+      "types": "./lib/types/dsh-workflow-node/src/text-template.d.ts",
+      "default": "./lib/text-template.js"
+    },
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "~4.0.4",
+    "@deepseek-ai/cordis-plugin-loader": "~1.0.5",
+    "@deepseek-ai/dsh-app-boot": "0.2.0-rc.1"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-locale"
+      ]
+    }
+  }
+}

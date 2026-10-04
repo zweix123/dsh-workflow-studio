@@ -1,0 +1,9 @@
+id: browser-probe
+name: Browser capability probe
+type: dag
+dag:
+  - id: probe
+    type: node
+    node_kind: browser_probe
+    output_schema:
+      message: string
