@@ -1,6 +1,6 @@
 # 模板通过插件分发
 
-状态：第二阶段模板插件化已实现（2026-10-04）；自动化及固定 dsh 0.2.0-rc.1 隔离宿主/浏览器验证已开展。实际结果与未验证项见[验收记录](../acceptance/template-plugin-distribution.zh.md)。第三方节点与模板联合 bundle 的整体验收留待第三步，不能据此视为联合验收通过。
+状态：节点与模板插件化联合验收通过（2026-10-04）。累计双轴审查完成，示例接入缺陷已修复；136项自动化、本轮固定rc.1浏览器场景及经差异核对仍适用的历史真实宿主证据共同覆盖规格。真实模型证据为历史复用，本轮未重新认证调用；各场景、适用范围与限制见[联合验收记录](../acceptance/node-template-joint.zh.md)。
 
 本文更新[模板管理规格](./template-management.zh.md)和[实例 Tab 规格](./instance-tab.zh.md)中的模板来源、身份、名称和读取时机规则；模板图浏览、定义详情、实例快照及实例存储作用域继续沿用各自规格。
 
@@ -186,6 +186,6 @@ dag:
 
 ## 节点阶段衔接（2026-10-04）
 
-第一阶段公共节点接口已核实并复用，见[节点作者指南](../node-plugin-authoring.zh.md)和[节点阶段验收](../acceptance/node-plugin-registration.zh.md)。第二阶段完成通用模板加载、登记与六份内置模板统一分发；默认 bundle 一次装配节点与模板。作者接入见[模板作者指南](../template-plugin-authoring.zh.md)及 `examples/review-templates`。第三步仍需用同时贡献第三方节点与模板的 bundle 做联合验收。
+第一阶段公共节点接口已核实并复用，见[节点作者指南](../node-plugin-authoring.zh.md)和[节点阶段验收](../acceptance/node-plugin-registration.zh.md)。第二阶段完成通用模板加载、登记与六份内置模板统一分发；默认 bundle 一次装配节点与模板。作者接入见[模板作者指南](../template-plugin-authoring.zh.md)及 `examples/review-templates`。同时贡献第三方节点与模板的 bundle 已完成已列联合场景；结论与未验证项见[联合验收记录](../acceptance/node-template-joint.zh.md)。
 
 本阶段依用户明确要求以本地 spec 为依据，不配置 tracker、不发布 Issue、不自动 commit。

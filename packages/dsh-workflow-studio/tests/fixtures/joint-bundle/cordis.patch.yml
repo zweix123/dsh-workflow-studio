@@ -1,0 +1,14 @@
+- insert:
+    - id: joint-template
+      name: dsh-workflow-template
+      config:
+        directory: '@example/workflow-joint/templates/chain'
+    - id: joint-builtins
+      name: dsh-workflow-template
+      config:
+        directory: '@example/workflow-joint/templates/builtins'
+    - id: joint-node
+      name: '@example/workflow-joint'
+    - id: joint-conflict
+      name: '@example/workflow-joint/conflict'
+      disabled: true

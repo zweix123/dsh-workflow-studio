@@ -1,0 +1,8 @@
+{
+  "name": "@example/workflow-joint",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./server.js", "./conflict": "./conflict.js", "./templates/*/workflow.yaml": "./templates/*/workflow.yaml" },
+  "dsh": { "bundle": { "patch": "./cordis.patch.yml" } }
+}

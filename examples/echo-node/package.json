@@ -10,5 +10,8 @@
   },
   "peerDependencies": {
     "dsh-workflow-node": "0.1.0"
+  },
+  "exports": {
+    "./templates/example/workflow.yaml": "./workflow.yaml"
   }
 }

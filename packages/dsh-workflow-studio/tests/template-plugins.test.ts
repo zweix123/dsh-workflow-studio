@@ -9,6 +9,7 @@ import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { parseDocument } from 'yaml'
 import * as nodes from '../../dsh-workflow-node/src/server.js'
 import type { ServerNode } from 'dsh-workflow-node/contract'
 import * as studio from '../lib/index.js'
@@ -217,5 +218,138 @@ test('loaded templates validate node configuration by kind and preserve unknown 
       assert.equal((await h.request(`${TEMPLATES_PATH}/${id}`)).status, 422)
       assert.equal((await h.request(INSTANCES_PATH, { workspaceId: 'a', name: id, templateId: id })).status, 422)
     }
+  } finally { await h.close() }
+})
+
+
+test('one third-party bundle combines templates and nodes, template removal keeps execution but node removal pauses the whole snapshot', async () => {
+  const h = await host()
+  try {
+    await h.ctx.plugin(await import('../../dsh-workflow-node-form/lib/server.js'))
+    const yaml = await readFile(new URL('./fixtures/joint-bundle/templates/chain/workflow.yaml', import.meta.url), 'utf8')
+    // Same declarations as the local bundle: the template loads before its node.
+    const declaration = await h.declare('@example/workflow-joint/templates/chain', yaml)
+    assert.match((await (await h.request(TEMPLATES_PATH)).json()).templates[0].error, /joint_echo.*missing/)
+    const nodePlugin = await import(new URL('./fixtures/joint-bundle/server.js', import.meta.url).href)
+    const provider = h.ctx.plugin(nodePlugin); await provider; await settle()
+    const created = await (await h.request(INSTANCES_PATH, { workspaceId: 'a', name: 'Joint run', templateId: 'joint-chain' })).json()
+    const path = `${INSTANCES_PATH}/${created.id}`
+    const echo = created.snapshot.instances.find((item: any) => item.definitionId === 'echo')
+    assert.equal(created.nodeViews[echo.instanceId].actions[0].label.text, 'Echo joint')
+    await declaration.dispose()
+    assert.equal((await h.request(`${TEMPLATES_PATH}/joint-chain`)).status, 404)
+    assert.equal((await h.request(`${path}/nodes/${echo.instanceId}/actions/echo`, {})).status, 200)
+    let detail = await (await h.request(path)).json()
+    const confirm = detail.snapshot.instances.find((item: any) => item.definitionId === 'confirm')
+    assert.deepEqual(confirm.input, { message: 'loaded joint message' })
+    await provider.dispose(); await settle()
+    detail = await (await h.request(path)).json()
+    assert.match(detail.incompatible, /joint_echo/)
+    // Even the completed node type remains required by the full definition.
+    assert.equal((await h.request(`${path}/nodes/${confirm.instanceId}/actions/submit`, { message: 'confirmed' })).status, 409)
+    const replacement = h.ctx.plugin(nodePlugin); await replacement; await settle()
+    assert.equal((await h.request(`${path}/nodes/${confirm.instanceId}/actions/submit`, { message: 'confirmed' })).status, 200)
+    detail = await (await h.request(path)).json()
+    assert.deepEqual(detail.snapshot.instances.find((item: any) => item.definitionId === 'echo').output, { message: 'loaded joint message' })
+    assert.deepEqual(detail.snapshot.instances.find((item: any) => item.definitionId === 'confirm').output, { message: 'confirmed' })
+    assert.equal(detail.definition.name, 'Joint node and template')
+  } finally { await h.close() }
+})
+
+
+test('the documented echo bundle exposes a selectable template and executes its node after ordinary declarations load', async () => {
+  const h = await host()
+  try {
+    await h.ctx.plugin(await import('../../dsh-workflow-node-form/lib/server.js'))
+    const base = new URL('../../../examples/echo-node/', import.meta.url)
+    const manifest = JSON.parse(await readFile(new URL('package.json', base), 'utf8'))
+    const patch = parseDocument(await readFile(new URL(manifest.dsh.bundle.patch, base), 'utf8')).toJS()
+    for (const declaration of patch[0].insert) {
+      if (declaration.name === 'dsh-workflow-template') {
+        const resource = declaration.config.directory.slice(manifest.name.length) + '/workflow.yaml'
+        const file = manifest.exports['.' + resource]
+        await h.declare(declaration.config.directory, await readFile(new URL(file, base), 'utf8'))
+      } else await h.ctx.plugin(await import(new URL(declaration.name, base).href))
+    }
+    await settle()
+    const catalog = await (await h.request(TEMPLATES_PATH)).json()
+    assert.equal(catalog.templates.length, 1)
+    assert.equal(catalog.templates[0].id, 'example-echo')
+    assert.equal(catalog.templates[0].error, undefined)
+    const response = await h.request(INSTANCES_PATH, { workspaceId: 'a', name: 'Author example', templateId: 'example-echo' })
+    assert.equal(response.status, 201)
+    const created = await response.json()
+    const echo = created.snapshot.instances.find((item: any) => item.definitionId === 'echo')
+    const path = `${INSTANCES_PATH}/${created.id}`
+    assert.equal((await h.request(`${path}/nodes/${echo.instanceId}/actions/start`, {})).status, 200)
+    const detail = await (await h.request(path)).json()
+    assert.deepEqual(detail.snapshot.instances.find((item: any) => item.definitionId === 'answer').input, { message: 'Hello from a third-party node' })
+  } finally { await h.close() }
+})
+
+
+test('a replacement node rejects incompatible saved definitions or facts, keeps results readable, and resumes when compatible', async () => {
+  const h = await host()
+  try {
+    await h.ctx.plugin(await import('../../dsh-workflow-node-form/lib/server.js'))
+    const original = await import(new URL('./fixtures/joint-bundle/server.js', import.meta.url).href)
+    let provider = h.ctx.plugin(original); await provider
+    await h.declare('@example/workflow-joint/templates/chain', await readFile(new URL('./fixtures/joint-bundle/templates/chain/workflow.yaml', import.meta.url), 'utf8'))
+    const created = await (await h.request(INSTANCES_PATH, { workspaceId: 'a', name: 'Upgrade', templateId: 'joint-chain' })).json()
+    const path = `${INSTANCES_PATH}/${created.id}`
+    const echo = created.snapshot.instances.find((item: any) => item.definitionId === 'echo')
+    await h.request(`${path}/nodes/${echo.instanceId}/actions/echo`, {})
+    const saved = await (await h.request(path)).json()
+    const confirm = saved.snapshot.instances.find((item: any) => item.definitionId === 'confirm')
+    for (const rejection of [
+      { validate() { throw new Error('Upgraded definition unsupported') } },
+      { validateFact() { throw new Error('Upgraded fact unsupported') } },
+    ]) {
+      await provider.dispose()
+      provider = h.ctx.plugin({ name: original.name, inject: original.inject, apply(owner: Context) {
+        owner.workflowNodes.register(owner, original.name, { ...original.node, ...rejection })
+      } }); await provider; await settle()
+      const visible = await (await h.request(path)).json()
+      assert.match(visible.incompatible, /Upgraded (definition|fact) unsupported/)
+      assert.deepEqual(visible.snapshot, saved.snapshot)
+      assert.deepEqual(visible.executions[echo.instanceId].output, { message: 'loaded joint message' })
+      const blocked = await h.request(`${path}/nodes/${confirm.instanceId}/actions/submit`, { message: 'confirmed' })
+      assert.equal(blocked.status, 409)
+      assert.equal((await blocked.json()).error.code, 'instance-incompatible')
+    }
+    await provider.dispose()
+    provider = h.ctx.plugin(original); await provider; await settle()
+    assert.equal((await h.request(`${path}/nodes/${confirm.instanceId}/actions/submit`, { message: 'confirmed' })).status, 200)
+    const restored = await (await h.request(path)).json()
+    assert.equal(restored.incompatible, undefined)
+    assert.deepEqual(restored.executions[echo.instanceId].output, { message: 'loaded joint message' })
+  } finally { await h.close() }
+})
+
+
+test('the public kind query exposes saved identities as copies that cannot modify instance facts or definitions', async () => {
+  const h = await host()
+  try {
+    await h.ctx.plugin(await import('../../dsh-workflow-node-form/lib/server.js'))
+    await h.ctx.plugin(await import(new URL('./fixtures/joint-bundle/server.js', import.meta.url).href))
+    await h.declare('@example/workflow-joint/templates/chain', await readFile(new URL('./fixtures/joint-bundle/templates/chain/workflow.yaml', import.meta.url), 'utf8'))
+    const created = await (await h.request(INSTANCES_PATH, { workspaceId: 'a', name: 'Read only', templateId: 'joint-chain' })).json()
+    const path = `${INSTANCES_PATH}/${created.id}`
+    const echo = created.snapshot.instances.find((item: any) => item.definitionId === 'echo')
+    await h.request(`${path}/nodes/${echo.instanceId}/actions/echo`, {})
+    const records = h.ctx.workflowNodes.records('joint_echo')
+    assert.equal(records.length, 1)
+    assert.equal(records[0].instanceId, created.id)
+    assert.equal(records[0].nodeInstanceId, echo.instanceId)
+    assert.equal(records[0].workspaceId, 'a')
+    assert.deepEqual(h.ctx.workflowNodes.records('unrelated'), [])
+    records[0].definition.message = 'changed copy'
+    records[0].fact.output!.message = 'changed copy'
+    records[0].fact.status = 'failed'
+    const visible = await (await h.request(path)).json()
+    assert.equal(visible.definition.dag[0].message, 'loaded joint message')
+    assert.equal(visible.executions[echo.instanceId].status, 'succeeded')
+    assert.deepEqual(visible.executions[echo.instanceId].output, { message: 'loaded joint message' })
+    assert.deepEqual(h.ctx.workflowNodes.records('joint_echo')[0].fact.output, { message: 'loaded joint message' })
   } finally { await h.close() }
 })

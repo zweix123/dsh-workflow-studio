@@ -1,0 +1,20 @@
+id: joint-chain
+name: Joint node and template
+type: dag
+dag:
+  - id: echo
+    type: node
+    node_kind: joint_echo
+    message: loaded joint message
+    output_schema:
+      message: string
+  - id: confirm
+    type: node
+    node_kind: form
+    input_schema:
+      message: string
+    output_schema:
+      message: string
+  - type: edge
+    from: echo
+    to: confirm

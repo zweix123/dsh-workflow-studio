@@ -1,3 +1,7 @@
 - insert:
     - id: example-echo-node
       name: './server.js'
+    - id: example-echo-template
+      name: dsh-workflow-template
+      config:
+        directory: '@example/workflow-echo/templates/example'
