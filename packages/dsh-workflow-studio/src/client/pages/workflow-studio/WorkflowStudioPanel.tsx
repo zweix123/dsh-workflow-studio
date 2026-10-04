@@ -28,7 +28,7 @@ export function WorkflowStudioPanel({ nodes, t, useWorkspaces, client: suppliedC
     { id: 'instances', label: t('instanceManagement') },
     { id: 'templates', label: t('templateManagement') },
     ...opened.map(detail => ({ id: `instance-${detail.id}`, label: detail.name, detail })),
-    ...openedTemplates.map(template => ({ id: `template-${encodeURIComponent(template.id)}`, label: template.id, template })),
+    ...openedTemplates.map(template => ({ id: `template-${encodeURIComponent(template.id)}`, label: template.name!, template })),
   ]
 
   useEffect(() => {
@@ -47,14 +47,8 @@ export function WorkflowStudioPanel({ nodes, t, useWorkspaces, client: suppliedC
   }
 
   function openTemplate(template: TemplateDetail) {
-    setOpenedTemplates(current => current.some(item => item.id === template.id) ? current : [...current, template])
+    setOpenedTemplates(current => current.some(item => item.id === template.id) ? current.map(item => item.id === template.id ? template : item) : [...current, template])
     setActiveTab(`template-${encodeURIComponent(template.id)}`)
-  }
-
-  function openExistingTemplate(id: string) {
-    if (!openedTemplates.some(item => item.id === id)) return false
-    setActiveTab(`template-${encodeURIComponent(id)}`)
-    return true
   }
 
   function closeDetail(tabId: string) {
@@ -120,9 +114,9 @@ export function WorkflowStudioPanel({ nodes, t, useWorkspaces, client: suppliedC
         client.remove(instanceId)
       }} />
       : tab.id === 'templates'
-        ? <TemplatesPanel t={t} active={activeTab === 'templates'} onSelect={openTemplate} onOpenExisting={openExistingTemplate} />
+        ? <TemplatesPanel t={t} active={activeTab === 'templates'} onSelect={openTemplate} />
       : tab.template
-        ? <TemplateDetailPanel reading={client.canvas(tab.id)} template={tab.template} t={t} active={activeTab === tab.id} />
+        ? <TemplateDetailPanel reading={client.canvas(tab.id)} template={tab.template} onUpdate={updated => setOpenedTemplates(current => current.map(item => item.id === updated.id ? updated : item))} t={t} active={activeTab === tab.id} />
       : tab.detail
         ? <InstanceRunPanel nodes={nodes} reading={client.canvas(tab.id)} selection={selection?.instanceId === tab.detail.id ? selection : undefined} detail={tab.detail} t={t} active={activeTab === tab.id}
           onUpdate={updated => client.updateDetail(updated)}

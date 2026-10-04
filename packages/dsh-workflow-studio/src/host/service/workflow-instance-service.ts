@@ -1,5 +1,3 @@
-import { readdir, realpath } from 'node:fs/promises'
-import type { Dirent } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
@@ -8,29 +6,26 @@ import { z } from 'zod'
 import type { DagDefinition, JsonObject } from '../dag/index.js'
 import { WorkflowEngine, WorkflowInstanceError, initializeWorkflow, nodeDefinitionAt, validateWorkflowNodes } from '../workflow/index.js'
 import { WorkflowInstanceStore, workflowInstanceDomain } from '../storage/workflow-instance-store.js'
-import { validateTemplateDirectory } from '../template-directory.js'
-import type { CreateInstanceInput, InstanceDetail, InstanceSummary, TemplateCatalog, TemplateDetail, TemplateRow } from '../../shared/types/workflow-instance.js'
-import { inspectLayout } from '../../shared/layout.js'
+import { TemplateRegistry } from './template-registry.js'
+import type { CreateInstanceInput, InstanceDetail, InstanceSummary, TemplateCatalog, TemplateDetail } from '../../shared/types/workflow-instance.js'
 import type { NodeLookup, NodeRecord } from 'dsh-workflow-node/contract'
 
 export { WorkflowInstanceError, workflowInstanceDomain }
 
-type ScannedTemplate = TemplateRow & { definition?: DagDefinition }
 
 export class WorkflowInstanceService {
   private constructor(
     private readonly store: WorkflowInstanceStore,
-    private readonly templateRoot: string,
+    private readonly templates: TemplateRegistry,
     private readonly workspaceRegistry: Context['workspaceRegistry'],
     private readonly engine: WorkflowEngine,
-    private readonly templateDirectory: string,
     private readonly nodes: NodeLookup,
   ) {}
 
-  static async create(ctx: Context, templateRoot: string, templateDirectory = join(templateRoot, '<template-id>', 'workflow.yaml'), nodes: NodeLookup = ctx.workflowNodes): Promise<WorkflowInstanceService> {
+  static async create(ctx: Context, templates: TemplateRegistry, nodes: NodeLookup = ctx.workflowNodes): Promise<WorkflowInstanceService> {
     const store = new WorkflowInstanceStore(await ctx.storageDomain.open(workflowInstanceDomain))
     const engine = new WorkflowEngine(store, ctx, nodes)
-    const service = new WorkflowInstanceService(store, templateRoot, ctx.workspaceRegistry, engine, templateDirectory, nodes)
+    const service = new WorkflowInstanceService(store, templates, ctx.workspaceRegistry, engine, nodes)
     if (nodes.subscribe) ctx.effect(() => nodes.subscribe!(() => { void service.resume().catch(error => console.error('Node dependency recovery failed', error)) }))
     if (ctx.get('workflowNodes')) ctx.workflowNodes.readWith(ctx, kind => service.records(kind))
     for (const [, row] of store.entries()) {
@@ -58,48 +53,13 @@ export class WorkflowInstanceService {
       return { instanceId: row.id, nodeInstanceId, workspaceId: row.workspaceId, definition, fact }
     }))
   }
-  async listTemplates(): Promise<TemplateCatalog> {
-    let entries: Dirent[]
-    try {
-      entries = await readdir(this.templateRoot, { withFileTypes: true })
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') entries = []
-      else throw error
-    }
-    const directories = entries.filter(entry => entry.isDirectory()).sort((left, right) => left.name.localeCompare(right.name, 'en'))
-    return {
-      directory: this.templateDirectory,
-      templates: (await Promise.all(directories.map(entry => this.readTemplate(entry.name))))
-        .map(({ definition: _definition, ...row }) => row),
-    }
-  }
+  async listTemplates(): Promise<TemplateCatalog> { return this.templates.list() }
 
-  async getTemplate(id: string): Promise<TemplateDetail> {
-    if (!id || id === '.' || id === '..' || id.includes('/') || id.includes('\\') || id.includes('\0')) {
-      throw new WorkflowInstanceError('invalid-request', 'Invalid template ID')
-    }
-    const entries = await readdir(this.templateRoot, { withFileTypes: true }).catch((error: NodeJS.ErrnoException) => {
-      if (error.code === 'ENOENT') return []
-      throw error
-    })
-    if (!entries.some(entry => entry.isDirectory() && entry.name === id)) {
-      throw new WorkflowInstanceError('template-missing', 'Workflow template not found')
-    }
-    const directory = await realpath(join(this.templateRoot, id))
-    const path = join(directory, 'workflow.yaml')
-    const resolved = await realpath(path).catch((error: NodeJS.ErrnoException) => {
-      if (error.code === 'ENOENT') return path
-      throw error
-    })
-    if (resolved !== path) throw new WorkflowInstanceError('invalid-request', 'Template definition must stay in its directory')
-    const result = await this.readTemplate(id)
-    if (!result.definition) throw new WorkflowInstanceError('template-invalid', result.error ?? 'Workflow template is invalid')
-    return { id, definition: result.definition, ...(result.layout && { layout: result.layout }) }
-  }
+  async getTemplate(id: string): Promise<TemplateDetail> { return this.templates.get(id) }
 
   listInstances(): InstanceSummary[] {
     return [...this.store.entries()]
-      .map(([, row]) => ({ id: row.id, workspaceId: row.workspaceId, name: row.name, templateId: row.templateId, createdAt: row.createdAt }))
+      .map(([, row]) => ({ id: row.id, workspaceId: row.workspaceId, name: row.name, templateId: row.templateId, templateName: (row.definition as DagDefinition).name as string, createdAt: row.createdAt }))
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt) || left.id.localeCompare(right.id))
   }
 
@@ -151,27 +111,12 @@ export class WorkflowInstanceService {
     await this.store.close()
   }
 
-  private async readTemplate(id: string): Promise<ScannedTemplate> {
-    const result = await validateTemplateDirectory(join(this.templateRoot, id), this.nodes)
-    if (!('definition' in result)) return { id, error: result.error }
-    const layout = inspectLayout(result.definition)
-    return { id, definition: result.definition, ...(layout.layers.length ? { layout } : {}) }
-  }
-
   private async create(input: CreateInstanceInput): Promise<InstanceDetail> {
     if (!this.workspaceRegistry.get(WorkspaceId(input.workspaceId))) throw new WorkflowInstanceError('workspace-missing', 'Workspace not found')
     if ([...this.store.entries()].some(([, row]) => row.workspaceId === input.workspaceId && row.name === input.name)) {
       throw new WorkflowInstanceError('duplicate-name', 'An instance with this name already exists in the workspace')
     }
-    const entries = await readdir(this.templateRoot, { withFileTypes: true }).catch((error: NodeJS.ErrnoException) => {
-      if (error.code === 'ENOENT') return []
-      throw error
-    })
-    if (!entries.some(entry => entry.isDirectory() && entry.name === input.templateId)) {
-      throw new WorkflowInstanceError('template-missing', 'Workflow template not found')
-    }
-    const template = await this.readTemplate(input.templateId)
-    if (!template.definition) throw new WorkflowInstanceError('template-invalid', template.error ?? 'Workflow template is invalid')
+    const template = this.templates.get(input.templateId)
     let initialized: ReturnType<typeof initializeWorkflow>
     try {
       initialized = initializeWorkflow(template.definition)

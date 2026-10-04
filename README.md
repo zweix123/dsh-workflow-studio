@@ -10,7 +10,7 @@ Built for `@deepseek-ai/dsh@0.2.0-rc.1`. The plugin is currently installed from 
 
 ## What it does
 
-- Loads workflow templates from the local DSH home directory, with three bundled examples.
+- Loads templates contributed by plugins in the active profile, with six English/Chinese defaults.
 - Creates independent, persistent runs from template snapshots and shows their progress on a DAG canvas.
 - Runs `session_agent` nodes in DSH conversations, `bash` nodes in the host sandbox, and `form` nodes through user input.
 - Supports dependencies, conditional edges, item expansion, nested DAGs, and recursive DAG references. See the [DAG syntax guide (Chinese)](docs/dag-syntax.zh.md) for the full rules.
@@ -31,18 +31,19 @@ dsh web
 If this profile previously installed `packages/dsh-workflow-studio` directly, stop its host, remove the old plugin entry with `dsh plugin --profile web remove dsh-workflow-studio`, add the default bundle above, then restart. Use the same profile for both commands. Installing Studio alone leaves its node registry dependencies missing; the Web page can report `waiting for service: workflowNodeViews`. This changes plugin assembly, not instance files.
 
 
-DSH itself is not bundled with this plugin. The default bundle installs the public node registry, Studio, and three node plugins. See the [node author guide](docs/node-plugin-authoring.zh.md) and [minimal external example](examples/echo-node/README.zh.md). Common template distribution is the next implementation stage.
+DSH itself is not bundled with this plugin. The default bundle installs the public node registry, Studio, three node plugins, the template loader, and six templates. See the [node author guide](docs/node-plugin-authoring.zh.md) and [minimal external example](examples/echo-node/README.zh.md). See the [template author guide](docs/template-plugin-authoring.zh.md) and [pure configuration example](examples/review-templates/README.zh.md).
 
 ## Create a workflow
 
-1. Add a `workflow.yaml` under `<DSH home>/dsh-workflow-studio/templates/<template-id>/`. The default DSH home is `~/.dsh`.
+1. Use a default template or add your own pure configuration bundle following the [author guide](docs/template-plugin-authoring.zh.md).
 2. Open **Workflows** from the DSH sidebar. In **Instances**, choose a workspace, select the template, and create a run.
 3. Open the run to execute ready nodes and inspect its graph. A `session_agent` node is completed explicitly by the user; a successful `bash` command completes automatically; a `form` node completes on valid submission.
 
-Minimal template at `~/.dsh/dsh-workflow-studio/templates/hello/workflow.yaml`:
+Minimal package resource, exported and declared by a bundle:
 
 ```yaml
 id: hello
+name: Hello workflow
 type: dag
 dag:
   - id: draft
@@ -51,7 +52,7 @@ dag:
     prompt: Write a short draft.
 ```
 
-Templates are files, not yet editable in the plugin UI. The bundled examples are copied into the template directory when the plugin starts.
+Templates are read only when their declaration loads or reloads. Page refreshes do not reread YAML; existing runs retain their snapshots. The old DSH home template directory is no longer discovered or populated.
 
 ## Current limitation
 

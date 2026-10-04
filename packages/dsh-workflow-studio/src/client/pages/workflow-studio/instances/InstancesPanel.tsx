@@ -109,7 +109,7 @@ function InstanceItem({ row, onOpen, onDeleted, t }: { row: InstanceSummary; onO
 
   return <li ref={item} className="dsh-workflow-instance-item" data-menu-open={mode === 'menu'}>
     <button type="button" className="dsh-workflow-instance-row" onClick={() => { setMode('closed'); onOpen() }}>
-      <strong>{row.name}</strong><span>{row.templateId}</span>
+      <strong>{row.name}</strong><span>{row.templateName}</span>
     </button>
     <button ref={trigger} type="button" className="dsh-workflow-instance-more" aria-label={`${t('instanceActions')} ${row.name}`} aria-haspopup="menu" aria-expanded={mode === 'menu'} onClick={() => setMode(current => current === 'menu' ? 'closed' : 'menu')}>⋯</button>
     {mode === 'menu' && <div className="dsh-workflow-instance-menu" role="menu" aria-label={row.name}>
@@ -181,7 +181,7 @@ function CreateInstanceForm({ workspaceId, workspaceTitle, trigger, rows, onClos
       const first = value.templates.find(row => !row.error)
       if (first) {
         setTemplateId(first.id)
-        setName(defaultName(first.id))
+        setName(defaultName(first.name!))
       }
     }, () => { if (active) setCatalogError(true) })
     return () => { active = false }
@@ -218,16 +218,16 @@ function CreateInstanceForm({ workspaceId, workspaceTitle, trigger, rows, onClos
       <label>{t('chooseTemplate')}
         <select value={templateId} disabled={pending || validTemplates.length === 0} onChange={event => {
           setTemplateId(event.target.value)
-          setName(defaultName(event.target.value))
+          setName(defaultName(catalog.templates.find(row => row.id === event.target.value)!.name!))
         }}>
-          {catalog.templates.map(row => <option key={row.id} value={row.id} disabled={Boolean(row.error)}>
-            {row.error ? `${row.id} — ${t('templateInvalid')}` : row.id}
+          {catalog.templates.map(row => <option key={row.key} value={row.id} disabled={Boolean(row.error)}>
+            {row.error ? `${row.name ?? row.source} — ${t('templateInvalid')}: ${row.error}` : row.name}
           </option>)}
         </select>
       </label>
       <LayoutNotices key={templateId} report={catalog.templates.find(row => row.id === templateId)?.layout} t={t} surface="create" />
       {validTemplates.length === 0 && <div className="dsh-workflow-template-empty">
-        <strong>{t('noTemplates')}</strong><code>{catalog.directory}</code>
+        <strong>{t('noTemplates')}</strong>
       </div>}
       <label>{t('instanceName')}<input name="instanceName" value={name} disabled={pending} autoComplete="off" onChange={event => setName(event.target.value)} /></label>
       {error && <p className="dsh-workflow-error" role="alert">{error}</p>}

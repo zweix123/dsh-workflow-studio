@@ -4,7 +4,7 @@ import type { TemplateCatalog, TemplateDetail } from '../../../../shared/types/w
 import type { WorkflowTranslate } from '../../../locales/index.js'
 import { LayoutNotices } from '../LayoutNotices.js'
 
-export function TemplatesPanel({ t, active, onSelect, onOpenExisting }: { t: WorkflowTranslate; active: boolean; onSelect: (detail: TemplateDetail) => void; onOpenExisting: (id: string) => boolean }) {
+export function TemplatesPanel({ t, active, onSelect }: { t: WorkflowTranslate; active: boolean; onSelect: (detail: TemplateDetail) => void }) {
   const [catalog, setCatalog] = useState<TemplateCatalog>()
   const [phase, setPhase] = useState<'loading' | 'ready' | 'error'>('loading')
   const [detailError, setDetailError] = useState<string>()
@@ -18,7 +18,7 @@ export function TemplatesPanel({ t, active, onSelect, onOpenExisting }: { t: Wor
 
   async function open(id: string) {
     setDetailError(undefined)
-    if (onOpenExisting(id)) return
+    // Fetch current availability before reusing a detail tab.
     try { onSelect(await getTemplate(id)) }
     catch (error) {
       setDetailError(error instanceof WorkflowInstanceApiError
@@ -33,11 +33,12 @@ export function TemplatesPanel({ t, active, onSelect, onOpenExisting }: { t: Wor
     {phase === 'error' && <p role="alert" className="dsh-workflow-notice">{t('templatesLoadFailed')}</p>}
     {detailError && <p role="alert" className="dsh-workflow-notice">{detailError}</p>}
     {phase === 'ready' && catalog && (catalog.templates.length
-      ? <ul>{catalog.templates.map(row => <li key={row.id} className="dsh-workflow-template-item">
-        <button type="button" disabled={Boolean(row.error)} onClick={() => void open(row.id)} aria-label={`${t('openTemplate')} ${row.id}`}>{row.id}</button>
+      ? <ul>{catalog.templates.map(row => <li key={row.key} className="dsh-workflow-template-item">
+        <button type="button" disabled={Boolean(row.error)} onClick={() => void open(row.id)} aria-label={`${t('openTemplate')} ${row.name ?? row.source}`}>{row.name ?? row.source}</button>
+        <code>{row.source}</code>
         {row.error && <p role="alert"><strong>{t('templateInvalid')}</strong><span>{row.error}</span></p>}
         <LayoutNotices report={row.layout} t={t} surface="template" />
       </li>)}</ul>
-      : <div className="dsh-workflow-template-empty"><strong>{t('noTemplatesInDirectory')}</strong><code>{catalog.directory}</code></div>)}
+      : <div className="dsh-workflow-template-empty"><strong>{t('noTemplatesInDirectory')}</strong></div>)}
   </div>
 }

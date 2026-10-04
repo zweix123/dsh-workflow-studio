@@ -39,8 +39,9 @@ function detail(value: unknown): value is InstanceDetail {
 }
 
 function catalog(value: unknown): value is TemplateCatalog {
-  return object(value) && typeof value.directory === 'string' && Array.isArray(value.templates)
-    && value.templates.every(row => object(row) && typeof row.id === 'string'
+  return object(value) && Array.isArray(value.templates)
+    && value.templates.every(row => object(row) && typeof row.id === 'string' && typeof row.key === 'string' && typeof row.source === 'string'
+      && (row.name === undefined ? typeof row.error === 'string' : typeof row.name === 'string' && Boolean(row.name.trim()))
       && (row.error === undefined || typeof row.error === 'string')
       && (row.layout === undefined || layoutReport(row.layout)))
 }
@@ -75,7 +76,7 @@ export async function listTemplates(): Promise<TemplateCatalog> {
 
 export async function getTemplate(id: string): Promise<TemplateDetail> {
   const value = await request(`${TEMPLATES_PATH}/${encodeURIComponent(id)}`)
-  if (!object(value) || value.id !== id || !object(value.definition) || value.definition.type !== 'dag' || !Array.isArray(value.definition.dag)
+  if (!object(value) || value.id !== id || typeof value.name !== 'string' || !value.name.trim() || value.error !== undefined || !object(value.definition) || value.definition.type !== 'dag' || !Array.isArray(value.definition.dag)
     || (value.layout !== undefined && !layoutReport(value.layout))) throw new Error('Unexpected workflow template detail')
   return value as unknown as TemplateDetail
 }
@@ -83,7 +84,7 @@ export async function getTemplate(id: string): Promise<TemplateDetail> {
 export async function listInstances(): Promise<InstanceSummary[]> {
   const value = await request(INSTANCES_PATH)
   if (!Array.isArray(value) || !value.every(summary)) throw new Error('Unexpected workflow instance list')
-  return value.map(row => ({ id: row.id, workspaceId: row.workspaceId, name: row.name, templateId: row.templateId, createdAt: row.createdAt }))
+  return value.map(row => ({ id: row.id, workspaceId: row.workspaceId, name: row.name, templateId: row.templateId, ...(row.templateName === undefined ? {} : { templateName: row.templateName }), createdAt: row.createdAt }))
 }
 
 export async function createInstance(input: CreateInstanceInput): Promise<InstanceDetail> {

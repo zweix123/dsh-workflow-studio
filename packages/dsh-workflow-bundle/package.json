@@ -13,6 +13,7 @@
     "dsh-workflow-node": "0.1.0",
     "@dsh-workflow/node-bash": "0.1.0",
     "@dsh-workflow/node-session-agent": "0.1.0",
-    "@dsh-workflow/node-form": "0.1.0"
+    "@dsh-workflow/node-form": "0.1.0",
+    "dsh-workflow-template": "0.1.0"
   }
 }

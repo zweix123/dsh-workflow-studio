@@ -1,6 +1,6 @@
 # 模板通过插件分发
 
-状态：需求与公开契约已确认（2026-10-03），待实施及固定 rc.1 宿主验收。
+状态：第二阶段模板插件化已实现（2026-10-04）；自动化及固定 dsh 0.2.0-rc.1 隔离宿主/浏览器验证已开展。实际结果与未验证项见[验收记录](../acceptance/template-plugin-distribution.zh.md)。第三方节点与模板联合 bundle 的整体验收留待第三步，不能据此视为联合验收通过。
 
 本文更新[模板管理规格](./template-management.zh.md)和[实例 Tab 规格](./instance-tab.zh.md)中的模板来源、身份、名称和读取时机规则；模板图浏览、定义详情、实例快照及实例存储作用域继续沿用各自规格。
 
@@ -11,7 +11,7 @@
 - 打通模板从随包提供、装配加载到工坊使用的完整流程；第三方作者无须编写注册代码。
 - 节点扩展机制由[节点插件化注册规格](./node-plugin-registration.zh.md)定义；本文消费工坊已经装配的节点能力，不自行实现节点扩展。
 - 继续适配项目固定的 `@deepseek-ai/dsh@0.2.0-rc.1`。
-- 本轮交付确认后的规格，不包含业务实现。
+- 本阶段落实已确认的加载、登记和工坊行为，不扩大模板业务运行能力。
 
 ## 加载规则
 
@@ -28,13 +28,13 @@
 - 已有实例显示创建时定义中的模板名称，模板改名或卸载不改变它。此行为继承既有快照语义。
 - 本次改造前创建的实例不要求继续执行，也不新增旧格式查看适配；旧实例文件不自动删除或改写。内置节点与六份源模板统一改造为符合新规范。本文关于已有实例名称、快照及卸载后读取与恢复的承诺，适用于按新规范创建的实例；不为改造前缺少根 `name` 的旧快照新增名称回退或迁移规则。
 
-## 实施前的现状
+## 改造前的历史基线
 
 - [领域词汇表](../../CONTEXT.md)中的“工作流模板”仍指可供创建工作流实例的 DAG 定义。“模板即插件”是本次分发方式的简称；模板定义、通用加载插件和贡献模板的 bundle 各自承担不同职责。
 - 当前插件启动时，将包内模板复制到 DSH home 的统一模板目录；同名内置模板目录被整体替换。见[实例 Tab 的模板发现规则](./instance-tab.zh.md#模板发现与创建规则)及 `packages/dsh-workflow-studio/src/host/template-directory.ts`。
 - 当前模板 ID 和列表展示名称取自目录名；模板列表、详情与创建实例会读取目录中的定义。见[模板管理规格](./template-management.zh.md)及 `packages/dsh-workflow-studio/src/host/service/workflow-instance-service.ts`。
 - 已有工作流实例保存创建时的完整定义，源模板变动不改写实例快照。
-- 当前节点登记表固定装配 `session_agent`、`bash` 和 `form`。见 `packages/dsh-workflow-studio/src/host/nodes/registry.ts`。
+- 节点阶段已完成独立公共登记、具体类型依赖及生命周期接口；模板阶段复用 `dsh-workflow-node/contract` 的 `NodeLookup`、`nodeService` 和登记变更通知，不另建节点登记。
 
 ## 声明与路径契约
 
@@ -105,7 +105,7 @@ dag:
 
 包名来自贡献 bundle 的 `package.json`。上述 wildcard exports 暴露包内模板定义文件，使加载器可以解析 `@acme/workflows/templates/review/workflow.yaml`。
 
-## 根 ID 和包内资源的核实结果
+## 改造前的根 ID 和包内资源核实
 
 - 当前 DAG 编译器要求根 `id` 为字符串，并在单份定义内部检查显式 ID 重复；没有跨模板唯一性检查，也未额外拒绝空字符串。见 `packages/dsh-workflow-studio/src/host/dag/compiler.ts`。
 - 当前 `openspec-workflow` 和 `openspec-workflow.zh` 的根 `id` 都是 `openspec-sdd-workflow`。实施时必须消除这对内置模板的 ID 冲突，并在注册入口检查冲突。其余两对内置模板分别使用英文或中文标题作为根 ID。
@@ -152,7 +152,7 @@ dag:
 
 ## 实现后的验收场景
 
-以下为待执行的验收要求，不表示本轮已经运行：
+以下为验收要求；逐项实际结果、验证方式与限制见[验收记录](../acceptance/template-plugin-distribution.zh.md)。
 
 1. 在固定 rc.1 宿主中从本地目录添加一个纯配置 bundle，模板出现在所属 profile 下各工作区的选择器中。
 2. 目录名与模板 ID 不同仍能加载；UI 显示 YAML 的 `name`，请求与实例关联使用 YAML 的 `id`。
@@ -171,11 +171,11 @@ dag:
 
 ## 验证边界
 
-公开契约和产品行为已确认，没有待决的产品选项。实现与宿主验收尚未开展：
+公开契约和产品行为已确认。实现采用 Studio 的 profile 模板登记、独立通用加载插件和已有节点公共能力；页面与创建入口均查询登记结果。
 
-- 已静态核对 dsh rc.1 的补丁处理、profile 模块解析、服务依赖与声明生命周期机制。
-- 一次性临时包已在 Node v26.7.0 中通过原生模块解析和文件读取验证示例的 wildcard exports 可以定位 YAML，无须执行 YAML。
-- 临时包验证不代表固定 rc.1 宿主内的安装、服务装配、模板注册或 UI 验收通过；实施后须执行上列验收场景。
+- 自动化以现有 Cordis 装配、HTTP 与真实临时存储、页面交互边界验证公开行为，包括配置拒绝、声明生命周期、节点冲突/恢复及两个 profile 的隔离。
+- 固定 rc.1 的隔离宿主与真实浏览器验证默认 bundle、纯配置第三方模板、两个工作区、诊断、撤销与重载、实例快照和依赖恢复。
+- 自动化与真实浏览器的覆盖分别记录；未执行项目及第三步联合验收不会写成已通过。
 
 ## 文档维护
 
@@ -186,4 +186,6 @@ dag:
 
 ## 节点阶段衔接（2026-10-04）
 
-第一阶段节点公共接口及默认 bundle 的节点部分已实现，见[节点作者指南](../node-plugin-authoring.zh.md)和[节点阶段验收](../acceptance/node-plugin-registration.zh.md)。本规格的模板登记、通用加载及六份内置模板统一分发仍待实施；现有目录读取/复制和手动示例文件不能作为这些项目已通过的证据。节点与模板联合 bundle 的验收留待第二阶段。
+第一阶段公共节点接口已核实并复用，见[节点作者指南](../node-plugin-authoring.zh.md)和[节点阶段验收](../acceptance/node-plugin-registration.zh.md)。第二阶段完成通用模板加载、登记与六份内置模板统一分发；默认 bundle 一次装配节点与模板。作者接入见[模板作者指南](../template-plugin-authoring.zh.md)及 `examples/review-templates`。第三步仍需用同时贡献第三方节点与模板的 bundle 做联合验收。
+
+本阶段依用户明确要求以本地 spec 为依据，不配置 tracker、不发布 Issue、不自动 commit。

@@ -1,5 +1,5 @@
 import { build } from 'esbuild'
-import { cp, readFile, rm } from 'node:fs/promises'
+import { readFile, rm } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 
 const manifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
@@ -9,6 +9,7 @@ await rm('lib', { recursive: true, force: true })
 await build({
   entryPoints: {
     index: 'src/index.ts',
+    templates: 'src/host/service/template-registry.ts',
     'host/dag/index': 'src/host/dag/index.ts',
   },
   outdir: 'lib',
@@ -24,4 +25,3 @@ await build({
   banner: { js: `window.__ModuleLoader__.load({ id: ${JSON.stringify(manifest.name)}, factory: (require) => {\nvar module = { exports: {} }; var exports = module.exports;` },
   footer: { js: 'return module.exports;\n} });' },
 })
-await cp('templates', 'lib/templates', { recursive: true })

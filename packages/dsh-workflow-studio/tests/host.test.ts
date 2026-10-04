@@ -51,25 +51,16 @@ test('built host plugin serves HTTP and removes its route on disposal', async ()
     await denied.text()
     assert.deepEqual(await (await fetch(`http://127.0.0.1:${ctx.webServer.port}${INSTANCES_PATH}`)).json(), [])
     const catalog = await (await fetch(`http://127.0.0.1:${ctx.webServer.port}${TEMPLATES_PATH}`)).json()
-    assert.deepEqual(catalog.templates, [
-      { id: 'github-spec-kit-workflow' },
-      { id: 'github-spec-kit-workflow.zh' },
-      { id: 'matt-pocock-wayfinder-workflow' },
-      { id: 'matt-pocock-wayfinder-workflow.zh' },
-      { id: 'openspec-workflow' },
-      { id: 'openspec-workflow.zh' },
-    ])
+    assert.deepEqual(catalog.templates, [])
     const builtin = join(home, 'dsh-workflow-studio', 'templates', 'matt-pocock-wayfinder-workflow', 'workflow.yaml')
-    const bundled = await readFile(new URL('../templates/matt-pocock-wayfinder-workflow/workflow.yaml', import.meta.url), 'utf8')
-    assert.equal(await readFile(builtin, 'utf8'), bundled)
-    await writeFile(builtin, '# changed locally\n')
+    await assert.rejects(readFile(builtin), { code: 'ENOENT' })
     await fiber.dispose()
     assert.equal((await fetch(url)).status, 404)
     assert.equal((await fetch(`http://127.0.0.1:${ctx.webServer.port}${INSTANCES_PATH}`)).status, 404)
     const reloaded = ctx.plugin(plugin)
     await reloaded
     assert.equal((await fetch(url)).status, 200)
-    assert.equal(await readFile(builtin, 'utf8'), bundled)
+    await assert.rejects(readFile(builtin), { code: 'ENOENT' })
   } finally {
     await ctx.fiber.dispose()
     if (previousHome === undefined) delete process.env.DSH_HOME

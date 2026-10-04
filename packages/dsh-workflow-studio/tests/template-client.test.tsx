@@ -25,17 +25,19 @@ test('template tab rescans, shows invalid entries, and reuses and closes read-on
   ] }
   let catalogLoads = 0
   let detailLoads = 0
+  let detailUnavailable = false
   let catalogMode: 'normal' | 'empty' | 'error' = 'normal'
   globalThis.fetch = async url => {
     if (url === '/api/dsh-workflow-studio/instances') return Response.json([])
     if (url === '/api/dsh-workflow-studio/templates') {
       catalogLoads++
       if (catalogMode === 'error') return new Response('unavailable', { status: 503 })
-      return Response.json({ directory: '/templates/<template-id>/workflow.yaml', templates: catalogMode === 'empty' ? [] : [{ id: 'broken', error: 'Missing id' }, { id: 'good' }] })
+      return Response.json({ directory: '/templates/<template-id>/workflow.yaml', templates: catalogMode === 'empty' ? [] : [{ key: 'bad', id: '', source: '@test/templates/broken', error: 'Missing id' }, { key: 'good', id: 'good', name: 'Team review', source: '@test/templates/good' }] })
     }
     if (url === '/api/dsh-workflow-studio/templates/good') {
       detailLoads++
-      return Response.json({ id: 'good', definition })
+      if (detailUnavailable) return Response.json({ error: { code: 'template-invalid', message: 'external missing' } }, { status: 422 })
+      return Response.json({ key: 'good', source: '@test/templates/good', id: 'good', name: 'Team review', definition })
     }
     return new Response('missing', { status: 404 })
   }
@@ -47,13 +49,13 @@ test('template tab rescans, shows invalid entries, and reuses and closes read-on
     await act(async () => root.render(<WorkflowStudioPanel t={key => zh[key]} useWorkspaces={useWorkspaces} />))
     await act(async () => tabs()[1]!.click())
     assert.equal(catalogLoads, 1)
-    const invalid = container.querySelector<HTMLButtonElement>('[aria-label="打开模板 broken"]')!
+    const invalid = container.querySelector<HTMLButtonElement>('[aria-label="打开模板 @test/templates/broken"]')!
     assert.equal(invalid.disabled, true)
     assert.match(invalid.closest('li')!.textContent!, /Missing id/)
-    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="打开模板 good"]')!.click())
-    assert.equal(detailLoads, 1)
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="打开模板 Team review"]')!.click())
+    assert.equal(detailLoads, 2)
     assert.equal(tabs().length, 3)
-    assert.equal(tabs()[2]!.textContent, 'good')
+    assert.equal(tabs()[2]!.textContent, 'Team review')
     await act(async () => container.querySelector<HTMLButtonElement>('.dsh-workflow-template-detail .dsh-workflow-detail-header button')!.click())
     const inspector = container.querySelector('.dsh-workflow-template-inspector')!
     assert.match(inspector.textContent!, /description原始描述/)
@@ -75,20 +77,24 @@ test('template tab rescans, shows invalid entries, and reuses and closes read-on
     assert.equal(writeInspector.querySelector('.dsh-workflow-inspector-body input, .dsh-workflow-inspector-body textarea, .dsh-workflow-inspector-body button'), null)
     await act(async () => tabs()[1]!.click())
     assert.equal(catalogLoads, 2)
-    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="打开模板 good"]')!.click())
-    assert.equal(detailLoads, 1)
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="打开模板 Team review"]')!.click())
+    assert.equal(detailLoads, 4)
     assert.equal(tabs().length, 3)
-    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="关闭模板标签 good"]')!.click())
+    detailUnavailable = true
+    await act(async () => tabs()[0]!.click())
+    await act(async () => tabs()[2]!.click())
+    assert.match(container.querySelector('.dsh-workflow-template-detail [role="alert"]')!.textContent!, /external missing/)
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="关闭模板标签 Team review"]')!.click())
     assert.equal(tabs().length, 2)
     assert.equal(tabs()[1]!.getAttribute('aria-selected'), 'true')
     catalogMode = 'error'
     await act(async () => tabs()[0]!.click())
     await act(async () => tabs()[1]!.click())
-    assert.match(container.querySelector('.dsh-workflow-template-list [role="alert"]')!.textContent!, /模板目录暂时无法读取/)
+    assert.match(container.querySelector('.dsh-workflow-template-list [role="alert"]')!.textContent!, /模板登记结果暂时无法读取/)
     catalogMode = 'empty'
     await act(async () => tabs()[0]!.click())
     await act(async () => tabs()[1]!.click())
-    assert.match(container.querySelector('.dsh-workflow-template-list .dsh-workflow-template-empty')!.textContent!, /\/templates\/<template-id>\/workflow.yaml/)
+    assert.match(container.querySelector('.dsh-workflow-template-list .dsh-workflow-template-empty')!.textContent!, /当前 profile/)
   } finally {
     await act(async () => root.unmount())
     dom.window.close()

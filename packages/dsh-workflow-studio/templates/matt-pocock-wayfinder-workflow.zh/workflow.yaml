@@ -1,5 +1,6 @@
 # source: https://github.com/mattpocock/skills
-id: Matt-Pocock-工程工作流
+id: matt-pocock-wayfinder-workflow.zh
+name: Matt-Pocock-工程工作流
 type: dag
 output_schema: {}
 description: Wayfinder：一次选择地图中的全部开放 decision tickets，并让每个 ticket 在发现新前置决策时独立分裂和递归。

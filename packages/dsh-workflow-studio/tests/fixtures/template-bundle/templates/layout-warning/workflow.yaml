@@ -1,0 +1,5 @@
+id: layout-warning
+name: Layout warning only
+type: dag
+layout: { direction: diagonal }
+dag: []

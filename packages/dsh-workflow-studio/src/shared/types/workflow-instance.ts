@@ -2,13 +2,15 @@ import type { DagDefinition, ExecutionSnapshot, JsonObject } from '../../host/da
 import type { LayoutReport } from '../layout.js'
 
 export interface TemplateRow {
+  key: string
+  source: string
+  name?: string
   id: string
   error?: string
   layout?: LayoutReport
 }
 
 export interface TemplateCatalog {
-  directory: string
   templates: TemplateRow[]
 }
 
@@ -21,6 +23,7 @@ export interface InstanceSummary {
   workspaceId: string
   name: string
   templateId: string
+  templateName?: string
   createdAt: string
 }
 

@@ -623,8 +623,8 @@ test('one plugin client preserves ordered instance and template tabs and indepen
     ], waitingPositions: [], skippedPositions: [], edges: [], instanceConnections: [] } })
   globalThis.fetch = async url => {
     if (String(url).endsWith('/instances')) return nodeResponse([detail('A'), detail('B')])
-    if (String(url).endsWith('/templates')) return nodeResponse({ directory: '/templates', templates: [{ id: 'flow' }] })
-    if (String(url).endsWith('/templates/flow')) return nodeResponse({ id: 'flow', definition: detail('A').definition })
+    if (String(url).endsWith('/templates')) return nodeResponse({ directory: '/templates', templates: [{ key: 'flow', source: '@test/templates/flow', id: 'flow', name: 'flow' }] })
+    if (String(url).endsWith('/templates/flow')) return nodeResponse({ key: 'flow', source: '@test/templates/flow', id: 'flow', name: 'flow', definition: detail('A').definition })
     return nodeResponse(detail(String(url).split('/').at(-1)!))
   }
   const container = dom.window.document.getElementById('root')!

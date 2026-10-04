@@ -10,7 +10,7 @@
 
 ## 功能
 
-- 从本机 DSH 用户目录加载工作流模板，并附带三个示例模板。
+- 从当前 profile 的插件声明加载模板，默认提供三对中英文模板。
 - 基于模板快照创建独立、可持久化的工作流实例，在 DAG 画布中查看进展。
 - 使用 DSH 对话执行 `session_agent` 节点、宿主沙箱执行 `bash` 节点、用户填写并提交 `form` 节点。
 - 支持依赖、条件边、逐项展开、嵌套 DAG 和递归 DAG 引用。完整规则见 [DAG 语法文档](docs/dag-syntax.zh.md)。
@@ -31,18 +31,19 @@ dsh web
 如果此 profile 之前直接安装的是 `packages/dsh-workflow-studio`，先停止对应宿主，执行 `dsh plugin --profile web remove dsh-workflow-studio` 移除旧插件入口，再按上面的命令添加默认 bundle 并重启。两条命令使用相同 profile。仅安装 Studio 单包会缺少节点登记依赖，Web 页面可能提示 `waiting for service: workflowNodeViews`。这些操作只调整插件装配，不迁移或删除实例文件。
 
 
-本插件不内置 DSH。默认 bundle 装配公共节点登记、Studio 和三个节点插件；第三方节点见[作者指南](docs/node-plugin-authoring.zh.md)及[最小示例](examples/echo-node/README.zh.md)。模板通过通用加载插件分发留待下一阶段。
+本插件不内置 DSH。默认 bundle 装配公共节点登记、Studio、三个节点插件、通用模板加载器和六份模板；第三方节点见[作者指南](docs/node-plugin-authoring.zh.md)及[最小示例](examples/echo-node/README.zh.md)。模板接入见[作者指南](docs/template-plugin-authoring.zh.md)和[纯配置示例](examples/review-templates/README.zh.md)。
 
 ## 创建工作流
 
-1. 在 `<DSH 用户目录>/dsh-workflow-studio/templates/<template-id>/` 下添加 `workflow.yaml`。默认 DSH 用户目录是 `~/.dsh`。
+1. 使用默认模板，或按照[模板作者指南](docs/template-plugin-authoring.zh.md)添加自己的纯配置 bundle。
 2. 从 DSH 侧边栏打开 **工作流**，在 **实例管理** 中选择工作区和模板，创建实例。
 3. 打开实例，在运行图中执行就绪节点。`session_agent` 节点需用户明确标记完成；`bash` 命令成功后自动完成；`form` 节点在有效提交后完成。
 
-最小模板，保存为 `~/.dsh/dsh-workflow-studio/templates/hello/workflow.yaml`：
+包内最小模板（须由 bundle 声明并通过 exports 暴露）：
 
 ```yaml
 id: hello
+name: Hello workflow
 type: dag
 dag:
   - id: draft
@@ -51,7 +52,7 @@ dag:
     prompt: 写一段简短的初稿。
 ```
 
-模板目前通过文件管理，插件界面暂不支持编辑。插件启动时会将附带的示例复制到模板目录。
+模板只在插件声明加载或重载时读取；页面刷新不重读文件，已有实例保留创建时快照。旧 DSH home 模板目录不再自动发现或复制。
 
 ## 当前限制
 

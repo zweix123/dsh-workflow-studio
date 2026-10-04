@@ -1,6 +1,6 @@
 # 工作流工坊 DAG 语法规范
 
-当前实现：工作流工坊内置 DAG 引擎，并装配 `session_agent`、`bash`、`form` 三种节点。
+当前实现：工作流工坊内置 DAG 引擎，默认 bundle 装配 `session_agent`、`bash`、`form` 三种节点。
 
 `session_agent` 是原 `chat` 节点的新名称。自定义模板需更新 `node_kind`；已有实例中的旧模板快照不会自动改写，需重新创建实例。
 
@@ -19,7 +19,11 @@
 
 工作流工坊 DAG 引擎使用由键值对、数组和标量组成的定义对象描述嵌套执行图，支持按需实例化、条件执行、逐项执行和自递归定义引用。语言面向编排引擎及其可复用包，定义执行依赖和数据契约；节点业务动作与实际结果由外部集成方提供。
 
-工坊的模板配置使用 YAML 存储。实例管理 Tab 创建实例时从插件模板目录读取并解析为定义对象，再交给引擎；实例详情 Tab 展示初始化快照。引擎本身不负责文件存储或文本解析，定义的数据结构与文件序列化格式分开约定。本文的 JSON 示例用于表达解析后的数据结构，不要求配置文件使用 JSON。
+工坊的模板配置使用 YAML 存储。模板声明加载或重载时读取并登记定义，实例管理 Tab 创建实例时使用当前可用的已加载定义；实例详情 Tab 展示初始化快照。引擎本身不负责文件存储或文本解析，定义的数据结构与文件序列化格式分开约定。本文的 JSON 示例用于表达解析后的数据结构，不要求配置文件使用 JSON。
+
+工坊模板的 YAML 根 `id` 是同一 profile 中唯一的稳定身份，根 `name` 是展示名称，两者必须是非空且非纯空白的字符串。目录只定位资源，不作为身份或名称。模板作者通过纯配置 bundle 声明带包名的目录资源地址并 exports 暴露 `workflow.yaml`，完整示例见[模板作者指南](./template-plugin-authoring.zh.md)。中英文模板分别使用独立根 ID。此名称要求仅针对模板根，不改变嵌套 DAG、节点及引擎标准字段。
+
+同 ID 贡献全部不可用；缺失或冲突 node_kind 的模板保留来源与诊断，节点恢复后重验已读定义。列表、详情和创建共用登记结果，刷新不重读 YAML；已有实例名称与定义来自创建时快照。旧 DSH home 模板目录不再自动发现或复制。
 
 “必须”和“不得”表示强制要求。“待确定”表示尚未规定，不能假定实现已支持。“编译期”或“静态检查”指执行前对源程序定义的检查，不要求实现生成机器码。
 
@@ -93,6 +97,7 @@ DAG 的内容由顶点和边组成。顶点分为节点（`node`）和 DAG（`da
 
 ```yaml
 id: example
+name: 示例工作流
 type: dag
 dag:
   - id: discuss
@@ -131,6 +136,7 @@ form 的字段名与类型直接来自 `output_schema`，仅支持 `string`、`n
 
 ```yaml
 id: collect
+name: 示例工作流
 type: node
 node_kind: form
 output_schema:
@@ -162,6 +168,7 @@ bash 的占位符必须是独立、未额外加引号的数据参数；不能用
 
 ```yaml
 id: input-example
+name: 示例工作流
 type: dag
 dag:
   - id: request
@@ -209,6 +216,7 @@ layout:
 
 ```yaml
 id: horizontal-flow
+name: 示例工作流
 type: dag
 layout: { direction: horizontal }
 dag:
@@ -221,6 +229,7 @@ dag:
 
 ```yaml
 id: vertical-flow
+name: 示例工作流
 type: dag
 layout: { direction: vertical }
 dag:
@@ -233,6 +242,7 @@ dag:
 
 ```yaml
 id: columns
+name: 示例工作流
 type: dag
 layout:
   direction: vertical
@@ -255,6 +265,7 @@ dag:
 
 ```yaml
 id: mixed
+name: 示例工作流
 type: dag
 layout:
   direction: horizontal
@@ -277,6 +288,7 @@ dag:
 
 ```yaml
 id: nested-layout
+name: 示例工作流
 type: dag
 layout: { direction: horizontal }
 dag:
@@ -295,6 +307,7 @@ dag:
 
 ```yaml
 id: unsafe-turn
+name: 示例工作流
 type: dag
 layout:
   direction: horizontal

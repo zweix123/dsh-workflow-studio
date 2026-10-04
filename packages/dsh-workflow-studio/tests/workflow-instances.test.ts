@@ -18,8 +18,11 @@ import { bashNode } from '../../dsh-workflow-node-bash/src/server.js'
 import * as sessionPlugin from '../../dsh-workflow-node-session-agent/src/server.js'
 import { sessionAgentNode } from '../../dsh-workflow-node-session-agent/src/server.js'
 import { formNode } from '../../dsh-workflow-node-form/src/server.js'
+import { parse, stringify } from 'yaml'
+import { TemplateRegistry } from '../src/host/service/template-registry.js'
 import { type ServerNode } from 'dsh-workflow-node/contract'
 
+const templateHosts = new Map<string, { ctx: Context; declarations: Map<string, any> }>()
 const cleanups: Array<() => Promise<void>> = []
 afterEach(async () => {
   while (cleanups.length) await cleanups.pop()!()
@@ -68,10 +71,12 @@ async function openHost(storageRoot: string, templateRoot: string, workspacePath
   if (!Object.hasOwn(services, 'shell')) ctx.provide('shell', { sandboxMode: true } as never)
   for (const [name, service] of Object.entries(services)) ctx.provide(name as never, service as never)
   await ctx.plugin(nodePlugin)
-  if (ctx.get('sessionController')) await ctx.plugin(sessionPlugin)
-  else await ctx.plugin({ inject: ['workflowNodes'], apply(c: Context) { c.workflowNodes.register(c, '@dsh-workflow/node-session-agent', sessionAgentNode) } })
-  for (const node of [bashNode, formNode]) await ctx.plugin({ inject: ['workflowNodes', ...node.requires], apply(c: Context) { c.workflowNodes.register(c, `@dsh-workflow/node-${node.kind}`, node) } })
-  const service = await WorkflowInstanceService.create(ctx, templateRoot, undefined, nodes)
+  if (!nodes?.has('session_agent') && ctx.get('sessionController')) await ctx.plugin(sessionPlugin)
+  else if (!nodes?.has('session_agent')) await ctx.plugin({ inject: ['workflowNodes'], apply(c: Context) { c.workflowNodes.register(c, '@dsh-workflow/node-session-agent', sessionAgentNode) } })
+  for (const node of [bashNode, formNode].filter(node => !nodes?.has(node.kind)).concat([...(nodes?.values() ?? [])])) await ctx.plugin({ inject: ['workflowNodes', ...node.requires], apply(c: Context) { c.workflowNodes.register(c, `@dsh-workflow/node-${node.kind}`, node) } })
+  await ctx.plugin({ inject: ['workflowNodes'], apply(owner: Context) { owner.provide('workflowTemplates', new TemplateRegistry(owner)) } })
+  templateHosts.set(templateRoot, { ctx, declarations: new Map() })
+  const service = await WorkflowInstanceService.create(ctx, ctx.workflowTemplates)
   const unregister = ctx.webServer.register(createWorkflowInstancesRoute(service))
   let active = true
   const close = async () => {
@@ -89,9 +94,22 @@ async function openHost(storageRoot: string, templateRoot: string, workspacePath
 }
 
 async function putTemplate(root: string, id: string, yaml: string) {
+  const host = templateHosts.get(root)!
+  await host.declarations.get(id)?.dispose()
   const directory = join(root, id)
   await mkdir(directory, { recursive: true })
+  let value: { definition: unknown } | { error: string }
+  try {
+    const definition = parse(yaml)
+    // Existing execution fixtures now declare a stable root identity and display name.
+    if (definition && typeof definition === 'object') { definition.id = id; definition.name ??= id }
+    yaml = stringify(definition)
+    value = { definition }
+  } catch (error) { value = { error: String(error) } }
   await writeFile(join(directory, 'workflow.yaml'), yaml)
+  const fiber = host.ctx.plugin({ inject: ['workflowTemplates'], apply(owner: Context) { owner.workflowTemplates.register(owner, directory, value) } })
+  await fiber
+  host.declarations.set(id, fiber)
 }
 
 async function postJson(url: string, value: unknown) {
@@ -559,22 +577,21 @@ test('an incompatible current-contract instance keeps its snapshot visible but c
   assert.equal((await fetch(restarted.url(path), { method: 'DELETE' })).status, 200)
 })
 
-test('template route rescans the configured directory and reports invalid templates', async () => {
+test('template route queries declared contributions and reports invalid templates', async () => {
   const f = await fixture()
   let response = await fetch(f.url(TEMPLATES_PATH))
   assert.equal(response.status, 200)
   assert.deepEqual(await response.json(), {
-    directory: `${f.templateRoot}/<template-id>/workflow.yaml`,
     templates: [],
   })
 
   await putTemplate(f.templateRoot, 'valid-template', validTemplate)
-  await putTemplate(f.templateRoot, 'broken-template', 'type: dag\ndag: []\n')
+  await putTemplate(f.templateRoot, 'broken-template', 'dag: []\n')
   response = await fetch(f.url(TEMPLATES_PATH))
   assert.equal(response.status, 200)
   const catalog = await response.json() as { templates: Array<{ id: string; error?: string }> }
   assert.deepEqual(catalog.templates.map(row => row.id), ['broken-template', 'valid-template'])
-  assert.match(catalog.templates[0]!.error!, /Missing id/)
+  assert.match(catalog.templates[0]!.error!, /Missing entity type/)
   assert.equal(catalog.templates[1]!.error, undefined)
 
   await putTemplate(f.templateRoot, 'layout-warning', validTemplate.replace('dag:\n', 'layout:\n  direction: vertical\n  segments:\n    - { start_at: draft, direction: horizontal }\ndag:\n'))
@@ -592,10 +609,10 @@ test('template route rescans the configured directory and reports invalid templa
   assert.equal((await fetch(f.url(INSTANCES_PATH))).status, 200)
 })
 
-test('template detail is validated on read and confined to a direct template directory', async () => {
+test('template detail uses declared identity without filesystem discovery', async () => {
   const f = await fixture()
   await putTemplate(f.templateRoot, 'good', 'id: root\ntype: dag\ndescription: Original\ndag:\n  - id: step\n    type: node\n    node_kind: bash\n    command: echo hi\n')
-  await putTemplate(f.templateRoot, 'bad', 'type: dag\ndag: []\n')
+  await putTemplate(f.templateRoot, 'bad', 'dag: []\n')
   const url = (id: string) => f.url(`${TEMPLATES_PATH}/${id}`)
   assert.equal((await fetch(url('good'))).status, 200)
   const first = await (await fetch(url('good'))).json() as any
@@ -606,18 +623,18 @@ test('template detail is validated on read and confined to a direct template dir
   assert.equal((await (await fetch(url('good'))).json() as any).definition.description, 'Updated')
   assert.equal((await fetch(url('bad'))).status, 422)
   assert.equal((await fetch(url('gone'))).status, 404)
-  assert.equal((await fetch(url('..%2f..%2foutside'))).status, 400)
+  assert.equal((await fetch(url('..%2f..%2foutside'))).status, 404)
   await mkdir(join(f.templateRoot, 'linked'))
   await writeFile(join(f.root, 'outside.yaml'), 'id: outside\ntype: dag\ndag: []\n')
   await symlink(join(f.root, 'outside.yaml'), join(f.templateRoot, 'linked', 'workflow.yaml'))
-  assert.equal((await fetch(url('linked'))).status, 400)
+  assert.equal((await fetch(url('linked'))).status, 404)
   assert.equal((await fetch(url('good'), { method: 'POST' })).status, 405)
 })
 
 test('instance route validates and initializes before one durable create', async () => {
   const f = await fixture()
   await putTemplate(f.templateRoot, 'writer', validTemplate)
-  await putTemplate(f.templateRoot, 'broken', 'type: dag\ndag: []\n')
+  await putTemplate(f.templateRoot, 'broken', 'dag: []\n')
   const request = {
     workspaceId: 'workspace-a',
     name: 'Writer run',
@@ -635,7 +652,7 @@ test('instance route validates and initializes before one durable create', async
   }
   assert.match(detail.id, /^[0-9a-f-]{36}$/)
   assert.equal(detail.name, request.name)
-  assert.equal(detail.definition.id, 'root')
+  assert.equal(detail.definition.id, 'writer')
   assert.deepEqual(detail.input, {})
   assert.equal(detail.snapshot.instances.find(row => row.definitionId === 'draft')?.status, 'ready')
   assert.equal(detail.snapshot.instances.find(row => row.definitionId === 'draft')?.output, undefined)

@@ -1,0 +1,14 @@
+{
+  "name": "@acme/workflows",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "exports": {
+    "./templates/*/workflow.yaml": "./templates/*/workflow.yaml"
+  }
+}

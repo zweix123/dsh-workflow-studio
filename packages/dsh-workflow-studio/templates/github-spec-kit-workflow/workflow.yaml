@@ -1,5 +1,6 @@
 # source: https://github.com/github/spec-kit
-id: Spec Kit specification-driven development workflow
+id: github-spec-kit-workflow
+name: Spec Kit specification-driven development workflow
 type: dag
 output_schema: {}
 description: Follow the GitHub Spec Kit process from project principles through requirements, technical

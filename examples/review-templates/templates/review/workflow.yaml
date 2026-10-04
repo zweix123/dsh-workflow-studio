@@ -1,0 +1,8 @@
+id: acme-review
+name: 团队代码审查
+type: dag
+dag:
+  - id: inspect
+    type: node
+    node_kind: bash
+    command: git diff --stat

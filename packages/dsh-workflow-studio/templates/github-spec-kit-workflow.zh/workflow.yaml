@@ -1,5 +1,6 @@
 # source: https://github.com/github/spec-kit
-id: Spec-Kit规格驱动开发工作流
+id: github-spec-kit-workflow.zh
+name: Spec-Kit规格驱动开发工作流
 type: dag
 output_schema: {}
 description: 使用 GitHub Spec Kit 的推荐流程，从项目原则开始，依次完成需求规格、技术方案、任务拆解、实现与收敛检查。

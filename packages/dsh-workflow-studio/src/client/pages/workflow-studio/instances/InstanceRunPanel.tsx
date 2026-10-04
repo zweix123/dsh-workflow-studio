@@ -182,7 +182,7 @@ export function InstanceRunPanel({ nodes = emptyNodeViews, detail, t, onUpdate, 
   const inspectionStatus = canvasStatusLabel(inspection?.status ?? 'waiting', execution?.status, t)
   const layoutReport = useMemo(() => inspectLayout(detail.definition), [detail.definition])
   return <section className="dsh-workflow-detail" aria-label={detail.name}>
-    <header className="dsh-workflow-detail-header"><div><h2>{detail.name}</h2><p>{detail.templateId}</p></div><button type="button" className="dsh-workflow-button" onClick={() => setSelected(detail.snapshot.rootInstanceId)}>{t('rootDagDetails')}</button></header>
+    <header className="dsh-workflow-detail-header"><div><h2>{detail.name}</h2><p>{detail.definition.name as string}</p></div><button type="button" className="dsh-workflow-button" onClick={() => setSelected(detail.snapshot.rootInstanceId)}>{t('rootDagDetails')}</button></header>
     {error && <p className="dsh-workflow-run-error" role="alert">{t(error.key)} {error.message}</p>}
     {draftDiscarded && <p role="alert">{t('draftDiscarded')}</p>}
     {detail.incompatible && <p className="dsh-workflow-run-error" role="alert">{t('instanceIncompatible')} {detail.incompatible}</p>}

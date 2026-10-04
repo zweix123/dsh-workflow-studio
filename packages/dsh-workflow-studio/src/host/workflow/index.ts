@@ -127,7 +127,7 @@ export class WorkflowEngine {
     }))
     return {
       nodeViews,
-      id: row.id, workspaceId: row.workspaceId, name: row.name, templateId: row.templateId, createdAt: row.createdAt,
+      id: row.id, workspaceId: row.workspaceId, name: row.name, templateId: row.templateId, templateName: (row.definition as DagDefinition).name as string, createdAt: row.createdAt,
       revision: row.revision ?? 0, definition: row.definition as DagDefinition, input: row.input as JsonObject,
       snapshot: row.snapshot as unknown as ExecutionSnapshot,
       ...(Object.keys(executions).length ? { executions } : {}), ...(incompatible ? { incompatible } : {}),

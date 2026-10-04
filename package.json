@@ -9,8 +9,8 @@
     "node": "^22.19.0 || >=24.0.0"
   },
   "scripts": {
-    "build": "node scripts/build-nodes.mjs && npm run build --workspace=dsh-workflow-studio",
-    "typecheck": "npm run typecheck --workspace=dsh-workflow-studio",
+    "build": "node scripts/build-nodes.mjs && npm run build --workspace=dsh-workflow-studio && node scripts/build-template.mjs",
+    "typecheck": "npm run typecheck --workspace=dsh-workflow-studio && tsc --noEmit --skipLibCheck --strict --target ES2022 --module ESNext --moduleResolution Bundler packages/dsh-workflow-template/src/index.ts",
     "test": "npm run test --workspace=dsh-workflow-studio",
     "check": "npm run typecheck && npm run build && npm test",
     "install:local": "npm run build && dsh plugin --profile web add ./packages/dsh-workflow-bundle"

@@ -1,0 +1,14 @@
+{
+  "name": "@dsh-workflow/template-fixture",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "exports": {
+    "./templates/*/workflow.yaml": "./templates/*/workflow.yaml"
+  }
+}

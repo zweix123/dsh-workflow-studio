@@ -1,0 +1,7 @@
+id: missing-kind
+name: Missing type diagnostic
+type: dag
+dag:
+  - id: task
+    type: node
+    node_kind: unavailable_fixture_kind

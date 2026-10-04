@@ -115,6 +115,7 @@ ${reactFlowCss}
 .dsh-workflow-template-list { box-sizing: border-box; min-width: 0; padding: 28px 20px 80px; }
 .dsh-workflow-template-list ul { list-style: none; padding: 0; margin: 20px 0 0; display: grid; gap: 10px; max-width: 800px; }
 .dsh-workflow-template-item { padding: 12px 14px; border: .5px solid var(--dsw-alias-border-l2); border-radius: 9px; background: var(--dsw-alias-bg-layer-1); }
+.dsh-workflow-template-item > code { display: block; margin-top: 4px; font-size: 12px; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
 .dsh-workflow-template-item > button { border: 0; padding: 3px 0; background: none; color: var(--dsw-alias-label-primary); font: inherit; font-size: 13px; font-weight: 600; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
 .dsh-workflow-template-item > button:hover { color: var(--dsw-alias-state-business-primary); }
 .dsh-workflow-template-item > button:disabled { color: var(--dsw-alias-label-tertiary); cursor: default; }

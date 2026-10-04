@@ -198,7 +198,7 @@ test('instance cards and creation dialog preserve drafts, then open details only
     if (url === '/api/dsh-workflow-studio/instances' && !init?.method) return Response.json(rows)
     if (url === '/api/dsh-workflow-studio/templates') {
       templateLoads++
-      return Response.json({ directory: '~/.dsh/dsh-workflow-studio/templates/<template-id>/workflow.yaml', templates: [{ id: 'broken', error: 'Missing id' }, { id: 'flow' }] })
+      return Response.json({ directory: '~/.dsh/dsh-workflow-studio/templates/<template-id>/workflow.yaml', templates: [{ key: 'broken', source: '@test/templates/broken', name: 'broken', id: 'broken', error: 'Missing id' }, { key: 'flow', source: '@test/templates/flow', name: 'flow', id: 'flow' }] })
     }
     if (url === '/api/dsh-workflow-studio/instances' && init?.method === 'POST') {
       createAttempts++
@@ -276,7 +276,7 @@ test('instance cards and creation dialog preserve drafts, then open details only
     assert.equal(select.value, 'flow')
     const brokenOption = select.querySelector<HTMLOptionElement>('option[value="broken"]')!
     assert.equal(brokenOption.disabled, true)
-    assert.equal(brokenOption.textContent?.trim(), 'broken — 模板无效')
+    assert.equal(brokenOption.textContent?.trim(), 'broken — 模板无效: Missing id')
     const name = form.querySelector<HTMLInputElement>('input[name="instanceName"]')!
     assert.match(name.value, /^flow /)
     assert.equal(form.querySelector('textarea[name="runtimeInput"]'), null)
@@ -408,7 +408,7 @@ test('instance API uses the host routes and rejects malformed payloads', async (
     const calls: Array<[string, RequestInit | undefined]> = []
     globalThis.fetch = async (url, init) => {
       calls.push([String(url), init])
-      if (url === '/api/dsh-workflow-studio/templates') return Response.json({ directory: '~/.dsh/dsh-workflow-studio/templates/<template-id>/workflow.yaml', templates: [{ id: 'template-a' }, { id: 'broken', error: 'Missing id' }] })
+      if (url === '/api/dsh-workflow-studio/templates') return Response.json({ directory: '~/.dsh/dsh-workflow-studio/templates/<template-id>/workflow.yaml', templates: [{ key: 'template-a', source: '@test/templates/template-a', name: 'template-a', id: 'template-a' }, { key: 'broken', source: '@test/templates/broken', name: 'broken', id: 'broken', error: 'Missing id' }] })
       if (url === '/api/dsh-workflow-studio/instances' && init?.method === 'POST') return Response.json(detail, { status: 201 })
       if (url === '/api/dsh-workflow-studio/instances') return Response.json([detail])
       if (url === '/api/dsh-workflow-studio/instances/instance-a' && init?.method === 'DELETE') return Response.json({})
@@ -427,7 +427,7 @@ test('instance API uses the host routes and rejects malformed payloads', async (
 
     globalThis.fetch = async () => Response.json({ ...detail, snapshot: null })
     await assert.rejects(getInstance('instance-a'), /Unexpected workflow instance/)
-    globalThis.fetch = async () => Response.json({ directory: '/templates', templates: [{ id: 'bad-layout', layout: { layers: 'invalid', issues: [] } }] })
+    globalThis.fetch = async () => Response.json({ directory: '/templates', templates: [{ key: 'bad-layout', source: '@test/templates/bad-layout', name: 'bad-layout', id: 'bad-layout', layout: { layers: 'invalid', issues: [] } }] })
     await assert.rejects(listTemplates(), /Unexpected workflow template catalog/)
     globalThis.fetch = async () => Response.json({ error: { code: 'duplicate-name', message: 'duplicate' } }, { status: 409 })
     await assert.rejects(createInstance(input), error => {

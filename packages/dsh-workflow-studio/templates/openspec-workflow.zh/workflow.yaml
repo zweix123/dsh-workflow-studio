@@ -3,7 +3,8 @@
 #   - https://github.com/Fission-AI/OpenSpec/blob/main/docs/workflows.md
 #   - https://github.com/Fission-AI/OpenSpec/blob/main/docs/commands.md
 #   - https://github.com/Fission-AI/OpenSpec/blob/main/docs/agent-contract.md
-id: openspec-sdd-workflow
+id: openspec-workflow.zh
+name: OpenSpec 规格驱动开发工作流
 type: dag
 output_schema: {}
 description: 使用 OpenSpec 的 OPSX 工作流完成一次规格驱动变更：按需探索，生成并审阅规划产物，在计划修订、实现修复和一致性修订之间递归收敛，最后同步主规格并归档。

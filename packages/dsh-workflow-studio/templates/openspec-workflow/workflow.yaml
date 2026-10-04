@@ -3,7 +3,8 @@
 #   - https://github.com/Fission-AI/OpenSpec/blob/main/docs/workflows.md
 #   - https://github.com/Fission-AI/OpenSpec/blob/main/docs/commands.md
 #   - https://github.com/Fission-AI/OpenSpec/blob/main/docs/agent-contract.md
-id: openspec-sdd-workflow
+id: openspec-workflow
+name: OpenSpec specification-driven development workflow
 type: dag
 output_schema: {}
 description: "Use the OpenSpec OPSX workflow for a specification-driven change: explore when needed, create

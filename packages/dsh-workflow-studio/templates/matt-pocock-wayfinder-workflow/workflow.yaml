@@ -1,5 +1,6 @@
 # source: https://github.com/mattpocock/skills
-id: Matt Pocock engineering workflow
+id: matt-pocock-wayfinder-workflow
+name: Matt Pocock engineering workflow
 type: dag
 output_schema: {}
 description: Wayfinder selects every open decision ticket on the map in one pass, then independently splits

@@ -1,0 +1,11 @@
+{
+  "name": "dsh-workflow-template",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/dsh-workflow-template/src/index.d.ts",
+  "exports": { ".": { "types": "./lib/types/dsh-workflow-template/src/index.d.ts", "default": "./lib/index.js" } },
+  "dependencies": { "yaml": "^2.8.1", "zod": "^4.0.0" },
+  "peerDependencies": { "@deepseek-ai/cordis": "~4.0.4", "@deepseek-ai/cordis-plugin-loader": "~1.0.5", "dsh-workflow-studio": "0.1.0" }
+}

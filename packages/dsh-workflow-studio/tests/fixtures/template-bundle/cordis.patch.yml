@@ -1,0 +1,21 @@
+- insert:
+    - id: template-fixture-duplicate
+      name: dsh-workflow-template
+      config:
+        directory: '@dsh-workflow/template-fixture/templates/duplicate'
+    - id: template-fixture-bad-name
+      name: dsh-workflow-template
+      config:
+        directory: '@dsh-workflow/template-fixture/templates/bad-name'
+    - id: template-fixture-bad-yaml
+      name: dsh-workflow-template
+      config:
+        directory: '@dsh-workflow/template-fixture/templates/bad-yaml'
+    - id: template-fixture-missing-kind
+      name: dsh-workflow-template
+      config:
+        directory: '@dsh-workflow/template-fixture/templates/missing-kind'
+    - id: template-fixture-layout-warning
+      name: dsh-workflow-template
+      config:
+        directory: '@dsh-workflow/template-fixture/templates/layout-warning'
