@@ -1,0 +1,4 @@
+interface:
+  display_name: "DSH 模板编写与加载"
+  short_description: "定义工作流内容、构造纯配置模板插件，并完成本地加载与验证"
+  default_prompt: "使用 $dsh-template-authoring 将我的流程做成模板插件，说明各节点输入输出并给出本地加载步骤。"

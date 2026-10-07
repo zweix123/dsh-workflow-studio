@@ -1,0 +1,5 @@
+- insert:
+    - id: example-task-review-loader
+      name: dsh-workflow-template
+      config:
+        directory: '@example/team-workflows/templates/task-review'

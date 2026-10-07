@@ -1,0 +1,60 @@
+id: example-task-review
+name: 任务分析与结果确认
+type: dag
+output_schema:
+  summary: string
+  approved: boolean
+dag:
+  - id: request
+    type: node
+    node_kind: form
+    output_schema:
+      task: string
+    schema:
+      properties:
+        task:
+          title: 需要分析的任务
+          description: 填写目标、范围和已有材料。
+    uiSchema:
+      task:
+        ui:widget: textarea
+
+  - id: discuss
+    type: node
+    node_kind: session_agent
+    input_schema:
+      task: string
+    prompt: |
+      请分析以下任务：
+      {{ task }}
+
+      本节点负责分析和提出建议，不直接修改工作区文件。
+      请说明已知事实、待确认问题和建议的下一步，并给出可供用户核对的简短结论。
+      完成后请提醒用户阅读结果，在工坊中手动标记本节点完成，
+      再到结果确认表单填写结论并决定是否认可。
+      会话回复不会自动成为工作流的结构化输出。
+
+  - id: confirm
+    type: node
+    node_kind: form
+    output_schema:
+      summary: string
+      approved: boolean
+    schema:
+      properties:
+        summary:
+          title: 已确认的结论
+          description: 阅读对话后填写最终结论。
+        approved:
+          title: 是否认可该结论
+          default: false
+    uiSchema:
+      summary:
+        ui:widget: textarea
+
+  - type: edge
+    from: request
+    to: discuss
+  - type: edge
+    from: discuss
+    to: confirm

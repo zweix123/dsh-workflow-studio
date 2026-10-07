@@ -1,0 +1,3 @@
+# Keep this skill's bundled guides despite the repository-wide references/ rule.
+!references/
+!references/**
