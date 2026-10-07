@@ -1,0 +1,48 @@
+id: form-structured-retry
+name: 结构化交付重试 / Structured retry
+type: dag
+output_schema:
+  result: string
+dag:
+  - id: answer
+    type: node
+    node_kind: form
+    output_schema:
+      enabled: boolean
+      rows:
+        type: array
+        items:
+          type: object
+          properties:
+            name: string
+            amount: number
+            enabled: boolean
+            tags:
+              type: array
+              items: string
+            grid:
+              type: array
+              items:
+                type: array
+                items: number
+    schema:
+      properties:
+        enabled:
+          default: false
+        rows:
+          default:
+            - name: ""
+              amount: 0
+              enabled: false
+              tags: []
+              grid: []
+  - id: finish
+    type: node
+    node_kind: bash
+    command: ""
+    output_schema:
+      result: string
+  - type: edge
+    from: answer
+    to: finish
+    if: $.enabled

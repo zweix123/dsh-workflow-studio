@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { mkdir, mkdtemp, rm, rename, symlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, rename, symlink, writeFile, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, test } from 'node:test'
@@ -217,6 +217,138 @@ test('form accepts validated input once and sends its real result downstream', a
   assert.deepEqual(done.snapshot.instances.find((item: any) => item.instanceId === nodeId).output, { choice: 'yes', count: 0, approved: false })
   assert.deepEqual(done.snapshot.instances.find((item: any) => item.definitionId === 'next').input, { choice: 'yes', count: 0, approved: false })
   assert.equal((await postJson(f.url(`${path}/nodes/${nodeId}/actions/submit`), { choice: 'no', count: 1, approved: true })).status, 409)
+})
+
+test('form submits nested lists in order, delivers them downstream and restores the accepted result', async () => {
+  const f = await fixture()
+  const output = { rows: { type: 'array', items: { type: 'object', properties: { name: 'string', amount: 'number', enabled: 'boolean', tags: { type: 'array', items: 'string' }, matrix: { type: 'array', items: { type: 'array', items: 'number' } } } } } }
+  await putTemplate(f.templateRoot, 'structured', stringify({ id: 'root', type: 'dag', dag: [
+    { id: 'answer', type: 'node', node_kind: 'form', output_schema: output },
+    { id: 'next', type: 'node', node_kind: 'bash', command: '', input_schema: output },
+    { type: 'edge', from: 'answer', to: 'next' },
+  ] }))
+  const response = await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Structured', templateId: 'structured' })
+  assert.equal(response.status, 201)
+  const created = await response.json() as any
+  const nodeId = created.snapshot.instances.find((item: any) => item.definitionId === 'answer').instanceId
+  const path = `${INSTANCES_PATH}/${created.id}`
+  const value = { rows: [{ name: '', amount: 0, enabled: false, tags: [], matrix: [[], [1, 2]] }, { name: 'second', amount: 3, enabled: true, tags: ['a'], matrix: [] }] }
+  assert.equal((await postJson(f.url(`${path}/nodes/${nodeId}/actions/submit`), value)).status, 200)
+  const done = await (await fetch(f.url(path))).json() as any
+  assert.deepEqual(done.snapshot.instances.find((item: any) => item.definitionId === 'next').input, value)
+  await f.close()
+  const restored = await openHost(f.storageRoot, f.templateRoot, f.root)
+  cleanups.push(restored.close)
+  const recovered = await (await fetch(restored.url(path))).json() as any
+  assert.deepEqual(recovered.executions[nodeId].output, value)
+  assert.equal((await postJson(restored.url(`${path}/nodes/${nodeId}/actions/submit`), { rows: [] })).status, 409)
+})
+
+test('form compares prefill structure independently of key order and validates every submitted layer', async () => {
+  const f = await fixture()
+  const row = { type: 'object', properties: { name: 'string', amount: 'number', flags: { type: 'array', items: 'boolean' } } }
+  const output = { rows: { type: 'array', items: row } }
+  const input = { rows: { type: 'array', items: { type: 'object', properties: { flags: { type: 'array', items: 'boolean' }, amount: 'number', name: 'string' } } } }
+  const form = { id: 'answer', type: 'node', node_kind: 'form', input_schema: input, output_schema: output,
+    schema: { properties: { rows: { items: { properties: { name: { enum: ['a', 'b'] } } } } } } }
+  await putTemplate(f.templateRoot, 'strict-form', stringify({ id: 'root', type: 'dag', dag: [{ id: 'source', type: 'node', node_kind: 'form', output_schema: output }, form, { type: 'edge', from: 'source', to: 'answer' }] }))
+  const response = await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Strict', templateId: 'strict-form' })
+  assert.equal(response.status, 201)
+  const created = await response.json() as any
+  const path = `${INSTANCES_PATH}/${created.id}`
+  const sourceId = created.snapshot.instances.find((item: any) => item.definitionId === 'source').instanceId
+  assert.equal((await postJson(f.url(`${path}/nodes/${sourceId}/actions/submit`), { rows: [] })).status, 200)
+  const active = await (await fetch(f.url(path))).json() as any
+  const id = active.snapshot.instances.find((item: any) => item.definitionId === 'answer').instanceId
+  for (const [value, location] of [
+    [{ rows: [{ name: 'a', flags: [] }] }, 'rows[0].amount'],
+    [{ rows: [{ name: 'a', amount: '0', flags: [] }] }, 'rows[0].amount'],
+    [{ rows: [{ name: 'other', amount: 0, flags: [] }] }, 'rows[0].name'],
+    [{ rows: [{ name: 'a', amount: 0, flags: [1] }] }, 'rows[0].flags[0]'],
+    [{ rows: [{ name: 'a', amount: 0, flags: [], extra: 1 }] }, 'rows[0].extra'],
+    [{ rows: [], extra: 1 }, 'extra'],
+  ] as const) {
+    const invalid = await postJson(f.url(`${path}/nodes/${id}/actions/submit`), value)
+    assert.equal(invalid.status, 422)
+    assert.ok((await invalid.json() as any).error.message.includes(location))
+    const unchanged = await (await fetch(f.url(path))).json() as any
+    assert.equal(unchanged.snapshot.instances.find((item: any) => item.instanceId === id).status, 'ready')
+    assert.equal(unchanged.executions[id]?.status === 'succeeded', false)
+  }
+  assert.equal((await postJson(f.url(`${path}/nodes/${id}/actions/submit`), { rows: [] })).status, 200)
+  const badInput = { rows: { type: 'array', items: { type: 'object', properties: { name: 'number', amount: 'number', flags: { type: 'array', items: 'boolean' } } } } }
+  await putTemplate(f.templateRoot, 'mismatched-form', stringify({ id: 'root', type: 'dag', dag: [{ id: 'source', type: 'node', node_kind: 'form', output_schema: badInput }, { ...form, input_schema: badInput }, { type: 'edge', from: 'source', to: 'answer' }] }))
+  const catalog = await (await fetch(f.url(TEMPLATES_PATH))).json() as any
+  assert.match(catalog.templates.find((item: any) => item.id === 'mismatched-form').error, /prefill input/)
+})
+
+test('form rejects invalid nested annotations, controls and incomplete structured defaults in the template catalog', async () => {
+  const f = await fixture()
+  const output = { rows: { type: 'array', items: { type: 'object', properties: { name: 'string', amount: 'number' } } } }
+  const invalid = [
+    { schema: { properties: { rows: { items: null } } } },
+    { uiSchema: { rows: { items: null } } },
+    { uiSchema: null },
+    { schema: { properties: { rows: { default: [{ name: 'a' }] } } } },
+    { schema: { properties: { rows: { default: [{ name: 'a', amount: 0, extra: true }] } } } },
+    { schema: { properties: { rows: { default: [{ name: 'b', amount: 0 }], items: { properties: { name: { enum: ['a'] } } } } } } },
+    { schema: { properties: { rows: { items: { properties: { unknown: { title: 'Unknown' } } } } } } },
+    { schema: { properties: { rows: { items: { properties: { amount: { type: 'string' } } } } } } },
+    { schema: { properties: { rows: { enum: [[]] } } } },
+    { uiSchema: { rows: { 'ui:widget': 'textarea' } } },
+    { uiSchema: { rows: { items: { amount: { 'ui:widget': 'textarea' } } } } },
+    { schema: { properties: { rows: { items: { properties: { amount: { enum: ['0'] } } } } } } },
+  ]
+  for (const [index, config] of invalid.entries()) {
+    const id = `bad-structured-${index}`
+    await putTemplate(f.templateRoot, id, stringify({ id: 'root', type: 'dag', dag: [{ id: 'answer', type: 'node', node_kind: 'form', output_schema: output, ...config }] }))
+    const catalog = await (await fetch(f.url(TEMPLATES_PATH))).json() as any
+    assert.ok(catalog.templates.find((item: any) => item.id === id).error, `Invalid configuration ${index} must be rejected`)
+  }
+})
+
+test('structured browser fixtures use ordinary templates and deliver partial prefill without changing DAG extra-field semantics', async () => {
+  const emitted = { gate: true, record: { title: '', checked: false, tags: [], nested: [[]], empty: { extra: 1 }, extra: 2 }, rows: [{ name: 'kept', amount: 0, extra: 3 }], bad: { score: 'wrong' } }
+  const f = await fixture({ shell: { sandboxMode: 'workspace-write', resolve: (request: unknown) => request, execute: async () => ({ result: async () => ({ exitCode: 0, stdout: { text: JSON.stringify(emitted), truncated: false }, stderr: { text: '', truncated: false }, sandbox: { mode: 'workspace-write' } }) }) } })
+  for (const name of ['structured', 'prefill', 'retry']) {
+    const yaml = await readFile(new URL(`./fixtures/form-structured/templates/${name}/workflow.yaml`, import.meta.url), 'utf8')
+    await putTemplate(f.templateRoot, parse(yaml).id, yaml)
+  }
+  const catalog = await (await fetch(f.url(TEMPLATES_PATH))).json() as any
+  assert.deepEqual(catalog.templates.filter((item: any) => item.error).map((item: any) => ({ id: item.id, error: item.error })), [])
+  const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Partial', templateId: 'form-structured-prefill' })).json() as any
+  const path = `${INSTANCES_PATH}/${created.id}`
+  const source = created.snapshot.instances.find((item: any) => item.definitionId === 'source').instanceId
+  await postJson(f.url(`${path}/nodes/${source}/actions/start`), {})
+  const detail = await untilDetail(f.url(path), value => value.snapshot.instances.some((item: any) => item.definitionId === 'answer'))
+  const answer = detail.snapshot.instances.find((item: any) => item.definitionId === 'answer')
+  assert.deepEqual(answer.input, emitted)
+  assert.equal((await postJson(f.url(`${path}/nodes/${answer.instanceId}/actions/submit`), answer.input)).status, 422)
+  const value = { record: { title: '', score: 0, checked: false, tags: [], nested: [[]], empty: {} }, rows: [{ name: 'kept', amount: 0 }], bad: { score: 0 } }
+  assert.equal((await postJson(f.url(`${path}/nodes/${answer.instanceId}/actions/submit`), value)).status, 200)
+  const done = await (await fetch(f.url(path))).json() as any
+  assert.deepEqual(done.snapshot.instances.find((item: any) => item.definitionId === 'next').input, value)
+  assert.deepEqual(done.executions[source].output, emitted)
+})
+
+test('form retains structured accepted output through delivery retries and a restart', async () => {
+  const f = await fixture()
+  const yaml = await readFile(new URL('./fixtures/form-structured/templates/retry/workflow.yaml', import.meta.url), 'utf8')
+  await putTemplate(f.templateRoot, 'structured-retry', yaml)
+  const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Retry', templateId: 'structured-retry' })).json() as any
+  const path = `${INSTANCES_PATH}/${created.id}`
+  const id = created.snapshot.instances.find((item: any) => item.definitionId === 'answer').instanceId
+  const value = { enabled: false, rows: [{ name: '', amount: 0, enabled: false, tags: [], grid: [[]] }] }
+  assert.equal((await postJson(f.url(`${path}/nodes/${id}/actions/submit`), value)).status, 422)
+  assert.equal((await postJson(f.url(`${path}/nodes/${id}/actions/submit`), { enabled: true, rows: [] })).status, 409)
+  assert.equal((await postJson(f.url(`${path}/nodes/${id}/actions/retry`), {})).status, 422)
+  await f.close()
+  const restored = await openHost(f.storageRoot, f.templateRoot, f.root)
+  cleanups.push(restored.close)
+  assert.equal((await postJson(restored.url(`${path}/nodes/${id}/actions/retry`), {})).status, 422)
+  const result = await (await fetch(restored.url(path))).json() as any
+  assert.deepEqual(result.executions[id].output, value)
+  assert.equal(result.executions[id].status, 'succeeded')
 })
 
 test('form preserves upstream zero, false and empty text over defaults', async () => {

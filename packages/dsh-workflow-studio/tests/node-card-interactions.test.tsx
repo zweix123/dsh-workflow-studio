@@ -557,6 +557,183 @@ test('form keeps a page draft, submits through the node action, then becomes rea
 })
 
 
+test('structured form edits independent rows, deletes without reinitializing its draft and locks accepted results', async () => {
+  const { dom, cleanup } = testDom()
+  const defaultRows = [{ name: 'first', amount: 1 }, { name: 'middle', amount: 2 }, { name: 'last', amount: 3 }]
+  const base: any = { id: 'run', workspaceId: 'w', name: 'Lists', templateId: 'flow', createdAt: '2026-10-07T00:00:00Z', input: {},
+    definition: { id: 'root', type: 'dag', dag: [{ id: 'answer', type: 'node', node_kind: 'form', output_schema: { rows: { type: 'array', items: { type: 'object', properties: { name: 'string', amount: 'number' } } } },
+      schema: { properties: { rows: { title: 'Rows', default: defaultRows, items: { properties: { name: { title: 'Name' }, amount: { title: 'Amount', default: 0 } } } } } }, uiSchema: { rows: { items: { name: { 'ui:widget': 'textarea' } } } } }] },
+    snapshot: { rootInstanceId: 'root-i', instances: [
+      { instanceId: 'root-i', definitionId: 'root', definitionPath: [], parentInstanceId: null, input: {}, type: 'dag', status: 'running' },
+      { instanceId: 'form-i', definitionId: 'answer', definitionPath: ['dag', 0], parentInstanceId: 'root-i', input: {}, type: 'node', status: 'ready' },
+    ], waitingPositions: [], skippedPositions: [], edges: [], instanceConnections: [] } }
+  let submitted: any
+  let latest = base
+  globalThis.fetch = async (_url, init) => {
+    submitted = JSON.parse(String(init?.body))
+    latest = { ...base, snapshot: { ...base.snapshot, instances: base.snapshot.instances.map((item: any) => item.instanceId === 'form-i' ? { ...item, status: 'completed', output: submitted } : item) }, executions: { 'form-i': { kind: 'form', status: 'succeeded', output: submitted } } }
+    return nodeResponse(latest)
+  }
+  const container = dom.window.document.getElementById('root')!
+  const root = createRoot(container)
+  const render = () => act(async () => root.render(<InstanceRunPanel nodes={testNodes} detail={withNodeViews(latest)} t={key => { testLanguage = en; return en[key] }} onUpdate={value => { latest = value }} onWidthUpdate={() => {}} />))
+  const button = (label: string) => container.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!
+  const row = (index: number) => container.querySelector<HTMLElement>(`[role="group"][aria-label="Rows ${index}"]`)!
+  const change = async (input: HTMLInputElement | HTMLTextAreaElement, value: string) => act(async () => { Object.getOwnPropertyDescriptor(input instanceof dom.window.HTMLTextAreaElement ? dom.window.HTMLTextAreaElement.prototype : dom.window.HTMLInputElement.prototype, 'value')!.set!.call(input, value); Simulate.change(input) })
+  try {
+    await render()
+    await act(async () => button('Details answer').click())
+    assert.equal(row(1).querySelector('textarea')!.value, 'first')
+    await change(row(1).querySelector('textarea')!, 'changed')
+    await act(async () => button('Remove Rows 2').click())
+    assert.equal(row(2).querySelector('textarea')!.value, 'last')
+    await act(async () => button('Add Rows').click())
+    assert.equal(row(3).querySelector('textarea')!.value, '')
+    assert.equal(row(3).querySelector('input')!.value, '0')
+    await change(row(3).querySelector('textarea')!, 'new')
+    await act(async () => button('Close details').click())
+    await act(async () => button('Details answer').click())
+    assert.deepEqual([...container.querySelectorAll('textarea')].map(input => input.value), ['changed', 'last', 'new'])
+    assert.deepEqual(defaultRows, [{ name: 'first', amount: 1 }, { name: 'middle', amount: 2 }, { name: 'last', amount: 3 }])
+    for (let index = 3; index > 0; index--) await act(async () => button(`Remove Rows ${index}`).click())
+    await act(async () => button('Close details').click())
+    await act(async () => button('Details answer').click())
+    assert.equal(container.querySelector('textarea'), null)
+    await act(async () => container.querySelector<HTMLButtonElement>('button[type="submit"]')!.click())
+    await render()
+    assert.deepEqual(submitted, { rows: [] })
+    assert.equal(button('Add Rows').disabled, true)
+  } finally { await act(async () => root.unmount()); cleanup() }
+})
+
+test('structured prefill excludes unknown fields without merging defaults and nested scalars stay unfilled until edited', async () => {
+  const { dom, cleanup } = testDom()
+  const input = { record: { title: '', checked: false, tags: [], nested: [[]], empty: { unrelated: 1 }, unrelated: 'secret' } }
+  const base: any = { id: 'run', workspaceId: 'w', name: 'Nested', templateId: 'flow', createdAt: '2026-10-07T00:00:00Z', input: {},
+    definition: { id: 'root', type: 'dag', dag: [{ id: 'answer', type: 'node', node_kind: 'form', output_schema: {
+      record: { type: 'object', properties: { title: 'string', score: 'number', checked: 'boolean', tags: { type: 'array', items: 'string' }, nested: { type: 'array', items: { type: 'array', items: 'number' } }, empty: { type: 'object', properties: {} } } },
+      picks: { type: 'array', items: 'boolean' }, numbers: { type: 'array', items: 'number' }, texts: { type: 'array', items: 'string' },
+    }, schema: { properties: { record: { default: { title: 'fallback', score: 9, checked: true, tags: ['a'], nested: [[9]], empty: {} }, properties: { score: { default: 7 }, tags: { items: { enum: ['a', 'b'] } } } } } } }] },
+    snapshot: { rootInstanceId: 'root-i', instances: [
+      { instanceId: 'root-i', definitionId: 'root', definitionPath: [], parentInstanceId: null, input: {}, type: 'dag', status: 'running' },
+      { instanceId: 'form-i', definitionId: 'answer', definitionPath: ['dag', 0], parentInstanceId: 'root-i', input, type: 'node', status: 'ready' },
+    ], waitingPositions: [], skippedPositions: [], edges: [], instanceConnections: [] } }
+  const requests: any[] = []
+  let latest = base
+  globalThis.fetch = async (_url, init) => {
+    const value = JSON.parse(String(init?.body)); requests.push(value)
+    if (requests.length === 1) return Response.json({ error: { code: 'node-input-invalid', message: 'Delivery refused' }, latest: withNodeViews(latest) }, { status: 422 })
+    latest = { ...base, executions: { 'form-i': { kind: 'form', status: 'succeeded', output: value } } }
+    return nodeResponse(latest)
+  }
+  const container = dom.window.document.getElementById('root')!
+  const root = createRoot(container)
+  const render = () => act(async () => root.render(<InstanceRunPanel nodes={testNodes} detail={withNodeViews(latest)} t={key => { testLanguage = en; return en[key] }} onUpdate={value => { latest = value }} onWidthUpdate={() => {}} />))
+  const button = (label: string) => container.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!
+  const control = (label: string) => { const element = [...container.querySelectorAll('label')].find(item => item.textContent === label)!; return dom.window.document.getElementById(element.htmlFor) as HTMLInputElement | HTMLSelectElement }
+  const change = async (element: HTMLInputElement | HTMLSelectElement, value: string) => act(async () => { Object.getOwnPropertyDescriptor(element instanceof dom.window.HTMLSelectElement ? dom.window.HTMLSelectElement.prototype : dom.window.HTMLInputElement.prototype, 'value')!.set!.call(element, value); Simulate.change(element) })
+  const submit = () => act(async () => container.querySelector<HTMLButtonElement>('button[type="submit"]')!.click())
+  try {
+    await render(); await act(async () => button('Details answer').click())
+    assert.equal(control('title').value, '')
+    assert.equal(control('score').value, '')
+    assert.equal((control('checked') as HTMLInputElement).checked, false)
+    assert.equal(container.querySelector('.dsh-workflow-form')!.textContent!.includes('secret'), false)
+    await submit(); assert.match(container.querySelector('[role="alert"]')!.textContent!, /record.score/)
+    assert.equal(requests.length, 0)
+    await change(control('score'), '0')
+    await act(async () => button('Add picks').click())
+    await submit(); assert.match(container.querySelector('[role="alert"]')!.textContent!, /picks\[0\]/)
+    const pick = container.querySelector<HTMLInputElement>('[aria-label="picks 1"] input')!
+    await act(async () => { pick.checked = true; Simulate.change(pick) })
+    await act(async () => { pick.checked = false; Simulate.change(pick) })
+    await act(async () => button('Add numbers').click())
+    await submit(); assert.match(container.querySelector('[role="alert"]')!.textContent!, /numbers\[0\]/)
+    await change(container.querySelector<HTMLInputElement>('[aria-label="numbers 1"] input')!, '0')
+    await act(async () => button('Add texts').click())
+    await submit(); assert.match(container.querySelector('[role="alert"]')!.textContent!, /texts\[0\]/)
+    const text = container.querySelector<HTMLInputElement>('[aria-label="texts 1"] input')!
+    await change(text, 'x'); await change(text, '')
+    await act(async () => button('Add tags').click())
+    await change(container.querySelector<HTMLSelectElement>('[aria-label="tags 1"] select')!, '1')
+    await act(async () => button('Add 1').click())
+    await change(container.querySelector<HTMLInputElement>('[aria-label="nested 1"] input')!, '6')
+    await submit()
+    assert.equal(requests.length, 1)
+    assert.equal(control('score').value, '0')
+    assert.match(container.textContent!, /Delivery refused/)
+    await submit(); await render()
+    assert.deepEqual(requests[1], { record: { title: '', score: 0, checked: false, tags: ['b'], nested: [[6]], empty: {} }, picks: [false], numbers: [0], texts: [''] })
+    assert.deepEqual(input, { record: { title: '', checked: false, tags: [], nested: [[]], empty: { unrelated: 1 }, unrelated: 'secret' } })
+    assert.ok([...container.querySelectorAll<HTMLInputElement | HTMLButtonElement | HTMLSelectElement>('.dsh-workflow-form input, .dsh-workflow-form select, .dsh-workflow-form button')].every(element => element.disabled))
+  } finally { await act(async () => root.unmount()); cleanup() }
+})
+
+test('prototype-sensitive form fields stay unfilled at every object level and submit their own values', async () => {
+  const { dom, cleanup } = testDom()
+  const properties = JSON.parse('{"constructor":"string","__proto__":"string"}')
+  const detail: any = { id: 'run', workspaceId: 'w', name: 'Field names', templateId: 'flow', createdAt: '2026-10-07T00:00:00Z', input: {},
+    definition: { id: 'root', type: 'dag', dag: [{ id: 'answer', type: 'node', node_kind: 'form', output_schema: { ...properties,
+      record: { type: 'object', properties }, rows: { type: 'array', items: { type: 'object', properties } },
+    } }] }, snapshot: { rootInstanceId: 'root-i', instances: [
+      { instanceId: 'root-i', definitionId: 'root', definitionPath: [], parentInstanceId: null, input: {}, type: 'dag', status: 'running' },
+      { instanceId: 'form-i', definitionId: 'answer', definitionPath: ['dag', 0], parentInstanceId: 'root-i', input: {}, type: 'node', status: 'ready' },
+    ], waitingPositions: [], skippedPositions: [], edges: [], instanceConnections: [] } }
+  let submitted: any
+  globalThis.fetch = async (_url, init) => { submitted = JSON.parse(String(init?.body)); return nodeResponse(detail) }
+  const container = dom.window.document.getElementById('root')!
+  const root = createRoot(container)
+  const button = (label: string) => container.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!
+  try {
+    await act(async () => root.render(<InstanceRunPanel nodes={testNodes} detail={withNodeViews(detail)} t={key => { testLanguage = en; return en[key] }} onUpdate={() => {}} onWidthUpdate={() => {}} />))
+    await act(async () => button('Details answer').click())
+    assert.deepEqual([...container.querySelectorAll<HTMLInputElement>('.dsh-workflow-form input')].map(input => input.value), ['', '', '', ''])
+    await act(async () => button('Add rows').click())
+    const inputs = [...container.querySelectorAll<HTMLInputElement>('.dsh-workflow-form input')]
+    assert.deepEqual(inputs.map(input => input.value), ['', '', '', '', '', ''])
+    await act(async () => container.querySelector<HTMLButtonElement>('button[type="submit"]')!.click())
+    assert.equal(submitted, undefined)
+    assert.match(container.querySelector('[role="alert"]')!.textContent!, /form.constructor/)
+    for (const [index, input] of inputs.entries()) await act(async () => {
+      Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value')!.set!.call(input, String(index))
+      Simulate.change(input)
+    })
+    await act(async () => container.querySelector<HTMLButtonElement>('button[type="submit"]')!.click())
+    assert.deepEqual(submitted, JSON.parse('{"constructor":"0","__proto__":"1","record":{"constructor":"2","__proto__":"3"},"rows":[{"constructor":"4","__proto__":"5"}]}'))
+  } finally { await act(async () => root.unmount()); cleanup() }
+})
+
+test('new structured item defaults are independent across rows and node instances', async () => {
+  const { dom, cleanup } = testDom()
+  const itemDefault = { names: ['Ada'], count: 0, enabled: false }
+  const config = { type: 'node', node_kind: 'form', output_schema: { rows: { type: 'array', items: { type: 'object', properties: { names: { type: 'array', items: 'string' }, count: 'number', enabled: 'boolean' } } } }, schema: { properties: { rows: { items: { default: itemDefault } } } } }
+  const detail: any = { id: 'run', workspaceId: 'w', name: 'Independent', templateId: 'flow', createdAt: '2026-10-07T00:00:00Z', input: {}, definition: { id: 'root', type: 'dag', dag: [{ ...config, id: 'a' }, { ...config, id: 'b' }] },
+    snapshot: { rootInstanceId: 'root-i', instances: [
+      { instanceId: 'root-i', definitionId: 'root', definitionPath: [], parentInstanceId: null, input: {}, type: 'dag', status: 'running' },
+      ...['a', 'b'].map((id, index) => ({ instanceId: `${id}-i`, definitionId: id, definitionPath: ['dag', index], parentInstanceId: 'root-i', input: {}, type: 'node', status: 'ready' })),
+    ], waitingPositions: [], skippedPositions: [], edges: [], instanceConnections: [] } }
+  const container = dom.window.document.getElementById('root')!
+  const root = createRoot(container)
+  const button = (label: string) => container.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!
+  try {
+    await act(async () => root.render(<InstanceRunPanel nodes={testNodes} detail={withNodeViews(detail)} t={key => { testLanguage = en; return en[key] }} onUpdate={() => {}} onWidthUpdate={() => {}} />))
+    await act(async () => button('Details a').click())
+    assert.equal(container.querySelector('.dsh-workflow-form input'), null)
+    await act(async () => button('Add rows').click())
+    await act(async () => button('Add rows').click())
+    const first = container.querySelector<HTMLInputElement>('[aria-label="rows 1"] input[type="text"]')!
+    await act(async () => { Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value')!.set!.call(first, 'Grace'); Simulate.change(first) })
+    assert.equal(container.querySelector<HTMLInputElement>('[aria-label="rows 2"] input[type="text"]')!.value, 'Ada')
+    await act(async () => button('Details b').click())
+    assert.equal(container.querySelector('.dsh-workflow-form input'), null)
+    await act(async () => button('Add rows').click())
+    assert.equal(container.querySelector<HTMLInputElement>('input[type="text"]')!.value, 'Ada')
+    await act(async () => button('Details a').click())
+    assert.equal(container.querySelector<HTMLInputElement>('[aria-label="rows 1"] input[type="text"]')!.value, 'Grace')
+    assert.deepEqual(itemDefault, { names: ['Ada'], count: 0, enabled: false })
+  } finally { await act(async () => root.unmount()); cleanup() }
+})
+
 test('conversation header returns to the latest instance and exact node after studio unmounts', async () => {
   const { dom, cleanup } = testDom()
   const client = new StudioClient()

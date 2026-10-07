@@ -1,0 +1,154 @@
+id: form-structured-e2e
+name: 结构化表单验收 / Structured form E2E
+type: dag
+dag:
+  - id: collect
+    type: node
+    node_kind: form
+    output_schema: &a3
+      rows: &a4
+        type: array
+        items:
+          type: object
+          properties:
+            name: string
+            amount: number
+            enabled: boolean
+            tags:
+              type: array
+              items: string
+            grid:
+              type: array
+              items:
+                type: array
+                items: number
+      settings: &a5
+        type: object
+        properties:
+          note: string
+          choice: number
+          approved: boolean
+      empty: &a6
+        type: object
+        properties: {}
+      flags: &a7
+        type: array
+        items: boolean
+    schema:
+      properties:
+        rows:
+          title: 任务列表 / Rows
+          description: 逐项填写名称与数值 / Fill each item
+          default:
+            - name: first
+              amount: 1
+              enabled: false
+              tags: &a1 []
+              grid: &a2 []
+            - name: middle
+              amount: 2
+              enabled: false
+              tags: *a1
+              grid: *a2
+            - name: last
+              amount: 3
+              enabled: false
+              tags: *a1
+              grid: *a2
+          items: &a8
+            default:
+              name: ""
+              amount: 0
+              enabled: false
+              tags: *a1
+              grid: *a2
+            properties:
+              name:
+                title: 名称 / Name
+              amount:
+                title: 数值 / Amount
+              enabled:
+                title: 启用 / Enabled
+              tags:
+                title: 标签 / Tags
+                items:
+                  enum:
+                    - a
+                    - b
+              grid:
+                title: 矩阵 / Matrix
+        settings:
+          title: 设置 / Settings
+          properties: &a9
+            note:
+              title: 备注 / Note
+              default: ""
+            choice:
+              title: 选择 / Choice
+              enum:
+                - 0
+                - 1
+              default: 0
+            approved:
+              title: 批准 / Approved
+              default: false
+    uiSchema: &a10
+      rows:
+        items:
+          name:
+            ui:widget: textarea
+          amount:
+            ui:widget: updown
+          enabled:
+            ui:widget: checkbox
+      settings:
+        note:
+          ui:widget: text
+        choice:
+          ui:widget: select
+  - id: review
+    type: node
+    node_kind: form
+    input_schema: *a3
+    output_schema: &a11
+      rows: *a4
+      settings: *a5
+      empty: *a6
+      flags: *a7
+      extraNote: string
+    schema:
+      properties:
+        rows:
+          title: 任务列表 / Rows
+          description: 逐项填写名称与数值 / Fill each item
+          default:
+            - name: fallback
+              amount: 99
+              enabled: false
+              tags: *a1
+              grid: *a2
+          items: *a8
+        settings:
+          default:
+            note: fallback
+            choice: 1
+            approved: true
+          properties: *a9
+        flags:
+          default:
+            - true
+        extraNote:
+          title: 额外备注 / Extra note
+          default: added default
+    uiSchema: *a10
+  - id: downstream
+    type: node
+    node_kind: bash
+    command: ""
+    input_schema: *a11
+  - type: edge
+    from: collect
+    to: review
+  - type: edge
+    from: review
+    to: downstream

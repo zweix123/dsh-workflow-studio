@@ -1,0 +1,84 @@
+id: form-structured-prefill
+name: 部分预填验收 / Partial prefill
+type: dag
+dag:
+  - id: source
+    type: node
+    node_kind: bash
+    command: printf '%s'
+      '{"gate":true,"record":{"title":"","checked":false,"tags":[],"nested":[[]],"empty":{"extra":1},"extra":2},"rows":[{"name":"kept","amount":0,"extra":3}],"bad":{"score":"wrong"}
+      }'
+    output_schema:
+      gate: boolean
+  - id: answer
+    type: node
+    node_kind: form
+    output_schema:
+      record: &a1
+        type: object
+        properties:
+          title: string
+          score: number
+          checked: boolean
+          tags:
+            type: array
+            items: string
+          nested:
+            type: array
+            items:
+              type: array
+              items: number
+          empty:
+            type: object
+            properties: {}
+      rows: &a2
+        type: array
+        items:
+          type: object
+          properties:
+            name: string
+            amount: number
+      bad:
+        type: object
+        properties:
+          score: number
+    schema:
+      properties:
+        record:
+          default:
+            title: fallback
+            score: 9
+            checked: true
+            tags:
+              - a
+            nested:
+              - - 9
+            empty: {}
+          properties:
+            score:
+              default: 7
+        rows:
+          default:
+            - name: fallback
+              amount: 9
+        bad:
+          properties:
+            score:
+              default: 99
+  - id: next
+    type: node
+    node_kind: bash
+    command: ""
+    input_schema:
+      record: *a1
+      rows: *a2
+      bad:
+        type: object
+        properties:
+          score: number
+  - type: edge
+    from: source
+    to: answer
+  - type: edge
+    from: answer
+    to: next

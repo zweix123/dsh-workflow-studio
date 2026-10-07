@@ -1,0 +1,13 @@
+- insert:
+    - id: form-structured-structured
+      name: dsh-workflow-template
+      config:
+        directory: "@dsh-workflow/form-structured-fixture/templates/structured"
+    - id: form-structured-retry
+      name: dsh-workflow-template
+      config:
+        directory: "@dsh-workflow/form-structured-fixture/templates/retry"
+    - id: form-structured-prefill
+      name: dsh-workflow-template
+      config:
+        directory: "@dsh-workflow/form-structured-fixture/templates/prefill"

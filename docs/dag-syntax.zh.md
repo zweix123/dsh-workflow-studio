@@ -124,7 +124,9 @@ session_agent 只消费输入，`output_schema` 只能省略或为 `{}`；手动
 
 ### 3.2 表单节点
 
-form 的字段名与类型直接来自 `output_schema`，仅支持 `string`、`number`、`boolean`。用户填写的字段不必出现在 `input_schema`；只有用于同名预填的上游字段才写入输入契约，且必须存在于输出契约中、类型一致。可选的 `schema.properties` 为字段补充 `title`、`description`、`default`、`enum`，也可声明与输出契约一致的 `type`；`uiSchema` 可为字段指定 `ui:widget`。支持的控件如下：
+form 已支持五种类型、组合嵌套和数组增删。实施规格见[对象与数组字段扩展](./specs/form-structured-fields.zh.md)，验证范围见[验收记录](./acceptance/form-structured-fields.zh.md)。
+
+form 的字段名与类型直接来自 `output_schema`，支持 `string`、`number`、`boolean`，以及带属性声明的 `object` 和带元素声明的 `array`。用户填写的字段不必出现在 `input_schema`；用于同名预填的字段可写入输入契约，且必须存在于输出契约中、递归结构类型一致。可选的 `schema.properties` 为字段补充 `title`、`description`、`default`、标量 `enum`，也可声明与输出契约一致的 `type`；`uiSchema` 可为标量指定 `ui:widget`。标量支持的控件如下：
 
 | 类型 | 默认控件 | 可选 `ui:widget` |
 | --- | --- | --- |
@@ -157,6 +159,54 @@ uiSchema:
 ```
 
 首次打开时，同名上游输入优先，其次使用 `default`；零、`false` 与空字符串均是有效值。缺失值留给用户填写，不自动猜测。类型不匹配的预填值不会转换。当前工作流页面内关闭详情或切换节点可保留未提交草稿；刷新或离开页面会丢弃草稿。提交后结果只读，额外上游字段不会混入输出。
+
+#### 对象与数组字段
+
+对象与数组沿用第 4 节的结构化类型描述。对象按 `properties` 展开，数组按 `items` 展开，支持组合嵌套；数组允许末尾新增、删除任意项及提交空数组。原有标量控件在嵌套字段中继续有效。
+
+以下示例表示数量不固定的任务列表，每项包含名称与优先级。结构只在 `output_schema` 中定义；`schema` 沿 `properties`、`items` 补充注解，`uiSchema` 沿对象字段名、数组 `items` 配置已有控件。
+
+```yaml
+id: collect_items
+type: node
+node_kind: form
+output_schema:
+  tasks:
+    type: array
+    items:
+      type: object
+      properties:
+        name: string
+        priority: string
+schema:
+  properties:
+    tasks:
+      title: 任务列表
+      items:
+        properties:
+          name:
+            title: 名称
+          priority:
+            title: 优先级
+            enum: [高, 中, 低]
+            default: 中
+uiSchema:
+  tasks:
+    items:
+      name:
+        ui:widget: textarea
+```
+
+默认值和预填遵循以下规则：
+
+- 已有草稿保持原样，不重新补预填或默认值。首次初始化逐顶层字段使用同名上游值；已有对象或数组整体采用，不与其自身或子字段的默认值合并。上游对象缺少的字段由用户填写，零、false、空字符串和空数组不会触发默认值。
+- 没有预填时，有显式 `default` 就复制并采用整个值；对象或数组默认值必须完整符合声明和嵌套枚举，不能包含额外字段。不再合并其子字段默认值。
+- 没有整体默认值的对象按子字段初始化；没有整体默认值的数组从空数组开始。点击添加时按 `items` 初始化新项：应用该项或其子字段已有默认值，没有默认值的标量留待填写，不自动补空字符串、零或 false。
+- 编辑和增删不会修改上游数据、模板默认值或其他项。删除后不按默认值重新补项，已删除的内容不会因重开详情而恢复。
+
+`enum` 继续仅用于标量字段或标量元素，对象和数组本身不支持枚举。预填递归只取声明字段；正式提交则在每一层要求全部声明字段存在，拒绝额外字段，并校验类型与标量枚举。空字符串和空数组合法；无默认值且未填写的标量不能因控件显示为空或未选中而被视为已填写。错误须能指出具体字段或数组下标。服务端接受结果后所有嵌套编辑和增删操作只读，结果交付失败仅重试已接受结果。
+
+该扩展只增加结构化填写与数组增删，不增加排序、复制、联动、上传、远程选项、额外校验关键字或持久化草稿。其逐层字段范围限制只属于 form，不改变公共 DAG 对额外字段的规则。
 
 ### 3.3 prompt / command 输入引用
 
