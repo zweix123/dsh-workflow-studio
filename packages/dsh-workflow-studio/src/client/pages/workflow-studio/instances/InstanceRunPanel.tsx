@@ -51,6 +51,7 @@ export function InstanceRunPanel({ nodes = emptyNodeViews, detail, t, onUpdate, 
     ...detail.snapshot.skippedPositions.map(row => ({ ...row, status: 'skipped' as const }))]
     .find(row => buildPositionNodeId(row, row.status) === selected)
   const inspection = item ?? position
+  const parent = detail.snapshot.instances.find(row => row.instanceId === inspection?.parentInstanceId)
   const execution = item?.type === 'node' ? detail.executions?.[item.instanceId] : undefined
   const definition = inspection && definitionAt(detail.definition, inspection.definitionPath)
   const output = item?.status === 'completed' ? item.output : execution?.status === 'succeeded' ? execution.output : undefined
@@ -197,9 +198,8 @@ export function InstanceRunPanel({ nodes = emptyNodeViews, detail, t, onUpdate, 
           <section aria-label={t('runningInformation')}>
             <h4>{t('runningInformation')}</h4>
             <DetailFields fields={[
-              ...(item ? [[t('instanceId'), item.instanceId] as [string, unknown]] : []),
-              [t('parentInstanceId'), inspection.parentInstanceId],
-              [t('definitionId'), inspection.definitionId],
+              ...(item ? [[t(item.type === 'node' ? 'nodeInstance' : 'dagInstance'), `${item.definitionId} · ${item.instanceId}`] as [string, unknown]] : [[t('definitionId'), inspection.definitionId] as [string, unknown]]),
+              ...(inspection.parentInstanceId !== null ? [[t('parentInstanceId'), parent ? `${parent.definitionId} · ${parent.instanceId}` : inspection.parentInstanceId] as [string, unknown]] : []),
               [t('runState'), inspectionStatus],
               ...(item?.forItem ? [[t('forItemIdentity'), item.forItem] as [string, unknown]] : []),
               ...(item ? [[t('nodeInput'), item.input] as [string, unknown]] : []),
