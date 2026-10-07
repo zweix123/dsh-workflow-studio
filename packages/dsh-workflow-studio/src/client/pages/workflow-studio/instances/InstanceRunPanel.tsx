@@ -188,7 +188,6 @@ export function InstanceRunPanel({ nodes = emptyNodeViews, detail, t, onUpdate, 
     {draftDiscarded && <p role="alert">{t('draftDiscarded')}</p>}
     {detail.incompatible && <p className="dsh-workflow-run-error" role="alert">{t('instanceIncompatible')} {detail.incompatible}</p>}
     <LayoutNotices report={layoutReport} t={t} surface="instance" />
-    <p className="dsh-workflow-run-note">{t('resultNotice')}</p>
     <div ref={runArea} className="dsh-workflow-run">
       <DagCanvas nodes={nodes} reading={reading} detail={detail} t={t} onAction={(id, name) => void invoke(id, name)} onInspect={setSelected} pending={pending} active={active} inspectorWidth={inspection ? visibleWidth(dragWidth ?? detail.drawerWidth ?? 320, areaWidth) : 0} />
       {inspection && <aside className="dsh-workflow-inspector" aria-label={`${t('nodeDetails')} ${inspection.definitionId}`} style={{ width: `${visibleWidth(dragWidth ?? detail.drawerWidth ?? 320, areaWidth)}px` }}>

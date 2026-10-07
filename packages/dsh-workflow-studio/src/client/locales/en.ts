@@ -68,7 +68,6 @@ export const en: Record<keyof typeof zh, string> = {
   nodeRunning: 'The node is running.',
   nodeKindInvalid: 'This node cannot be completed manually.',
   nodeInputInvalid: 'The node input is invalid.',
-  resultNotice: 'Session agent completion provides an execution dependency; bash JSON results and submitted forms deliver real data.',
   requestFailed: 'The operation failed. Try again.',
   nodeDetails: 'Details',
   groupOutput: 'Group output',

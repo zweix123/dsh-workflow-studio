@@ -68,7 +68,6 @@ export const zh = {
   nodeRunning: '节点正在执行。',
   nodeKindInvalid: '该节点不能手动完成。',
   nodeInputInvalid: '节点输入无效。',
-  resultNotice: 'session_agent 完成只提供执行依赖；bash 的 JSON 结果与 form 的正式提交交付真实数据。',
   requestFailed: '操作失败，请重试。',
   nodeDetails: '详情',
   groupOutput: '组输出',

@@ -405,7 +405,6 @@ ${reactFlowCss}
 .dsh-workflow-detail-header { flex: none; margin: 0; padding: 16px 20px; border-bottom: 0.5px solid var(--dsw-alias-border-l3); }
 .dsh-workflow-run { display: flex; position: relative; flex: 1; min-height: 0; min-width: 0; }
 .dsh-workflow-run-error { margin: 0; padding: 8px 20px; color: var(--dsw-alias-label-error); font-size: 12px; }
-.dsh-workflow-run-note { margin: 0; padding: 8px 20px; color: var(--dsw-alias-label-secondary); font-size: 12px; }
 .dsh-workflow-layout-notices { display: grid; gap: 8px; min-width: 0; margin: 10px 20px; }
 .dsh-workflow-create .dsh-workflow-layout-notices { margin: 12px 0 0; }
 .dsh-workflow-layout-notice { --layout-tone: var(--dsw-alias-state-warning-primary, #a8690d); border-left: 3px solid var(--layout-tone); border-radius: 3px 7px 7px 3px; background: color-mix(in srgb, var(--layout-tone) 9%, var(--dsw-alias-bg-layer-1)); color: var(--dsw-alias-label-primary); padding: 9px 11px; font-size: 12px; line-height: 1.5; }
