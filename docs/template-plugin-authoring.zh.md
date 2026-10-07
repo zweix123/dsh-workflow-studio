@@ -53,6 +53,6 @@ npm run build
 dsh plugin --profile web add /绝对路径/dsh-workflow-studio/packages/dsh-workflow-bundle
 ```
 
-默认 bundle 一次装配 Studio、公共节点登记、bash/session_agent/form、通用模板加载器及六份中英文模板。旧 DSH home 模板目录不再自动发现，也不再复制内置模板；旧文件不会自动删除。
+默认 bundle 一次装配 Studio、公共节点登记、bash/session_agent/form、通用模板加载器及唯一的内置模板 mattpocock 中文版（`matt-pocock-wayfinder-workflow.zh`）。旧 DSH home 模板目录不再自动发现，也不再复制内置模板；旧文件不会自动删除。
 
 模板只读图及实例输入输出语义见[DAG 用户文档](./dag-syntax.zh.md)。本期没有模板附属脚本/文件运行时定位契约，bash 等节点仍在实例工作区执行。

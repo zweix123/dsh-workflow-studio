@@ -1,5 +1,7 @@
 # 模板管理 Tab 产品规格
 
+当前内置模板范围（2026-10-07）：仅保留 mattpocock 中文版 `matt-pocock-wayfinder-workflow.zh`，不再提供英文版、OpenSpec 或 GitHub Spec Kit。下文涉及六份模板和双语同构的内容为此前范围，不再适用于当前内置模板。模板加载按[模板插件分发规格](./template-plugin-distribution.zh.md)执行。
+
 后续规则（2026-10-03）：[模板通过插件分发](./template-plugin-distribution.zh.md)已确认、待实施，替代本文关于目录自动发现、目录名充当模板身份与展示名称、页面查询时重新扫描及从磁盘读取详情的规则，并扩展原先排除的模板分发范围。模板只读浏览、图交互和定义详情继续按本文及相关规格执行。
 
 模板与实例共用定义详情正文及画布元素类型的后续要求见[模板与实例共享定义详情](./shared-definition-details.zh.md)；本文的模板只读浏览与定义字段展示规则继续生效。

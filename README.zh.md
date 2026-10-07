@@ -31,7 +31,7 @@ dsh web
 如果此 profile 之前直接安装的是 `packages/dsh-workflow-studio`，先停止对应宿主，执行 `dsh plugin --profile web remove dsh-workflow-studio` 移除旧插件入口，再按上面的命令添加默认 bundle 并重启。两条命令使用相同 profile。仅安装 Studio 单包会缺少节点登记依赖，Web 页面可能提示 `waiting for service: workflowNodeViews`。这些操作只调整插件装配，不迁移或删除实例文件。
 
 
-本插件不内置 DSH。默认 bundle 装配公共节点登记、Studio、三个节点插件、通用模板加载器和六份模板；第三方节点见[作者指南](docs/node-plugin-authoring.zh.md)及[最小示例](examples/echo-node/README.zh.md)。模板接入见[作者指南](docs/template-plugin-authoring.zh.md)和[纯配置示例](examples/review-templates/README.zh.md)。
+本插件不内置 DSH。默认 bundle 装配公共节点登记、Studio、三个节点插件、通用模板加载器和唯一的内置模板 mattpocock 中文版（`matt-pocock-wayfinder-workflow.zh`）；第三方节点见[作者指南](docs/node-plugin-authoring.zh.md)及[最小示例](examples/echo-node/README.zh.md)。模板接入见[作者指南](docs/template-plugin-authoring.zh.md)和[纯配置示例](examples/review-templates/README.zh.md)。
 
 ## 创建工作流
 

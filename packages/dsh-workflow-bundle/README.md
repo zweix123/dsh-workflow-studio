@@ -6,4 +6,4 @@ Add this local directory after building the repository. Its ordinary dsh patch i
 dsh plugin --profile web add ./packages/dsh-workflow-bundle
 ```
 
-The template loader and common distribution of the six bundled templates are the next implementation stage. Studio currently retains its existing local template discovery/copy behavior. See [the node author guide](../../docs/node-plugin-authoring.zh.md) and [the third-party example](../../examples/echo-node/README.zh.md).
+The bundle also installs the template loader and only the Chinese Matt Pocock Wayfinder template (`matt-pocock-wayfinder-workflow.zh`). See [the template author guide](../../docs/template-plugin-authoring.zh.md), [the node author guide](../../docs/node-plugin-authoring.zh.md), and [the third-party example](../../examples/echo-node/README.zh.md).

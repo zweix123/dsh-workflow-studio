@@ -31,7 +31,7 @@ dsh web
 If this profile previously installed `packages/dsh-workflow-studio` directly, stop its host, remove the old plugin entry with `dsh plugin --profile web remove dsh-workflow-studio`, add the default bundle above, then restart. Use the same profile for both commands. Installing Studio alone leaves its node registry dependencies missing; the Web page can report `waiting for service: workflowNodeViews`. This changes plugin assembly, not instance files.
 
 
-DSH itself is not bundled with this plugin. The default bundle installs the public node registry, Studio, three node plugins, the template loader, and six templates. See the [node author guide](docs/node-plugin-authoring.zh.md) and [minimal external example](examples/echo-node/README.zh.md). See the [template author guide](docs/template-plugin-authoring.zh.md) and [pure configuration example](examples/review-templates/README.zh.md).
+DSH itself is not bundled with this plugin. The default bundle installs the public node registry, Studio, three node plugins, the template loader, and the Chinese Matt Pocock Wayfinder template (`matt-pocock-wayfinder-workflow.zh`). See the [node author guide](docs/node-plugin-authoring.zh.md) and [minimal external example](examples/echo-node/README.zh.md). See the [template author guide](docs/template-plugin-authoring.zh.md) and [pure configuration example](examples/review-templates/README.zh.md).
 
 ## Create a workflow
 

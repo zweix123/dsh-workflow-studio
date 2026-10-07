@@ -9,27 +9,7 @@
       name: '@dsh-workflow/node-form'
     - id: workflow-studio
       name: dsh-workflow-studio
-    - id: workflow-template-github-spec-kit-workflow
-      name: dsh-workflow-template
-      config:
-        directory: dsh-workflow-studio/templates/github-spec-kit-workflow
-    - id: workflow-template-github-spec-kit-workflow.zh
-      name: dsh-workflow-template
-      config:
-        directory: dsh-workflow-studio/templates/github-spec-kit-workflow.zh
-    - id: workflow-template-matt-pocock-wayfinder-workflow
-      name: dsh-workflow-template
-      config:
-        directory: dsh-workflow-studio/templates/matt-pocock-wayfinder-workflow
     - id: workflow-template-matt-pocock-wayfinder-workflow.zh
       name: dsh-workflow-template
       config:
         directory: dsh-workflow-studio/templates/matt-pocock-wayfinder-workflow.zh
-    - id: workflow-template-openspec-workflow
-      name: dsh-workflow-template
-      config:
-        directory: dsh-workflow-studio/templates/openspec-workflow
-    - id: workflow-template-openspec-workflow.zh
-      name: dsh-workflow-template
-      config:
-        directory: dsh-workflow-studio/templates/openspec-workflow.zh

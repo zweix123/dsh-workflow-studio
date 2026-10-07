@@ -9,7 +9,7 @@ import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { parseDocument } from 'yaml'
+import { parse, parseDocument } from 'yaml'
 import * as nodes from '../../dsh-workflow-node/src/server.js'
 import type { ServerNode } from 'dsh-workflow-node/contract'
 import * as studio from '../lib/index.js'
@@ -176,18 +176,21 @@ async function installBuiltinNodes(h: Awaited<ReturnType<typeof host>>) {
   for (const node of [await import('../../dsh-workflow-node-bash/lib/server.js'), await import('../../dsh-workflow-node-form/lib/server.js'), await import('../../dsh-workflow-node-session-agent/lib/server.js')]) await h.ctx.plugin(node)
 }
 
-test('six default templates use the public loader and registration contract', async () => {
+test('the Chinese Matt Pocock default template uses the public loader and registration contract', async () => {
   const h = await host()
   try {
     await installBuiltinNodes(h)
-    const names = ['github-spec-kit-workflow', 'github-spec-kit-workflow.zh', 'matt-pocock-wayfinder-workflow', 'matt-pocock-wayfinder-workflow.zh', 'openspec-workflow', 'openspec-workflow.zh']
+    const patch = parse(await readFile(new URL('../../dsh-workflow-bundle/cordis.patch.yml', import.meta.url), 'utf8'))
+    const templates = patch[0].insert.filter((entry: any) => entry.name === 'dsh-workflow-template')
+    const names = ['matt-pocock-wayfinder-workflow.zh']
+    assert.deepEqual(templates.map((entry: any) => entry.config.directory), names.map(name => `dsh-workflow-studio/templates/${name}`))
     for (const name of names) await h.declare(`dsh-workflow-studio/templates/${name}`, await readFile(new URL(`../templates/${name}/workflow.yaml`, import.meta.url), 'utf8'))
     const rows = (await (await h.request(TEMPLATES_PATH)).json()).templates
     assert.deepEqual(rows.map((row: any) => row.id), names)
     assert.ok(rows.every((row: any) => row.name && !row.error))
-    const response = await h.request(INSTANCES_PATH, { workspaceId: 'a', name: 'Default run', templateId: 'openspec-workflow.zh' })
+    const response = await h.request(INSTANCES_PATH, { workspaceId: 'a', name: 'Default run', templateId: 'matt-pocock-wayfinder-workflow.zh' })
     assert.equal(response.status, 201)
-    assert.equal((await response.json()).definition.name, 'OpenSpec 规格驱动开发工作流')
+    assert.equal((await response.json()).definition.name, 'Matt-Pocock-工程工作流')
   } finally { await h.close() }
 })
 
