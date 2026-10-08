@@ -1,0 +1,46 @@
+id: regression-loop
+name: 逐项展开与汇合回归
+type: dag
+dag:
+  - id: source
+    type: node
+    node_kind: bash
+    command: |
+      if [ -f empty.txt ]; then
+        printf '{"jobs":[]}'
+      else
+        printf '{"jobs":[{"key":"a","title":"Alpha"},{"key":"b","title":"Beta"}]}'
+      fi
+    output_schema:
+      jobs:
+        type: array
+        items:
+          type: object
+          properties:
+            key: string
+            title: string
+  - id: each
+    type: node
+    node_kind: bash
+    input_schema:
+      title: string
+    output_schema:
+      done: string
+    command: |
+      printf '%s\n' {{ title }} >> each-runs.txt
+      printf '{"done":"%s"}' {{ title }}
+  - id: finish
+    type: node
+    node_kind: bash
+    command: ""
+    input_schema:
+      done:
+        type: array
+        items: string
+  - type: edge
+    from: source
+    to: each
+    for: $.jobs
+  - type: edge
+    from: each
+    to: finish

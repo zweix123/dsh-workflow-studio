@@ -72,7 +72,7 @@ export class DshHost {
     const [code] = await once(child, 'close')
     assert.equal(code, 0, 'dsh --version failed')
     assert.equal(version.trim(), '0.2.0-rc.1', 'E2E requires the installed dsh 0.2.0-rc.1')
-    for (const directory of ['packages/dsh-workflow-bundle', 'packages/dsh-workflow-studio/tests/fixtures/form-structured']) {
+    for (const directory of ['packages/dsh-workflow-bundle', 'packages/dsh-workflow-studio/tests/fixtures/form-structured', 'e2e/fixtures/core-regression']) {
       await this.addBundle(join(repo, directory))
     }
   }

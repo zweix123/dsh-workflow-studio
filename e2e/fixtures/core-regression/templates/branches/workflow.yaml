@@ -1,0 +1,40 @@
+id: regression-branches
+name: 条件分支回归
+type: dag
+dag:
+  - id: source
+    type: node
+    node_kind: bash
+    command: printf '{"enabled":true}'
+    output_schema:
+      enabled: boolean
+  - id: active
+    type: node
+    node_kind: bash
+    command: printf '{"answer":"active result"}'
+    output_schema:
+      answer: string
+  - id: closed
+    type: node
+    node_kind: bash
+    command: printf 'should never run' >> closed-runs.txt
+  - id: join
+    type: node
+    node_kind: bash
+    command: ""
+    input_schema:
+      answer: string
+  - type: edge
+    from: source
+    to: active
+    if: $.enabled
+  - type: edge
+    from: source
+    to: closed
+    if: $.enabled == false
+  - type: edge
+    from: active
+    to: join
+  - type: edge
+    from: closed
+    to: join

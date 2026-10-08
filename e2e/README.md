@@ -48,9 +48,23 @@ npm run test:e2e -- e2e/form-handoff.e2e.ts
 
 [template-assets.e2e.ts](./template-assets.e2e.ts)从 UI 验证工作区外模板包的脚本/文档读取、YAML-only exports 映射、特殊字符路径、旧宿主环境值覆盖、工作区产物、文档更新后的真实重启、成功节点不重跑，以及脚本删除后的 Bash 错误。使用[本地夹具](../packages/dsh-workflow-studio/tests/fixtures/template-assets/README.md)，仅修改每条 case 的临时副本。实际范围及尚未验证项见[验收记录](../docs/acceptance/template-attached-files.zh.md)。
 
+`workflows/` 保存关键能力回归，使用[独立测试模板包](./fixtures/core-regression/README.md)。每条用例均可独立运行：
+
+- [instances.e2e.ts](./workflows/instances.e2e.ts)：名称为空与重复校验、表单保留、详情 Tab 去重、重启恢复、取消及永久删除、列表计数与详情 Tab 清理。
+- [bash.e2e.ts](./workflows/bash.e2e.ts)：自动启动、非零退出与输出类型错误、原命令重试、真实数据交付、空命令完成、重启不重跑、执行中删除保护、中断后的结果未知与显式重试。
+- [dag.e2e.ts](./workflows/dag.e2e.ts)：条件激活与跳过、分支汇合、for 项独立身份、部分完成后重启、逆序完成但按源顺序聚合、空数组不创建虚构项。
+- [session-agent.e2e.ts](./workflows/session-agent.e2e.ts)：相同节点定义在不同实例中关联不同对话、对话往返、Tab 保留与去重、持久关联恢复、人工完成、完成后返回、删除实例保留对话并移除返回入口。
+
+```sh
+npm run test:e2e -- e2e/workflows
+npm run test:e2e -- e2e/workflows/bash.e2e.ts --grep "宿主中断"
+```
+
+宿主对话导航不改变 URL；用例通过侧边栏已选中行的公开身份及页面结果核对对话。session_agent 初始提示词会被真实宿主接收；隔离环境没有模型凭据，模型运行会显示缺少认证，回归只验证关联、导航与人工完成，不验证模型回复。语言、主题、窄屏组合与画布视角保留尚未覆盖。
+
 ## 新功能怎样留下回归测试
 
-1. 从 `docs/specs/` 提取操作和可观察的预期，新增或补充 `e2e/*.e2e.ts`。
+1. 从 `docs/specs/` 提取操作和可观察的预期，新增或补充 `e2e/**/*.e2e.ts`；嵌套目录同样纳入 E2E 类型检查。
 2. 从 `./dsh.js` 导入 `test`，复用每条用例的隔离宿主；按需在 `DshHost.install()` 登记场景夹具。不要依赖上一条用例的数据。
 3. 通过页面标签／角色定位，使用 `expect` 验证准确值和最终状态。接口可辅助环境准备与定位，不能替代被测业务的 UI 操作。
 4. 运行相关用例与受影响的已有用例，测试代码和可复现夹具随功能提交。失败时修复产品或定位依据，不能删除断言、增加无理由重试或用固定延时掩盖故障。

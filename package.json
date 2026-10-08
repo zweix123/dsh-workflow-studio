@@ -11,7 +11,7 @@
   "scripts": {
     "build": "node scripts/build-nodes.mjs && npm run build --workspace=dsh-workflow-studio && node scripts/build-template.mjs",
     "typecheck": "npm run typecheck --workspace=dsh-workflow-studio && tsc --noEmit --skipLibCheck --strict --target ES2022 --module ESNext --moduleResolution Bundler packages/dsh-workflow-template/src/index.ts && npm run typecheck:e2e",
-    "typecheck:e2e": "tsc --noEmit --skipLibCheck --strict --target ES2022 --module ESNext --moduleResolution Bundler e2e.config.ts e2e/*.ts",
+    "typecheck:e2e": "tsc -p tsconfig.e2e.json",
     "test": "npm run test --workspace=dsh-workflow-studio",
     "test:e2e": "node scripts/test-e2e.mjs",
     "check": "npm run typecheck && npm run build && npm test",

@@ -1,0 +1,44 @@
+id: regression-bash
+name: Bash 执行回归
+type: dag
+dag:
+  - id: automatic
+    type: node
+    node_kind: bash
+    is_auto_start: true
+    command: |
+      printf 'auto\n' >> automatic-runs.txt
+      printf '{"text":"hello from upstream"}'
+    output_schema:
+      text: string
+  - id: retry
+    type: node
+    node_kind: bash
+    input_schema:
+      text: string
+    output_schema:
+      result: string
+    command: |
+      printf 'attempt\n' >> attempts.txt
+      count=$(wc -l < attempts.txt)
+      if [ "$count" -eq 1 ]; then
+        printf 'first attempt failed\n' >&2
+        exit 7
+      fi
+      if [ "$count" -eq 2 ]; then
+        printf '{"result":42}'
+        exit 0
+      fi
+      printf '{"result":"%s"}' {{ text }}
+  - id: finish
+    type: node
+    node_kind: bash
+    command: ""
+    input_schema:
+      result: string
+  - type: edge
+    from: automatic
+    to: retry
+  - type: edge
+    from: retry
+    to: finish

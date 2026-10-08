@@ -1,0 +1,15 @@
+id: regression-session
+name: 对话关联与完成回归
+type: dag
+dag:
+  - id: task
+    type: node
+    node_kind: session_agent
+    prompt: E2E conversation association
+  - id: after
+    type: node
+    node_kind: bash
+    command: ""
+  - type: edge
+    from: task
+    to: after

@@ -1,0 +1,25 @@
+- insert:
+    - id: regression-lifecycle
+      name: dsh-workflow-template
+      config:
+        directory: "@dsh-workflow/core-regression-fixture/templates/lifecycle"
+    - id: regression-bash
+      name: dsh-workflow-template
+      config:
+        directory: "@dsh-workflow/core-regression-fixture/templates/bash"
+    - id: regression-gate
+      name: dsh-workflow-template
+      config:
+        directory: "@dsh-workflow/core-regression-fixture/templates/gate"
+    - id: regression-branches
+      name: dsh-workflow-template
+      config:
+        directory: "@dsh-workflow/core-regression-fixture/templates/branches"
+    - id: regression-loop
+      name: dsh-workflow-template
+      config:
+        directory: "@dsh-workflow/core-regression-fixture/templates/loop"
+    - id: regression-session
+      name: dsh-workflow-template
+      config:
+        directory: "@dsh-workflow/core-regression-fixture/templates/session"

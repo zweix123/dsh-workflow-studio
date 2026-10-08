@@ -1,0 +1,8 @@
+id: regression-lifecycle
+name: 实例管理回归
+type: dag
+dag:
+  - id: manual
+    type: node
+    node_kind: bash
+    command: printf 'manual-run\n' >> lifecycle-runs.txt

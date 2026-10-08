@@ -1,0 +1,17 @@
+id: regression-gate
+name: 执行中保护与未知恢复回归
+type: dag
+dag:
+  - id: gate
+    type: node
+    node_kind: bash
+    is_auto_start: true
+    command: |
+      printf 'start\n' >> gate-runs.txt
+      count=0
+      while [ ! -f release.txt ]; do
+        count=$((count + 1))
+        if [ "$count" -ge 600 ]; then exit 9; fi
+        sleep 0.1
+      done
+      printf 'released'
