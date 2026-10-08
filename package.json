@@ -10,21 +10,25 @@
   },
   "scripts": {
     "build": "node scripts/build-nodes.mjs && npm run build --workspace=dsh-workflow-studio && node scripts/build-template.mjs",
-    "typecheck": "npm run typecheck --workspace=dsh-workflow-studio && tsc --noEmit --skipLibCheck --strict --target ES2022 --module ESNext --moduleResolution Bundler packages/dsh-workflow-template/src/index.ts",
+    "typecheck": "npm run typecheck --workspace=dsh-workflow-studio && tsc --noEmit --skipLibCheck --strict --target ES2022 --module ESNext --moduleResolution Bundler packages/dsh-workflow-template/src/index.ts && npm run typecheck:e2e",
+    "typecheck:e2e": "tsc --noEmit --skipLibCheck --strict --target ES2022 --module ESNext --moduleResolution Bundler e2e.config.ts e2e/*.ts",
     "test": "npm run test --workspace=dsh-workflow-studio",
+    "test:e2e": "node scripts/test-e2e.mjs",
     "check": "npm run typecheck && npm run build && npm test",
     "install:local": "npm run build && dsh plugin --profile web add ./packages/dsh-workflow-bundle"
   },
   "devDependencies": {
+    "@e2e-dev/web": "0.13.0",
+    "@types/jsdom": "^21.1.7",
     "@types/node": "^22.20.0",
     "@types/react": "18.3.1",
     "@types/react-dom": "18.3.0",
+    "e2e": "0.18.0",
     "esbuild": "^0.25.0",
     "jsdom": "^26.1.0",
-    "@types/jsdom": "^21.1.7",
-    "tsx": "^4.20.0",
-    "typescript": "~5.9.3",
     "react": "18.3.1",
-    "react-dom": "18.3.1"
+    "react-dom": "18.3.1",
+    "tsx": "^4.20.0",
+    "typescript": "~5.9.3"
   }
 }

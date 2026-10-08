@@ -68,6 +68,14 @@ npm run check
 
 This runs type checking, the build, and tests. Product specifications live in [`docs/specs/`](docs/specs/), and repository conventions are in [`AGENTS.md`](AGENTS.md).
 
+Run the saved browser regression tests against an isolated real DSH host:
+
+```sh
+npm run test:e2e
+```
+
+Requires your installed DSH `0.2.0-rc.1`, pnpm, and Node `^22.22.3 || >=24.8.0`. Tests use deterministic actions and assertions without a model. See [E2E setup and coverage](e2e/README.md).
+
 ```sh
 dsh plugin --profile web remove dsh-workflow-bundle
 ```

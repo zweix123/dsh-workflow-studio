@@ -22,6 +22,7 @@ packages/*/lib/
 
 # Test & Debug & Run
 coverage/
+.e2e/
 artifacts/
 .local/
 

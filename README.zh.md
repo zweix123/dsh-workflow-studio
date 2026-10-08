@@ -68,6 +68,14 @@ npm run check
 
 该命令执行类型检查、构建和测试。产品规格见 [`docs/specs/`](docs/specs/)，仓库约定见 [`AGENTS.md`](AGENTS.md)。
 
+运行保存在仓库里的真实宿主浏览器回归测试：
+
+```sh
+npm run test:e2e
+```
+
+需要本机已安装的 dsh `0.2.0-rc.1`、pnpm 和 Node `^22.22.3 || >=24.8.0`；用例采用固定操作与断言，不需要模型。环境准备、可视运行和当前覆盖见 [E2E 说明](e2e/README.md)。
+
 ```sh
 dsh plugin --profile web remove dsh-workflow-bundle
 ```
