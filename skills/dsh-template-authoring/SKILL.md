@@ -36,7 +36,7 @@ description: 为 dsh-workflow-studio 定义或修改工作流模板，编写 DAG
 - 模板根为 `type: dag`，根 `id`、`name` 均非空。ID 在同一 profile 内唯一，目录只定位资源。整份定义中显式 ID 全局唯一，边引用本层顶点。
 - 工坊创建实例没有外部根业务输入，根 `input_schema` 省略或为 `{}`；人工输入用入口 `form` 收集。
 - 默认节点为 `form`、`session_agent`、`bash`。Schema 是字段到类型的映射，不是完整 JSON Schema；对象/数组使用带 `properties`/`items` 的结构化描述。
-- `form` 只支持 string、number、boolean；字段以 `output_schema` 为准，`schema.properties` 和 `uiSchema` 仅补充表单展示信息。输入契约只写有上游来源、用于同名预填的字段。
+- `form` 支持 string、number、boolean、结构化 object/array、组合嵌套和数组增删；字段结构以 `output_schema` 为准，`schema` 与 `uiSchema` 递归补充注解和已有控件。输入契约只写有上游来源、用于同名预填且与对应输出递归结构类型一致的字段。对象数组示例、默认值及提交约束见 [references/authoring.md](references/authoring.md#结构化表单)。
 - `session_agent` 提供 `prompt`，只消费输入。其 `output_schema` 只能省略或为 `{}`，用户手动完成时提交 `{}`，不会提取对话结果，也不透传输入。下游需要业务结果时增加人工结果表单，或采用能真实产生结果的 bash。
 - `bash` 提供 `command`。有输出声明时 stdout 必须整体为满足契约的 JSON 对象，日志写 stderr；无输出声明时 stdout 只是日志，提交 `{}`。
 - 每个输入字段都必须有潜在上游输出声明，不能假定数据沿链路自动透传。多个前驱的同名输出会冲突，即使条件互斥；边没有自定义字段映射语法。

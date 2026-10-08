@@ -8,6 +8,46 @@ starter 的路径是：`request` 表单收集 `task` → `discuss` 会话消费 
 
 如果 confirm 还要预填 task，须增加 `request → confirm`，并在 confirm 的输入与输出都声明 `task: string`。不能只在 discuss 后增加 `input_schema.task`，因为 discuss 的输出是空对象。
 
+## 结构化表单
+
+人工填写对象或数组时，可直接使用 form 的结构化输出契约，无需先填写 JSON 文本再用 Bash 解析。以下节点收集数量不固定的任务列表，直接交付 `tasks` 对象数组：
+
+```yaml
+- id: collect-tasks
+  type: node
+  node_kind: form
+  output_schema:
+    tasks:
+      type: array
+      items:
+        type: object
+        properties:
+          name: string
+          priority: number
+  schema:
+    properties:
+      tasks:
+        title: 任务列表
+        items:
+          properties:
+            name:
+              title: 任务名称
+            priority:
+              title: 优先级
+              default: 0
+              enum: [0, 1, 2]
+  uiSchema:
+    tasks:
+      items:
+        name:
+          ui:widget: textarea
+```
+
+- 字段及嵌套结构只在 `output_schema` 定义。`schema` 沿 `properties`、`items` 补充标题、说明、默认值和标量枚举；`uiSchema` 沿对象字段名、数组 `items` 定位已有标量控件。对象与数组可组合嵌套，枚举仅用于标量；不支持完整 JSON Schema、完整 RJSF 或上传、联动等扩展能力。
+- 预填输入与对应输出须递归结构类型一致。首次按顶层字段采用同名上游值，已有对象或数组不与默认值合并，缺失子字段由用户补齐；0、false、空字符串及空数组保留原值，类型不匹配不转换。预填递归只取声明字段。
+- 没有预填时，显式默认值整体采用且须完整符合契约；无整体默认值的对象按子字段初始化，数组从空数组开始。新增项采用该项或子字段的默认值，无默认值的标量留待填写，不猜测空字符串、0 或 false。
+- 数组可新增、删除任意项及提交空数组。正式提交逐层要求全部声明字段存在，拒绝额外字段，校验类型和标量枚举。已接受结果只读，交付失败仅重交该结果；未提交草稿只在当前页面保留，刷新或离开页面会丢弃。
+
 ## 提示词的写法
 
 用多行 `prompt: |` 写明：
@@ -35,7 +75,7 @@ starter 的路径是：`request` 表单收集 `task` → `discuss` 会话消费 
 
 `{{ summary }}` 不再额外包引号，节点会作为一个 Shell 数据参数转义。它不能写成 `"{{ summary }}"`、`prefix-{{ summary }}`，也不能放进 heredoc。
 
-要把人工提供的 JSON 文本变为真实对象输出，可用 `form` 收集 `result_json: string`，再连到：
+需要保留人工粘贴 JSON 文本的输入方式时，可用 `form` 收集 `result_json: string`，再连到：
 
 ```yaml
 - id: parse-result
@@ -49,7 +89,7 @@ starter 的路径是：`request` 表单收集 `task` → `discuss` 会话消费 
   command: "printf '%s' {{ result_json }}"
 ```
 
-用户输入例如 `{"approved":true,"summary":"检查通过"}`。命令输出由节点校验；不完整或非法 JSON 会失败，下游不会推进。这里不是 form 原生支持对象，也不是自动读取 Agent 的回复。
+用户输入例如 `{"approved":true,"summary":"检查通过"}`。命令输出由节点校验；不完整或非法 JSON 会失败，下游不会推进。此例由 Bash 将文本解析为对象；form 也可通过结构化契约直接收集对象和数组。两种方式都不自动读取 Agent 的回复。
 
 ## 条件与复杂图
 
