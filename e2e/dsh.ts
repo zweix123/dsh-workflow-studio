@@ -73,12 +73,16 @@ export class DshHost {
     assert.equal(code, 0, 'dsh --version failed')
     assert.equal(version.trim(), '0.2.0-rc.1', 'E2E requires the installed dsh 0.2.0-rc.1')
     for (const directory of ['packages/dsh-workflow-bundle', 'packages/dsh-workflow-studio/tests/fixtures/form-structured']) {
-      const { child, closed } = this.spawn(['plugin', '--profile', 'web', 'add', join(repo, directory), '--registry=https://registry.npmjs.org'])
-      this.process = child
-      this.closed = closed
-      const [code] = await closed as [number]
-      assert.equal(code, 0, `Plugin registration failed; see ${this.log}`)
+      await this.addBundle(join(repo, directory))
     }
+  }
+
+  async addBundle(directory: string) {
+    const { child, closed } = this.spawn(['plugin', '--profile', 'web', 'add', directory, '--registry=https://registry.npmjs.org'])
+    this.process = child
+    this.closed = closed
+    const [code] = await closed as [number]
+    assert.equal(code, 0, `Plugin registration failed; see ${this.log}`)
   }
 
   async start() {

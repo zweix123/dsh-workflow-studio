@@ -42,7 +42,7 @@ YAML 根 id 和 name 均必须为非空、非纯空白字符串。id 是同一 p
 
 工坊展示来源、加载错误、缺失/冲突的节点类型和布局警告。同 ID 的所有贡献都不可用，移除重复贡献后剩余项自动恢复；不同 profile 相互独立，同一 profile 各工作区共享模板和节点能力。实例仍存于原有工作区作用域。
 
-文件只在声明加载或重载时读取。刷新页面、查询详情、创建实例及节点依赖变化都不重读 YAML。节点恢复会自动重验已加载的定义；要采用改过的文件，请重载对应模板声明。无后台监听或轮询。
+YAML 只在声明加载或重载时读取。刷新页面、查询详情、创建实例及节点依赖变化都不重读 YAML。节点恢复会自动重验已加载的定义；要采用改过的文件，请重载对应模板声明。无后台监听或轮询。
 
 宿主在重载前拒绝新配置时旧贡献保持；真正卸载后重新读取/校验失败会显示新失败记录，不恢复旧有效定义。仅撤销模板不影响已创建实例的定义快照、名称及执行；撤销所需节点时按[节点规范](./specs/node-plugin-registration.zh.md)暂停新执行，仍保留查看。
 
@@ -55,4 +55,33 @@ dsh plugin --profile web add /绝对路径/dsh-workflow-studio/packages/dsh-work
 
 默认 bundle 一次装配 Studio、公共节点登记、bash/session_agent/form、通用模板加载器及唯一的内置模板 mattpocock 中文版（`matt-pocock-wayfinder-workflow.zh`）。旧 DSH home 模板目录不再自动发现，也不再复制内置模板；旧文件不会自动删除。
 
-模板只读图及实例输入输出语义见[DAG 用户文档](./dag-syntax.zh.md)。本期没有模板附属脚本/文件运行时定位契约，bash 等节点仍在实例工作区执行。
+## Bash 引用模板附属文件
+
+可在 workflow.yaml 旁提供 scripts/init.sh、docs/guide.md 等附属文件，无须资源字段、文件清单、固定子目录或逐个 exports。Bash 命令写为：
+
+~~~yaml
+command: bash "$DSH_TEMPLATE_DIR/scripts/init.sh"
+~~~
+
+脚本可以通过同一变量读取文档，并在当前工作区创建产物：
+
+~~~sh
+#!/usr/bin/env bash
+set -e
+cat "$DSH_TEMPLATE_DIR/docs/guide.md" >&2
+git diff --stat > review-stat.txt
+~~~
+
+DSH_TEMPLATE_DIR 来自模块解析器返回的 YAML 文件 URL 的父目录。exports 映射到其他位置时使用实际位置，不从模板 ID 或声明字符串猜测。系统通过宿主 Shell 的 dshEnv 提供它，无须 input_schema 声明，也不用 Django 占位符。路径按 Shell 规则用双引号包住；可与独立的业务参数引用同用：
+
+~~~yaml
+command: bash "$DSH_TEMPLATE_DIR/scripts/init.sh" {{ repository }}
+~~~
+
+Bash 的 cwd 和沙箱 workspaceRoot 继续使用用户工作区。附属文件用于读取或执行，产物写工作区；访问受现有沙箱和系统权限约束，不提升权限，也不承诺模板目录被强制只读隔离。本次不向 session_agent 注入路径。
+
+实例保存创建时的 YAML 定义和来源目录，不复制附属文件。嵌套、递归和逐项 Bash 使用同一来源，重启或仅撤销登记不清除目录，也不重绑定其他同 ID 模板。缺少来源的历史实例不自动补回变量，普通工作区命令继续可用。
+
+YAML 修改须重载声明后作用于新实例；脚本和文档读取实际执行时的当前内容。文件更新不使已成功节点重跑；文件删除、包移动或读取失败沿用 Bash 错误和人工重试，定义快照不保证原文件一直可访问。
+
+模板只读图及输入输出语义见[DAG 用户文档](./dag-syntax.zh.md)，验证范围见[附属文件验收记录](./acceptance/template-attached-files.zh.md)。

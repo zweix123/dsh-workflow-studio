@@ -46,6 +46,8 @@ npm run test:e2e -- e2e/form-handoff.e2e.ts
 
 该场景不执行 downstream 的空 bash 命令，也不执行模型任务，不代表所有功能已覆盖。
 
+[template-assets.e2e.ts](./template-assets.e2e.ts)从 UI 验证工作区外模板包的脚本/文档读取、YAML-only exports 映射、特殊字符路径、旧宿主环境值覆盖、工作区产物、文档更新后的真实重启、成功节点不重跑，以及脚本删除后的 Bash 错误。使用[本地夹具](../packages/dsh-workflow-studio/tests/fixtures/template-assets/README.md)，仅修改每条 case 的临时副本。实际范围及尚未验证项见[验收记录](../docs/acceptance/template-attached-files.zh.md)。
+
 ## 新功能怎样留下回归测试
 
 1. 从 `docs/specs/` 提取操作和可观察的预期，新增或补充 `e2e/*.e2e.ts`。

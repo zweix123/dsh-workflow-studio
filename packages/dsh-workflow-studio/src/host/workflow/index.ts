@@ -163,7 +163,7 @@ export class WorkflowEngine {
       if (value == null) throw new Error(`Node ${node.kind} requires host service ${String(service)}`)
       Object.defineProperty(services, service, { value, enumerable: true })
     }
-    return { definition: ready.definition, input: ready.input as JsonObject, fact: fact && structuredClone(fact), workspaceId: row.workspaceId, services,
+    return { definition: ready.definition, input: ready.input as JsonObject, fact: fact && structuredClone(fact), workspaceId: row.workspaceId, templateDirectory: row.templateDirectory, services,
       validateOutput: output => z.json().parse(copy(output, ready.definition.output_schema ?? {}, true, 'node-output', { instanceId: ready.instanceId })) as JsonObject,
       save: async next => { if (next.kind !== node.kind) throw new Error('Mismatched node fact'); await this.store.serial(async () => {
         const latest = this.store.get(row.id)

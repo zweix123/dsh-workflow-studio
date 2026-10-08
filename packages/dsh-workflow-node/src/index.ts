@@ -20,6 +20,8 @@ export interface NodeContext {
   input: NodeData
   fact?: NodeFact
   workspaceId: string
+  /** Resolved template source directory, retained by the caller independently of business input. */
+  templateDirectory?: string
   services: Context
   validateOutput: (output: unknown) => NodeData
   save: (fact: NodeFact) => Promise<void>

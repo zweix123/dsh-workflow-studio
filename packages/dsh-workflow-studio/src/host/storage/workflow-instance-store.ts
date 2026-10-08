@@ -14,6 +14,7 @@ const instanceSchema = z.object({
   workspaceId: z.string(),
   name: z.string(),
   templateId: z.string(),
+  templateDirectory: z.string().optional(),
   createdAt: z.iso.datetime(),
   revision: z.number().int().nonnegative().optional(),
   definition: z.json(),

@@ -53,7 +53,7 @@ description: 为 dsh-workflow-studio 定义或修改工作流模板，编写 DAG
 
 `package.json` 的 `dsh.bundle.patch` 指向补丁文件，`exports` 暴露对应 `workflow.yaml`。补丁中每个加载器实例只配置 `directory: '<包名>/templates/<目录>'`，它是包资源地址，不是文件系统相对路径。不重复写 `config.id`、`config.name` 或节点清单。
 
-一个包可以贡献多份模板，每份有独立 loader ID、directory 和模板根 ID。消费默认节点时只贡献模板，不重复装配默认节点。模板仅加载 YAML；没有模板附属脚本的运行时路径协议，bash 的相对路径基于实例工作区。
+一个包可以贡献多份模板，每份有独立 loader ID、directory 和模板根 ID。消费默认节点时只贡献模板，不重复装配默认节点。模板加载时读取 YAML 并保存解析后的父目录；包内脚本和文档可用 Bash 的 DSH_TEMPLATE_DIR 引用，例如 `bash "$DSH_TEMPLATE_DIR/scripts/init.sh"`。无需 input_schema 或资源字段，附属文件无需逐个 exports；普通相对路径和产物仍基于工作区。YAML 为实例快照，附属文件读取执行时当前内容；成功节点不因更新重跑，缺失或移动沿用 Bash 错误与人工重试，历史实例不自动补来源。session_agent 不注入路径，沿用沙箱且不提升权限。
 
 ## 校验、加载与交付
 

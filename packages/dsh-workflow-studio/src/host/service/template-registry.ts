@@ -7,7 +7,7 @@ import type { TemplateCatalog, TemplateDetail, TemplateRow } from '../../shared/
 import { nodeService, type NodeLookup } from 'dsh-workflow-node/contract'
 
 declare module '@deepseek-ai/cordis' { interface Context { workflowTemplates: TemplateRegistry } }
-type Contribution = TemplateRow & { definition?: DagDefinition; loadError?: string; typesReady?: boolean }
+type Contribution = TemplateRow & { definition?: DagDefinition; templateDirectory?: string; loadError?: string; typesReady?: boolean }
 
 /** Owned by Studio in one host profile; definitions never read files here. */
 export class TemplateRegistry {
@@ -15,7 +15,7 @@ export class TemplateRegistry {
   constructor(owner: Context, private readonly nodes: NodeLookup = owner.workflowNodes) {
     if (nodes.subscribe) owner.effect(() => nodes.subscribe!(() => this.revalidate()))
   }
-  register(owner: Context, source: string, value: { definition: unknown } | { error: string }): void {
+  register(owner: Context, source: string, value: { definition: unknown; templateDirectory?: string } | { error: string }): void {
     const row: Contribution = { key: randomUUID(), id: '', source }
     try {
       if ('error' in value) throw new Error(value.error)
@@ -25,6 +25,7 @@ export class TemplateRegistry {
       if (!row.id.trim()) throw new Error('Template root id must be a nonempty string')
       if (!row.name) throw new Error('Template root name must be a nonempty string')
       row.definition = compile(raw, {}).getDefinition()
+      row.templateDirectory = value.templateDirectory
       const layout = inspectLayout(row.definition)
       if (layout.layers.length) row.layout = layout
     } catch (error) { row.loadError = error instanceof Error ? error.message : String(error) }
@@ -62,10 +63,10 @@ export class TemplateRegistry {
     }
   }
   list(): TemplateCatalog {
-    return { templates: [...this.contributions].map(({ definition: _definition, loadError: _loadError, typesReady: _typesReady, ...row }) => structuredClone(row))
+    return { templates: [...this.contributions].map(({ definition: _definition, templateDirectory: _directory, loadError: _loadError, typesReady: _typesReady, ...row }) => structuredClone(row))
       .sort((a, b) => a.id.localeCompare(b.id, 'en') || a.source.localeCompare(b.source, 'en')) }
   }
-  get(id: string): TemplateDetail {
+  get(id: string): TemplateDetail & { templateDirectory?: string } {
     const row = [...this.contributions].find(row => row.id === id && id.trim())
     if (!row) throw new WorkflowInstanceError('template-missing', 'Workflow template not found')
     if (row.error || !row.definition) throw new WorkflowInstanceError('template-invalid', row.error ?? 'Workflow template is invalid')

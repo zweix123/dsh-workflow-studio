@@ -2,6 +2,8 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
 import type {} from 'dsh-workflow-studio/templates'
 import { readFile } from 'node:fs/promises'
+import { dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { parseDocument } from 'yaml'
 import { z } from 'zod'
 
@@ -12,7 +14,7 @@ export type Config = z.infer<typeof Config>
 
 /** Read only for this declaration's load. Type dependency changes belong to Studio. */
 export async function apply(ctx: Context, config: Config): Promise<void> {
-  let contribution: { definition: unknown } | { error: string }
+  let contribution: { definition: unknown; templateDirectory: string } | { error: string }
   try {
     if (!/^(?:@[^/]+\/[^/]+|[^./:@][^/]*)\/.+/.test(config.directory)
       || config.directory.split('/').some(part => part === '..' || part === '.')) throw new Error('directory must be a package resource address')
@@ -23,9 +25,10 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     const resource = resolver.version === 'v2'
       ? resolver.resolveSync(parent, { specifier })
       : await resolver.resolve(specifier, parent, {})
-    const document = parseDocument(await readFile(new URL(resource.url), 'utf8'))
+    const file = fileURLToPath(resource.url)
+    const document = parseDocument(await readFile(file, 'utf8'))
     if (document.errors.length) throw document.errors[0]
-    contribution = { definition: document.toJS() }
+    contribution = { definition: document.toJS(), templateDirectory: dirname(file) }
   } catch (error) { contribution = { error: error instanceof Error ? error.message : String(error) } }
   ctx.workflowTemplates.register(ctx, config.directory, contribution)
 }

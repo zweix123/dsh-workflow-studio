@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
+import { createRequire } from 'node:module'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import { scrubbedParentEnv } from '@deepseek-ai/dsh-subprocess'
 import { mkdir, mkdtemp, rm, rename, symlink, writeFile, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterEach, test } from 'node:test'
 import { Context } from '@deepseek-ai/cordis'
 import WebServer from '@deepseek-ai/dsh-host-webserver'
@@ -21,6 +24,7 @@ import { formNode } from '../../dsh-workflow-node-form/src/server.js'
 import { parse, stringify } from 'yaml'
 import { TemplateRegistry } from '../src/host/service/template-registry.js'
 import { type ServerNode } from 'dsh-workflow-node/contract'
+import * as templateLoader from '../../dsh-workflow-template/src/index.js'
 
 const templateHosts = new Map<string, { ctx: Context; declarations: Map<string, any> }>()
 const cleanups: Array<() => Promise<void>> = []
@@ -1709,4 +1713,192 @@ test('a conflict in an already completed kind pauses the full definition and a s
   await install('first-replacement')
   const stale = await fetch(f.url(`${INSTANCES_PATH}/${fresh.id}/nodes/${staleId}/actions/start`), { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Workflow-Node': token }, body: '{}' })
   assert.equal(stale.status, 409)
+})
+
+
+// Filesystem and exports are real; sandbox outcomes in this adapter are simulated.
+async function mappedTemplate(host: { ctx: Context; root: string }, definition: unknown, version = 'v2', folder = "assets/actual 中文 ' \" $ \x60 # %", packageName = 'asset-fixture') {
+  const base = join(host.root, 'node_modules', packageName), directory = join(base, folder)
+  await mkdir(directory, { recursive: true })
+  await writeFile(join(base, 'package.json'), JSON.stringify({ name: packageName, exports: { './templates/alias/workflow.yaml': './' + folder.split('/').map(encodeURIComponent).join('/') + '/workflow.yaml' } }))
+  await writeFile(join(directory, 'workflow.yaml'), stringify(definition))
+  const resolve = (specifier: string) => ({ url: pathToFileURL(createRequire(join(host.root, 'package.json')).resolve(specifier)).href })
+  host.ctx.provide('loader', { internal: version === 'v2' ? { version, resolveSync: (_parent: string, { specifier }: { specifier: string }) => resolve(specifier) } : { version, resolve: async (specifier: string) => resolve(specifier) } } as never)
+  const fiber = host.ctx.plugin(templateLoader, { directory: packageName + '/templates/alias' }); await fiber
+  return { fiber, directory: dirname(fileURLToPath(resolve(packageName + '/templates/alias/workflow.yaml').url)) }
+}
+function filesystemShell(calls: any[]) {
+  return { sandboxMode: 'workspace-write', resolve(request: any) { calls.push(request); return request },
+    execute: async (request: any) => ({ result: async () => {
+      const options = { cwd: request.workdir, env: { ...scrubbedParentEnv(), ...request.dshEnv } }
+      let exitCode = 0, stdout = '', stderr = ''
+      try { ({ stdout, stderr } = await promisify(execFile)('/bin/bash', ['-c', request.command], options)) }
+      catch (error) { const result = error as any; exitCode = typeof result.code === 'number' ? result.code : 1; stdout = result.stdout ?? ''; stderr = result.stderr ?? String(error) }
+      return { exitCode, stdout: { text: stdout, truncated: false }, stderr: { text: stderr, truncated: false }, sandbox: { mode: 'workspace-write', denied: false } }
+    } }),
+  }
+}
+const assetCommand = 'bash "$DSH_TEMPLATE_DIR/scripts/init.sh"'
+const assetDefinition = (dag: unknown[], extra = {}) => ({ id: 'asset-runtime', name: 'Attached files', type: 'dag', ...extra, dag })
+const assetTask = (id: string, command = assetCommand) => ({ id, type: 'node', node_kind: 'bash', command })
+
+test('template files use resolved exports parents and quoted special paths with real input/output and workspace writes', async () => {
+  for (const version of ['v1', 'v2']) {
+    const calls: any[] = [], f = await fixture({ shell: filesystemShell(calls) })
+    const command = assetCommand + ' {{ text }}'
+    const { directory } = await mappedTemplate(f, assetDefinition([
+      { id: 'input', type: 'node', node_kind: 'form', output_schema: { text: 'string' } },
+      { ...assetTask('run', command), input_schema: { text: 'string' }, output_schema: { text: 'string' }, is_auto_start: true },
+      { id: 'review', type: 'node', node_kind: 'form', input_schema: { text: 'string' }, output_schema: { text: 'string' } },
+      { type: 'edge', from: 'input', to: 'run' }, { type: 'edge', from: 'run', to: 'review' },
+    ]), version)
+    await mkdir(join(directory, 'scripts')); await mkdir(join(directory, 'docs'))
+    await writeFile(join(directory, 'docs', 'guide.md'), 'package document')
+    await writeFile(join(directory, 'scripts', 'init.sh'), 'set -e\ncat "$DSH_TEMPLATE_DIR/docs/guide.md" >&2\nprintf "%s" "$1" > result.txt\nnode -e \'console.log(JSON.stringify({text:process.argv[1]}))\' "$1"\n')
+    const catalog = await (await fetch(f.url(TEMPLATES_PATH))).json() as any
+    assert.equal(catalog.templates[0].error, undefined); assert.equal(catalog.templates[0].templateDirectory, undefined)
+    assert.equal((await (await fetch(f.url(TEMPLATES_PATH + '/asset-runtime'))).json() as any).templateDirectory, undefined)
+    const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: version, templateId: 'asset-runtime' })).json() as any
+    assert.equal(created.templateDirectory, undefined); assert.equal(created.definition.dag[1].command, command)
+    const input = created.snapshot.instances.find((i: any) => i.definitionId === 'input'), path = INSTANCES_PATH + '/' + created.id
+    const text = "space ' \" $HOME; touch INJECTION\n中文"
+    assert.equal((await postJson(f.url(path + '/nodes/' + input.instanceId + '/actions/submit'), { text })).status, 200)
+    const completed = await untilDetail(f.url(path), d => d.snapshot.instances.some((i: any) => i.definitionId === 'run' && i.status === 'completed'))
+    const run = completed.snapshot.instances.find((i: any) => i.definitionId === 'run')
+    assert.deepEqual(run.input, { text }); assert.deepEqual(run.output, { text })
+    assert.deepEqual(completed.snapshot.instances.find((i: any) => i.definitionId === 'review').input, { text })
+    assert.equal(completed.executions[run.instanceId].stderr, 'package document')
+    assert.equal(await readFile(join(f.root, 'result.txt'), 'utf8'), text)
+    await assert.rejects(readFile(join(f.root, 'INJECTION')), /ENOENT/)
+    assert.equal(calls.length, 1); assert.deepEqual(calls[0].dshEnv, { DSH_TEMPLATE_DIR: directory })
+    assert.equal(calls[0].workdir, f.root); assert.equal(calls[0].sandboxPolicy.workspaceRoot, f.root)
+    assert.equal(calls[0].sandboxPolicy.mode, 'workspace-write'); assert.ok(calls[0].command.startsWith(assetCommand))
+  }
+})
+
+test('saved template source survives restart and deregistration; current files and manual retry never rebind the snapshot', async () => {
+  const calls: any[] = [], services = { shell: filesystemShell(calls) }, f = await fixture(services)
+  const { fiber, directory } = await mappedTemplate(f, assetDefinition([assetTask('first'), assetTask('second'), assetTask('ordinary', 'printf ordinary'),
+    { type: 'edge', from: 'first', to: 'second' }, { type: 'edge', from: 'second', to: 'ordinary' }]))
+  await mkdir(join(directory, 'scripts')); await mkdir(join(directory, 'docs'))
+  const script = join(directory, 'scripts', 'init.sh'), doc = join(directory, 'docs', 'guide.md')
+  await writeFile(doc, 'A'); await writeFile(script, 'set -e\ncat "$DSH_TEMPLATE_DIR/docs/guide.md"\nexit 7\n')
+  const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Lifecycle', templateId: 'asset-runtime' })).json() as any
+  const path = INSTANCES_PATH + '/' + created.id, first = created.snapshot.instances.find((i: any) => i.definitionId === 'first').instanceId
+  await postJson(f.url(path + '/nodes/' + first + '/actions/start'), {})
+  const failed = await untilDetail(f.url(path), d => d.executions?.[first]?.status === 'failed')
+  assert.equal(failed.executions[first].stdout, 'A')
+  await writeFile(doc, 'B'); await writeFile(script, 'set -e\ncat "$DSH_TEMPLATE_DIR/docs/guide.md"\n')
+  await writeFile(join(directory, 'workflow.yaml'), stringify(assetDefinition([assetTask('changed', 'exit 99')])))
+  await fiber.dispose(); assert.equal((await fetch(f.url(TEMPLATES_PATH + '/asset-runtime'))).status, 404)
+  await postJson(f.url(path + '/nodes/' + first + '/actions/start'), {})
+  const done = await untilDetail(f.url(path), d => d.snapshot.instances.some((i: any) => i.instanceId === first && i.status === 'completed'))
+  assert.equal(done.executions[first].stdout, 'B')
+  await f.close()
+  const restarted = await openHost(f.storageRoot, f.templateRoot, f.root, services); cleanups.push(restarted.close)
+  const restored = await (await fetch(restarted.url(path))).json() as any
+  assert.equal(restored.definition.dag[0].command, assetCommand); assert.equal(calls.length, 2)
+  const second = restored.snapshot.instances.find((i: any) => i.definitionId === 'second').instanceId
+  await mappedTemplate({ ctx: restarted.ctx, root: f.root }, assetDefinition([assetTask('replacement', 'exit 99')]), 'v2', 'assets/replacement', 'asset-replacement')
+  await rm(script)
+  await postJson(restarted.url(path + '/nodes/' + second + '/actions/start'), {})
+  const missing = await untilDetail(restarted.url(path), d => d.executions?.[second]?.status === 'failed')
+  assert.match(missing.executions[second].stderr, /No such file/); assert.equal(calls.at(-1).dshEnv.DSH_TEMPLATE_DIR, directory)
+  await writeFile(script, 'set -e\ncat "$DSH_TEMPLATE_DIR/docs/guide.md"\n')
+  const moved = directory + '-moved'; await rename(directory, moved)
+  await postJson(restarted.url(path + '/nodes/' + second + '/actions/start'), {})
+  await untilDetail(restarted.url(path), d => d.executions?.[second]?.status === 'failed')
+  await rename(moved, directory); await writeFile(doc, 'C')
+  await postJson(restarted.url(path + '/nodes/' + second + '/actions/start'), {})
+  const next = await untilDetail(restarted.url(path), d => d.snapshot.instances.some((i: any) => i.definitionId === 'ordinary'))
+  assert.equal(next.executions[second].stdout, 'C'); assert.equal(next.executions[first].stdout, 'B')
+  const ordinary = next.snapshot.instances.find((i: any) => i.definitionId === 'ordinary').instanceId
+  await rm(directory, { recursive: true })
+  await postJson(restarted.url(path + '/nodes/' + ordinary + '/actions/start'), {})
+  await untilDetail(restarted.url(path), d => d.snapshot.instances.some((i: any) => i.instanceId === ordinary && i.status === 'completed'))
+  assert.equal(calls.length, 6)
+})
+
+test('nested and expanded Bash nodes receive the saved template source independently of item inputs', async () => {
+  const calls: any[] = [], f = await fixture({ shell: filesystemShell(calls) })
+  const rows = { type: 'array', items: { type: 'object', properties: { key: 'string', text: 'string' } } }
+  const { directory } = await mappedTemplate(f, assetDefinition([
+    { id: 'source', type: 'node', node_kind: 'form', output_schema: { rows } },
+    { id: 'nested', type: 'dag', input_schema: { text: 'string' }, dag: [{ ...assetTask('each', assetCommand + ' {{ text }}'), input_schema: { text: 'string' }, is_auto_start: true }] },
+    { type: 'edge', from: 'source', to: 'nested', for: '$.rows' },
+  ]))
+  await mkdir(join(directory, 'scripts')); await writeFile(join(directory, 'scripts', 'init.sh'), 'printf "%s" "$1"\n')
+  const response = await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Expanded', templateId: 'asset-runtime' })
+  assert.equal(response.status, 201, await response.clone().text())
+  const created = await response.json() as any
+  const path = INSTANCES_PATH + '/' + created.id, source = created.snapshot.instances.find((i: any) => i.definitionId === 'source').instanceId
+  await postJson(f.url(path + '/nodes/' + source + '/actions/submit'), { rows: [{ key: 'one', text: 'one' }, { key: 'two', text: 'two' }] })
+  const done = await untilDetail(f.url(path), d => d.snapshot.instances.filter((i: any) => i.definitionId === 'each' && i.status === 'completed').length === 2)
+  assert.deepEqual(done.snapshot.instances.filter((i: any) => i.definitionId === 'each').map((i: any) => i.input), [{ text: 'one' }, { text: 'two' }])
+  assert.equal(calls.length, 2); assert.ok(calls.every(c => c.dshEnv.DSH_TEMPLATE_DIR === directory && c.workdir === f.root))
+})
+
+test('historical instances without source do not inherit ambient template paths or repair from a newly registered template', async () => {
+  const calls: any[] = [], services = { shell: filesystemShell(calls) }, f = await fixture(services)
+  await putTemplate(f.templateRoot, 'asset-runtime', stringify(assetDefinition([assetTask('old', 'test -z "$DSH_TEMPLATE_DIR" && printf ordinary > legacy.txt')])))
+  const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Historical', templateId: 'asset-runtime' })).json() as any
+  await f.close()
+  const restarted = await openHost(f.storageRoot, f.templateRoot, f.root, services); cleanups.push(restarted.close)
+  await mappedTemplate({ ctx: restarted.ctx, root: f.root }, assetDefinition([assetTask('new')]))
+  const ambient = process.env.DSH_TEMPLATE_DIR
+  try {
+    process.env.DSH_TEMPLATE_DIR = '/stale/ambient/template'
+    const path = INSTANCES_PATH + '/' + created.id, id = created.snapshot.instances.find((i: any) => i.definitionId === 'old').instanceId
+    await postJson(restarted.url(path + '/nodes/' + id + '/actions/start'), {})
+    await untilDetail(restarted.url(path), d => d.snapshot.instances.some((i: any) => i.instanceId === id && i.status === 'completed'))
+    assert.equal(await readFile(join(f.root, 'legacy.txt'), 'utf8'), 'ordinary'); assert.deepEqual(calls[0].dshEnv, {})
+  } finally { if (ambient === undefined) delete process.env.DSH_TEMPLATE_DIR; else process.env.DSH_TEMPLATE_DIR = ambient }
+})
+
+test('accepted file-backed Bash output resumes after a durable DAG write failure without rereading changed files', async () => {
+  const calls: any[] = [], services = { shell: filesystemShell(calls) }
+  let fault = false
+  const f = await fixture(services, undefined, value => {
+    const row = value as any
+    if (!fault && row.snapshot.instances.some((i: any) => i.definitionId === 'run' && i.status === 'completed')) { fault = true; throw new Error('Injected DAG write failure') }
+  })
+  const { directory } = await mappedTemplate(f, assetDefinition([{ ...assetTask('run'), is_auto_start: true, output_schema: { text: 'string' } }], { output_schema: { text: 'string' } }))
+  await mkdir(join(directory, 'scripts')); await writeFile(join(directory, 'scripts', 'init.sh'), 'printf \'{"text":"accepted"}\'\n')
+  const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Accepted file output', templateId: 'asset-runtime' })).json() as any
+  const id = created.snapshot.instances.find((i: any) => i.definitionId === 'run').instanceId, path = INSTANCES_PATH + '/' + created.id
+  await untilDetail(f.url(path), d => d.executions?.[id]?.status === 'succeeded'); assert.equal(fault, true)
+  await f.close(); await rm(directory, { recursive: true })
+  const restarted = await openHost(f.storageRoot, f.templateRoot, f.root, services); cleanups.push(restarted.close)
+  const restored = await (await fetch(restarted.url(path))).json() as any
+  assert.equal(restored.snapshot.instances.find((i: any) => i.instanceId === id).status, 'completed')
+  assert.deepEqual(restored.executions[id].output, { text: 'accepted' }); assert.equal(calls.length, 1)
+})
+
+
+test('recursive Bash calls share one saved template directory while session_agent keeps its original prompt', async () => {
+  const calls: any[] = [], prompts: string[] = []
+  const f = await fixture({ shell: filesystemShell(calls), sessionController: {
+    create: async () => {}, prompt: async (request: any) => { prompts.push(request.content[0].text); return { accepted: true } },
+  } })
+  const items = { type: 'array', items: 'string' }
+  const { directory } = await mappedTemplate(f, assetDefinition([
+    { id: 'source', type: 'node', node_kind: 'form', output_schema: { items } },
+    { id: 'loop', type: 'dag', input_schema: { items }, dag: [
+      { ...assetTask('step', assetCommand + ' {{ items }}'), input_schema: { items }, output_schema: { items, again: 'boolean' }, is_auto_start: true },
+      { type: 'edge', from: 'step', to: 'loop', if: '$.again' },
+    ] },
+    { id: 'agent', type: 'node', node_kind: 'session_agent', prompt: 'Original prompt', is_auto_start: true },
+    { type: 'edge', from: 'source', to: 'loop' },
+  ]))
+  await mkdir(join(directory, 'scripts'))
+  await writeFile(join(directory, 'scripts/init.sh'), 'node -e \'const items=JSON.parse(process.argv[1]); console.log(JSON.stringify({items:items.slice(1), again:items.length>0}))\' "$1"\n')
+  const response = await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Recursive', templateId: 'asset-runtime' })
+  assert.equal(response.status, 201)
+  const created = await response.json() as any, path = INSTANCES_PATH + '/' + created.id
+  const source = created.snapshot.instances.find((i: any) => i.definitionId === 'source').instanceId
+  assert.equal((await postJson(f.url(path + '/nodes/' + source + '/actions/submit'), { items: ['a', 'b'] })).status, 200)
+  const done = await untilDetail(f.url(path), d => d.snapshot.instances.filter((i: any) => i.definitionId === 'step' && i.status === 'completed').length === 3)
+  assert.deepEqual(done.snapshot.instances.filter((i: any) => i.definitionId === 'step').map((i: any) => i.input.items), [['a', 'b'], ['b'], []])
+  assert.equal(calls.length, 3); assert.ok(calls.every(c => c.dshEnv.DSH_TEMPLATE_DIR === directory))
+  assert.deepEqual(prompts, ['Original prompt'])
 })

@@ -248,6 +248,22 @@ dag:
 
 verify 同时等待会话完成并从 request 接收真实 text；会话空输出不会透传业务字段。内置中英文模板同样通过需求表单取得真实输入；会话处理后由结果表单确认业务字段。需要数组或对象时，表单收集完整 JSON 文本，由 `printf '%s' {{ result_json }}` 的 bash 节点交付并校验 JSON 对象，保持原有条件分支和递归流程。
 
+### Bash 引用模板附属文件
+
+模板目录中的脚本、文档和配置可随包提供，只需 exports 暴露 workflow.yaml，无须新增 YAML/config 资源字段或文件清单。Bash 可写：
+
+~~~yaml
+command: bash "$DSH_TEMPLATE_DIR/scripts/init.sh"
+~~~
+
+DSH_TEMPLATE_DIR 是系统通过宿主 Shell 的 dshEnv 注入的执行环境信息，来源为模块解析器返回的 workflow.yaml 文件 URL 的父目录，不是业务输入，无须 input_schema 声明，也不用 {{ DSH_TEMPLATE_DIR }}。普通业务引用仍须独立、未额外加引号；路径变量按 Shell 规则用双引号引用，例如 bash "$DSH_TEMPLATE_DIR/scripts/init.sh" {{ repository }}。
+
+cwd 和沙箱 workspaceRoot 仍是实例所属工作区；模板文件用于读取或执行，产物写工作区。沿用现有沙箱和系统权限，不提升权限，也不新增模板目录强制只读隔离。session_agent 不注入此变量。
+
+实例持久化创建时 YAML 定义和解析后的来源目录；嵌套、递归及逐项 Bash 共享此目录。重启或仅撤销模板登记仍使用保存的来源；缺少来源的历史实例不补回变量，不从宿主环境继承同名值。YAML 修改不热更新实例命令，脚本和文档则读取执行时的当前内容，不缓存副本；文件变化不会重跑成功节点。文件删除、包移动或读取失败沿用 Bash 错误和人工重试，不重新绑定其他模板。
+
+完整包与加载示例见[模板作者指南](./template-plugin-authoring.zh.md)。
+
 ### 3.4 实例运行图排布 `layout`
 
 任意 DAG 定义可选配 `layout`，只影响该层实例画布的位置和连线方向。根 DAG、嵌套 DAG 及递归产生的每次 DAG 实例各用所引用定义的本层配置；父层不会覆盖子层。省略时沿用从左到右的横向画布，不显示排布提示。`layout` 不影响依赖、`if`、`for`、实例身份、输出、持久化和恢复。

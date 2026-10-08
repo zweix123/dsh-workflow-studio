@@ -55,7 +55,10 @@ export class WorkflowInstanceService {
   }
   async listTemplates(): Promise<TemplateCatalog> { return this.templates.list() }
 
-  async getTemplate(id: string): Promise<TemplateDetail> { return this.templates.get(id) }
+  async getTemplate(id: string): Promise<TemplateDetail> {
+    const { templateDirectory: _directory, ...detail } = this.templates.get(id)
+    return detail
+  }
 
   listInstances(): InstanceSummary[] {
     return [...this.store.entries()]
@@ -128,6 +131,7 @@ export class WorkflowInstanceService {
       workspaceId: input.workspaceId,
       name: input.name,
       templateId: input.templateId,
+      templateDirectory: template.templateDirectory,
       createdAt: new Date().toISOString(),
       definition: template.definition,
       input: initialized.input,

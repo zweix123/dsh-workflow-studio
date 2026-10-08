@@ -7,13 +7,15 @@ import type { ServerNode, NodeFact, NodeContext } from 'dsh-workflow-node/contra
 
 interface Result { ok: boolean; stdout: string; stderr: string; exitCode: number | null; error?: string; stdoutTruncated?: boolean }
 
-async function execute(command: string, workspaceId: string, services: NodeContext['services']): Promise<Result> {
+async function execute(command: string, { workspaceId, templateDirectory, services }: NodeContext): Promise<Result> {
   if (!command.trim()) return { ok: true, stdout: '', stderr: '', exitCode: 0 }
   const workspace = services.workspaceRegistry.get(WorkspaceId(workspaceId))
   if (!workspace) throw new Error('Workspace no longer exists')
   const policy = { ...services.sandboxPolicy.resolve(), workspaceRoot: workspace.path }
   if (!services.shell.sandboxMode || policy.mode === 'danger-full-access') throw new Error('Sandbox execution is unavailable')
-  const spec = services.shell.resolve({ command, workdir: workspace.path, sandboxPolicy: policy })
+  const spec = services.shell.resolve({ command, workdir: workspace.path, sandboxPolicy: policy,
+    dshEnv: templateDirectory === undefined ? {} : { DSH_TEMPLATE_DIR: templateDirectory },
+  })
   if (!spec.sandboxPolicy || spec.sandboxPolicy.mode === 'danger-full-access') throw new Error('Sandbox execution is unavailable')
   const outcome = await (await services.shell.execute(spec)).result()
   const result = { stdout: outcome.stdout.text, stderr: outcome.stderr.text, exitCode: outcome.exitCode, stdoutTruncated: outcome.stdout.truncated }
@@ -34,7 +36,7 @@ function start(context: NodeContext): { fact: NodeFact; run?: () => Promise<Node
   return {
     fact: { kind: 'bash', status: 'running' },
     run: async () => {
-      const result = await execute(command, context.workspaceId, context.services)
+      const result = await execute(command, context)
       if (!result.ok) return { kind: 'bash', status: 'failed', business: result as unknown as NodeFact['business'], error: result.error }
       try {
         let output = {}

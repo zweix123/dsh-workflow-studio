@@ -1,0 +1,30 @@
+id: template-assets-e2e
+name: 模板附属文件验收
+type: dag
+dag:
+  - id: first
+    type: node
+    node_kind: bash
+    command: bash "$DSH_TEMPLATE_DIR/scripts/init.sh"
+    output_schema:
+      doc: string
+      source: string
+      workspace: string
+  - id: second
+    type: node
+    node_kind: bash
+    command: bash "$DSH_TEMPLATE_DIR/scripts/init.sh"
+    output_schema:
+      doc: string
+      source: string
+      workspace: string
+  - id: missing
+    type: node
+    node_kind: bash
+    command: bash "$DSH_TEMPLATE_DIR/scripts/init.sh"
+  - type: edge
+    from: first
+    to: second
+  - type: edge
+    from: second
+    to: missing
