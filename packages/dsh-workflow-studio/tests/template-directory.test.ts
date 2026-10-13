@@ -1,7 +1,7 @@
 import { bashNode } from '../../dsh-workflow-node-bash/src/server.js'
 import { formNode } from '../../dsh-workflow-node-form/src/server.js'
-import { sessionAgentNode } from '../../dsh-workflow-node-session-agent/src/server.js'
-const builtinNodes = new Map([bashNode, formNode, sessionAgentNode].map(node => [node.kind, node]))
+import { agentNode } from '../../dsh-workflow-node-agent/src/server.js'
+const builtinNodes = new Map([bashNode, formNode, agentNode].map(node => [node.kind, node]))
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { readFile, readdir } from 'node:fs/promises'

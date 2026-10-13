@@ -2,10 +2,10 @@ import { Context } from '@deepseek-ai/cordis'
 import { BrowserNodeRegistry } from '../../dsh-workflow-node/src/browser.js'
 import { bashClient } from '../../dsh-workflow-node-bash/src/client.js'
 import { formClient } from '../../dsh-workflow-node-form/src/client.js'
-import { sessionAgentClient } from '../../dsh-workflow-node-session-agent/src/client.js'
+import { agentClient } from '../../dsh-workflow-node-agent/src/client.js'
 import { bashNode } from '../../dsh-workflow-node-bash/src/server.js'
 import { formNode } from '../../dsh-workflow-node-form/src/server.js'
-import { sessionAgentNode } from '../../dsh-workflow-node-session-agent/src/server.js'
+import { agentNode } from '../../dsh-workflow-node-agent/src/server.js'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import React, { act } from 'react'
@@ -16,7 +16,7 @@ import type { WorkspaceSnapshot } from '@deepseek-ai/dsh-api-workspace-controlle
 import { WorkflowStudioPanel } from '../src/client/pages/workflow-studio/WorkflowStudioPanel.js'
 import { InstanceRunPanel } from '../src/client/pages/workflow-studio/instances/InstanceRunPanel.js'
 import { StudioClient } from '../src/client/studio-client.js'
-import { ConversationInstanceAction } from '../../dsh-workflow-node-session-agent/src/ConversationInstanceAction.js'
+import { ConversationInstanceAction } from '../../dsh-workflow-node-agent/src/ConversationInstanceAction.js'
 import { en, zh } from './locales.js'
 
 let testLanguage = zh
@@ -27,10 +27,10 @@ function withNodeViews(value: any): any {
   return { ...value, nodeViews: Object.fromEntries(value.snapshot.instances.filter((item: any) => item.type === 'node').map((item: any) => {
     let definition = value.definition
     for (const key of item.definitionPath) definition = definition?.[key]
-    const node = [bashNode, formNode, sessionAgentNode].find(node => node.kind === definition?.node_kind)
+    const node = [bashNode, formNode, agentNode].find(node => node.kind === definition?.node_kind)
     const execution = value.executions?.[item.instanceId]
     const fact = execution && { ...execution, business: execution.business ?? execution }
-    const folder = node?.kind === 'session_agent' ? 'session-agent' : node?.kind
+    const folder = node?.kind
     return [item.instanceId, { source: `@dsh-workflow/node-${folder}`, token: 'test', ...node?.describe?.({ definition, input: item.input, fact, ready: item.status === 'ready' }) }]
   })) }
 }
@@ -40,7 +40,7 @@ function testDom(onResize?: (callback: ResizeObserverCallback) => void) {
   testLanguage = zh
   const context = new Context()
   testNodes = new BrowserNodeRegistry((_namespace, key) => testLanguage[key as keyof typeof zh] ?? key)
-  for (const [source, node] of [['bash', bashClient], ['form', formClient], ['session-agent', { ...sessionAgentClient, handlers: { openSession: (props: any) => testOpenSession?.(props.execution.sessionId) } }]] as const) testNodes.register(context, `@dsh-workflow/node-${source}`, node)
+  for (const [source, node] of [['bash', bashClient], ['form', formClient], ['agent', { ...agentClient, handlers: { openSession: (props: any) => testOpenSession?.(props.execution.sessionId) } }]] as const) testNodes.register(context, `@dsh-workflow/node-${source}`, node)
   const dom = new JSDOM('<!doctype html><div id="root"></div>')
   const names = ['window', 'document', 'IS_REACT_ACT_ENVIRONMENT', 'fetch', 'requestAnimationFrame', 'cancelAnimationFrame', 'ResizeObserver'] as const
   const previous = names.map(name => [name, Object.getOwnPropertyDescriptor(globalThis, name)] as const)
@@ -399,23 +399,23 @@ test('cards execute independently and the inspector follows the selected graph o
   }
 })
 
-test('workflow node inspector opens the existing session_agent, completes it, and shows the last bash result', async () => {
+test('workflow node inspector opens the existing agent, completes it, and shows the last bash result', async () => {
   const { dom, cleanup } = testDom()
   const base: any = { id: 'run', workspaceId: 'w', name: 'Business', templateId: 'flow', createdAt: '2026-09-24T00:00:00Z', input: {},
-    definition: { id: 'root', type: 'dag', dag: [{ id: 'session_agent', type: 'node', node_kind: 'session_agent', prompt: '' }, { id: 'bash', type: 'node', node_kind: 'bash', command: 'printf done' }] },
+    definition: { id: 'root', type: 'dag', dag: [{ id: 'agent', type: 'node', node_kind: 'agent', prompt: '' }, { id: 'bash', type: 'node', node_kind: 'bash', command: 'printf done' }] },
     snapshot: { rootInstanceId: 'root-i', instances: [
       { instanceId: 'root-i', definitionId: 'root', definitionPath: [], parentInstanceId: null, input: {}, type: 'dag', status: 'running' },
-      { instanceId: 'session_agent-i', definitionId: 'session_agent', definitionPath: ['dag', 0], parentInstanceId: 'root-i', input: {}, type: 'node', status: 'ready' },
+      { instanceId: 'agent-i', definitionId: 'agent', definitionPath: ['dag', 0], parentInstanceId: 'root-i', input: {}, type: 'node', status: 'ready' },
       { instanceId: 'bash-i', definitionId: 'bash', definitionPath: ['dag', 1], parentInstanceId: 'root-i', input: {}, type: 'node', status: 'ready' },
     ], waitingPositions: [], skippedPositions: [], edges: [], instanceConnections: [] },
-    executions: { 'session_agent-i': { kind: 'session_agent', status: 'waiting', sessionId: 'session-one', sessionCreated: true }, 'bash-i': { kind: 'bash', status: 'failed', stdout: 'done', stderr: 'warning', exitCode: 2, error: 'Command exited with code 2' } } }
+    executions: { 'agent-i': { kind: 'agent', status: 'waiting', sessionId: 'session-one', sessionCreated: true }, 'bash-i': { kind: 'bash', status: 'failed', stdout: 'done', stderr: 'warning', exitCode: 2, error: 'Command exited with code 2' } } }
   let latest: any
   const opened: string[] = []
   let completed = 0
   globalThis.fetch = async (url, init) => {
-    if (String(url).endsWith('/nodes/session_agent-i/actions/complete') && init?.method === 'POST') {
+    if (String(url).endsWith('/nodes/agent-i/actions/complete') && init?.method === 'POST') {
       completed++
-      return nodeResponse({ ...base, snapshot: { ...base.snapshot, instances: base.snapshot.instances.map((item: any) => item.instanceId === 'session_agent-i' ? { ...item, status: 'completed', output: {} } : item) } })
+      return nodeResponse({ ...base, snapshot: { ...base.snapshot, instances: base.snapshot.instances.map((item: any) => item.instanceId === 'agent-i' ? { ...item, status: 'completed', output: {} } : item) } })
     }
     return new Response('missing', { status: 404 })
   }
@@ -429,12 +429,12 @@ test('workflow node inspector opens the existing session_agent, completes it, an
   }
   try {
     await render(base)
-    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="详情 session_agent"]')!.click())
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="详情 agent"]')!.click())
     await act(async () => [...container.querySelectorAll<HTMLButtonElement>('.dsh-workflow-inspector button')].find(button => button.textContent === zh.openSession)!.click())
     assert.deepEqual(opened, ['session-one'])
     await act(async () => [...container.querySelectorAll<HTMLButtonElement>('.dsh-workflow-inspector button')].find(button => button.textContent === zh.completeSessionAgent)!.click())
     assert.equal(completed, 1)
-    assert.equal(latest.snapshot.instances.find((item: any) => item.instanceId === 'session_agent-i').status, 'completed')
+    assert.equal(latest.snapshot.instances.find((item: any) => item.instanceId === 'agent-i').status, 'completed')
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="详情 bash"]')!.click())
     assert.match(inspectorSection(container, '运行信息').textContent!, /printf done.*done.*warning.*Command exited with code 2/s)
     assert.equal(fields(inspectorSection(container, '定义详情')).command, 'printf done')
@@ -740,8 +740,8 @@ test('conversation header returns to the latest instance and exact node after st
   const workspaces = { items: [], archivedSessionIds: [], pinnedSessionIds: [], state: 'idle', phase: 'ready', error: null } as unknown as WorkspaceSnapshot
   const useWorkspaces = <T,>(selector: (snapshot: WorkspaceSnapshot) => T) => selector(workspaces)
   const detail: any = { id: 'run', workspaceId: 'w', name: 'Navigation run', templateId: 'source', createdAt: '2026-10-03T00:00:00Z', revision: 2, input: {},
-    definition: { id: 'root', type: 'dag', dag: [{ id: 'same', type: 'node', node_kind: 'session_agent', prompt: '' }] },
-    executions: { 'node-2': { kind: 'session_agent', status: 'waiting', sessionId: 'session-2', sessionCreated: true } },
+    definition: { id: 'root', type: 'dag', dag: [{ id: 'same', type: 'node', node_kind: 'agent', prompt: '' }] },
+    executions: { 'node-2': { kind: 'agent', status: 'waiting', sessionId: 'session-2', sessionCreated: true } },
     snapshot: { rootInstanceId: 'root-i', instances: [
       { instanceId: 'root-i', parentInstanceId: null, definitionId: 'root', definitionPath: [], type: 'dag', status: 'running', input: {} },
       { instanceId: 'node-1', parentInstanceId: 'root-i', definitionId: 'same', definitionPath: ['dag', 0], type: 'node', status: 'ready', input: {} },
@@ -893,8 +893,8 @@ function returnPage() {
     close: async () => { await act(async () => root.unmount()); client.dispose(); cleanup() } }
 }
 const returnDetail = (id = 'run', nodeId = 'n2'): any => ({ id, workspaceId: 'w', name: id, templateId: 'flow', revision: 3, createdAt: '2026-10-03T00:00:00Z', input: {},
-  definition: { id: 'root', type: 'dag', dag: [{ id: 'task', type: 'node', node_kind: 'session_agent', prompt: '' }] },
-  executions: { [nodeId]: { kind: 'session_agent', status: 'succeeded', sessionId: 'session', sessionCreated: true, output: {} } },
+  definition: { id: 'root', type: 'dag', dag: [{ id: 'task', type: 'node', node_kind: 'agent', prompt: '' }] },
+  executions: { [nodeId]: { kind: 'agent', status: 'succeeded', sessionId: 'session', sessionCreated: true, output: {} } },
   snapshot: { rootInstanceId: 'root-i', instances: [
     { instanceId: 'root-i', parentInstanceId: null, definitionId: 'root', definitionPath: [], type: 'dag', status: 'completed', input: {}, output: {} },
     { instanceId: nodeId, parentInstanceId: 'root-i', definitionId: 'task', definitionPath: ['dag', 0], type: 'node', status: 'completed', input: {}, output: {} },

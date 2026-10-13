@@ -4,7 +4,7 @@ type: dag
 dag:
   - id: task
     type: node
-    node_kind: session_agent
+    node_kind: agent
     prompt: E2E conversation association
   - id: after
     type: node

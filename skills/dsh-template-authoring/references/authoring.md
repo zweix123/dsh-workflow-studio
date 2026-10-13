@@ -110,6 +110,6 @@ starter 的路径是：`request` 表单收集 `task` → `discuss` 会话消费 
 
 ## Bash 模板附属文件
 
-包内脚本可通过 `command: bash "$DSH_TEMPLATE_DIR/scripts/init.sh"` 调用，脚本用 `"$DSH_TEMPLATE_DIR/docs/guide.md"` 读取文档。无需资源字段或文件清单，仅 exports 暴露 workflow.yaml；目录取解析结果父目录，不取模板 ID。该变量由宿主 dshEnv 提供，不是业务输入或 Django 占位符，session_agent 不注入。cwd 和沙箱 workspaceRoot 保持工作区，产物写工作区，不提升权限。
+包内脚本可通过 `command: bash "$DSH_TEMPLATE_DIR/scripts/init.sh"` 调用，脚本用 `"$DSH_TEMPLATE_DIR/docs/guide.md"` 读取文档。无需资源字段或文件清单，仅 exports 暴露 workflow.yaml；目录取解析结果父目录，不取模板 ID。该变量由宿主 dshEnv 提供，不是业务输入或 Django 占位符，agent 不注入。cwd 和沙箱 workspaceRoot 保持工作区，产物写工作区，不提升权限。
 
 实例保存定义快照和来源目录，不复制资源；重启、撤销登记继续使用旧来源，历史实例不自动补回。脚本和文档读取执行时当前文件，更新不使成功节点重跑；文件删除或包移动沿用 Bash 错误与人工重试。

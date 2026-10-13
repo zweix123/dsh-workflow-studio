@@ -35,15 +35,15 @@ description: 为 dsh-workflow-studio 定义或修改工作流模板，编写 DAG
 
 - 模板根为 `type: dag`，根 `id`、`name` 均非空。ID 在同一 profile 内唯一，目录只定位资源。整份定义中显式 ID 全局唯一，边引用本层顶点。
 - 工坊创建实例没有外部根业务输入，根 `input_schema` 省略或为 `{}`；人工输入用入口 `form` 收集。
-- 默认节点为 `form`、`session_agent`、`bash`。Schema 是字段到类型的映射，不是完整 JSON Schema；对象/数组使用带 `properties`/`items` 的结构化描述。
+- 默认节点为 `form`、`agent`、`bash`。Schema 是字段到类型的映射，不是完整 JSON Schema；对象/数组使用带 `properties`/`items` 的结构化描述。
 - `form` 支持 string、number、boolean、结构化 object/array、组合嵌套和数组增删；字段结构以 `output_schema` 为准，`schema` 与 `uiSchema` 递归补充注解和已有控件。输入契约只写有上游来源、用于同名预填且与对应输出递归结构类型一致的字段。对象数组示例、默认值及提交约束见 [references/authoring.md](references/authoring.md#结构化表单)。
-- `session_agent` 提供 `prompt`，只消费输入。其 `output_schema` 只能省略或为 `{}`，用户手动完成时提交 `{}`，不会提取对话结果，也不透传输入。下游需要业务结果时增加人工结果表单，或采用能真实产生结果的 bash。
+- `agent` 提供 `prompt`，mode 默认 foreground，可设为 background。有输出声明时通过宿主原生 structured_output 交付，并再次按 DAG 校验；台前点击“完成”发起只读交付，台后先执行并保存结果，等待人工完成。无输出时台前跳过交付子 Agent，台后仍执行任务；两者结果为 `{}`，不自动透传输入。失败和中断由用户重试，历次记录保留。
 - `bash` 提供 `command`。有输出声明时 stdout 必须整体为满足契约的 JSON 对象，日志写 stderr；无输出声明时 stdout 只是日志，提交 `{}`。
 - 每个输入字段都必须有潜在上游输出声明，不能假定数据沿链路自动透传。多个前驱的同名输出会冲突，即使条件互斥；边没有自定义字段映射语法。
 - `prompt`/`command` 引用用 `{{ field }}` 或 `{{ object.field }}`，必须在本节点输入中声明。bash 占位符须独立、未额外加引号，不能拼进参数或命令名。
 - `if`、`for` 写在边上，使用 `$.field`。不支持 JavaScript 表达式、布尔组合、嵌套字段或索引。复杂需求先读取准确语义，不能自创字段。
-- `is_auto_start` 只用于 session_agent/bash，默认 false；按用户要求决定自动启动，不能把它当成自动完成或自动授权后续动作。
-- 提示词写清任务、输入、范围、产物和人工交接方式。不能用“输出 JSON”的提示词伪装 session_agent 已支持结构化交付。其他对话的上下文也不会自动成为本节点输入。
+- `is_auto_start` 只用于 agent/bash，默认 false；按用户要求决定自动启动，不能把它当成自动完成或自动授权后续动作。
+- 提示词写清任务、输入、范围、产物和人工交接方式。声明 output_schema 才会为子 Agent 提供 structured_output；普通文本或提示词中的“输出 JSON”不能代替工具交付。其他对话的上下文也不会自动成为本节点输入。
 
 内置模板的当前范围见 `docs/specs/template-management.zh.md`。每份模板作为 `packages/dsh-workflow-template-*/` 下的独立纯配置插件包维护，由默认 bundle 装配；模板资源不放在 Studio 包内。模板范围与语言版本按需求确定，不在本技能中固定。
 
@@ -53,7 +53,7 @@ description: 为 dsh-workflow-studio 定义或修改工作流模板，编写 DAG
 
 `package.json` 的 `dsh.bundle.patch` 指向补丁文件，`exports` 暴露对应 `workflow.yaml`。单模板包使用 `"./workflow.yaml": "./workflow.yaml"`，加载器只配置 `directory: '<包名>'`；多模板包可使用 `directory: '<包名>/templates/<目录>'`。两者都是包资源地址，不是文件系统相对路径。不重复写 `config.id`、`config.name` 或节点清单。
 
-一个包可以贡献多份模板，每份有独立 loader ID、directory 和模板根 ID。消费默认节点时只贡献模板，不重复装配默认节点。模板加载时读取 YAML 并保存解析后的父目录；包内脚本和文档可用 Bash 的 DSH_TEMPLATE_DIR 引用，例如 `bash "$DSH_TEMPLATE_DIR/scripts/init.sh"`。无需 input_schema 或资源字段，附属文件无需逐个 exports；普通相对路径和产物仍基于工作区。YAML 为实例快照，附属文件读取执行时当前内容；成功节点不因更新重跑，缺失或移动沿用 Bash 错误与人工重试，历史实例不自动补来源。session_agent 不注入路径，沿用沙箱且不提升权限。
+一个包可以贡献多份模板，每份有独立 loader ID、directory 和模板根 ID。消费默认节点时只贡献模板，不重复装配默认节点。模板加载时读取 YAML 并保存解析后的父目录；包内脚本和文档可用 Bash 的 DSH_TEMPLATE_DIR 引用，例如 `bash "$DSH_TEMPLATE_DIR/scripts/init.sh"`。无需 input_schema 或资源字段，附属文件无需逐个 exports；普通相对路径和产物仍基于工作区。YAML 为实例快照，附属文件读取执行时当前内容；成功节点不因更新重跑，缺失或移动沿用 Bash 错误与人工重试，历史实例不自动补来源。agent 不注入路径，沿用沙箱且不提升权限。
 
 ## 校验、加载与交付
 
@@ -61,6 +61,6 @@ description: 为 dsh-workflow-studio 定义或修改工作流模板，编写 DAG
 
 校验 YAML/JSON、exports 与资源地址、ID、DAG 编译及具体节点配置。使用项目已有编译器时传入空根提供方 `compile(definition, {})`，随后用真实节点定义检查业务配置；仅解析 YAML 不足以证明模板可用。不为一份普通模板新建通用验证框架。
 
-若用户要求实际加载或跑通，在目标范围内验证模板名称与来源、创建实例、输入到达下游及完成结果。测试 session_agent 时区分人为确认完成与真实模型执行成功。涉及本项目 UI 改动时遵守项目浏览器验收技能；单纯写模板不必修改 UI。
+若用户要求实际加载或跑通，在目标范围内验证模板名称与来源、创建实例、输入到达下游及完成结果。测试 agent 时区分人为确认完成与真实模型执行成功。涉及本项目 UI 改动时遵守项目浏览器验收技能；单纯写模板不必修改 UI。
 
 交付文件入口、流程阅读顺序、具体加载命令、验证结果及未验证项。只做静态验证就明确写静态通过。需要保留真实宿主结果时按项目约定写验收记录；不为技能或普通小模板强制创建规格、验收报告或提交 Git。

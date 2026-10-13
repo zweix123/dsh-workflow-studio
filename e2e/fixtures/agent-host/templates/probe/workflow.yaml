@@ -1,0 +1,7 @@
+id: agent-host-probe
+name: Agent host probe
+type: dag
+dag:
+  - id: probe
+    type: node
+    node_kind: host_probe

@@ -1,4 +1,4 @@
-import { getConversationInstance } from '../../dsh-workflow-node-session-agent/src/association.js'
+import { getConversationInstance } from '../../dsh-workflow-node-agent/src/association.js'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { JSDOM } from 'jsdom'

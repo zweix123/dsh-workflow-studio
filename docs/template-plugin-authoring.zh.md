@@ -59,7 +59,7 @@ npm run build
 dsh plugin --profile web add /绝对路径/dsh-workflow-studio/packages/dsh-workflow-bundle
 ```
 
-默认 bundle 一次装配 Studio、公共节点登记、bash/session_agent/form、通用模板加载器及两个中文内置模板：mattpocock（`matt-pocock-wayfinder-workflow.zh`）和 [OpenSpec 需求交付](./openspec-workflow.zh.md)（`openspec-delivery.zh`）。旧 DSH home 模板目录不再自动发现，也不再复制内置模板；旧文件不会自动删除。
+默认 bundle 一次装配 Studio、公共节点登记、bash/agent/form、通用模板加载器及两个中文内置模板：mattpocock（`matt-pocock-wayfinder-workflow.zh`）和 [OpenSpec 需求交付](./openspec-workflow.zh.md)（`openspec-delivery.zh`）。旧 DSH home 模板目录不再自动发现，也不再复制内置模板；旧文件不会自动删除。
 
 内置模板也使用独立纯配置插件包，与 Studio 平级：
 
@@ -72,7 +72,7 @@ dsh plugin --profile web add /绝对路径/dsh-workflow-studio/packages/dsh-work
 
 推荐第三方作者沿用本项目的结构：独立节点包提供业务能力，独立模板包组合节点，bundle 提供一次添加的入口。仅提供模板时保留模板包即可；一个模板包也可以包含多份模板。
 
-模板包的 `peerDependencies` 声明 `dsh-workflow-template` 及实际使用的节点插件包和兼容版本。多模板包声明所用节点包的并集。Wayfinder 使用 form、session_agent、bash，声明对应三个包；OpenSpec 交付模板只使用 form 和 session_agent，不声明 bash。节点类型名与包名不一定相同，作者需根据实际提供该类型的插件填写包名。
+模板包的 `peerDependencies` 声明 `dsh-workflow-template` 及实际使用的节点插件包和兼容版本。多模板包声明所用节点包的并集。Wayfinder 使用 form 和 agent，声明对应两个包；OpenSpec 交付模板只使用 form 和 agent，不声明 bash。节点类型名与包名不一定相同，作者需根据实际提供该类型的插件填写包名。
 
 模板包自己的补丁只声明模板加载器，消费同一 profile 已装配的节点。组合 bundle 则在 `dependencies` 中包含要提供的包，并在补丁中显式启用节点、加载模板。例如，在已添加本项目默认 bundle 的 profile 中，第三方可以添加自己的组合 bundle：
 
@@ -138,7 +138,7 @@ DSH_TEMPLATE_DIR 来自模块解析器返回的 YAML 文件 URL 的父目录。e
 command: bash "$DSH_TEMPLATE_DIR/scripts/init.sh" {{ repository }}
 ~~~
 
-Bash 的 cwd 和沙箱 workspaceRoot 继续使用用户工作区。附属文件用于读取或执行，产物写工作区；访问受现有沙箱和系统权限约束，不提升权限，也不承诺模板目录被强制只读隔离。本次不向 session_agent 注入路径。
+Bash 的 cwd 和沙箱 workspaceRoot 继续使用用户工作区。附属文件用于读取或执行，产物写工作区；访问受现有沙箱和系统权限约束，不提升权限，也不承诺模板目录被强制只读隔离。本次不向 agent 注入路径。
 
 实例保存创建时的 YAML 定义和来源目录，不复制附属文件。嵌套、递归和逐项 Bash 使用同一来源，重启或仅撤销登记不清除目录，也不重绑定其他同 ID 模板。缺少来源的历史实例不自动补回变量，普通工作区命令继续可用。
 

@@ -1,0 +1,19 @@
+id: agent-failures
+name: Agent failure recovery
+type: dag
+dag:
+  - id: foreground
+    type: node
+    node_kind: agent
+    prompt: 'MISSING_MATERIAL CONTEXT_MARKER_731 SLOW_MAIN'
+    output_schema: { result: string }
+  - id: retry
+    type: node
+    node_kind: agent
+    mode: background
+    prompt: 'FAIL_ONCE_TASK'
+  - id: interrupted
+    type: node
+    node_kind: agent
+    mode: background
+    prompt: 'SLOW_BACKGROUND'

@@ -21,7 +21,7 @@ dag:
 
   - id: discuss
     type: node
-    node_kind: session_agent
+    node_kind: agent
     input_schema:
       task: string
     prompt: |

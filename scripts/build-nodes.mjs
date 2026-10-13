@@ -2,7 +2,7 @@ import { build } from 'esbuild'
 import { readFile, mkdir, rm } from 'node:fs/promises'
 import { execFileSync } from 'node:child_process'
 
-for (const directory of ['dsh-workflow-node', 'dsh-workflow-node-bash', 'dsh-workflow-node-session-agent', 'dsh-workflow-node-form']) {
+for (const directory of ['dsh-workflow-node', 'dsh-workflow-node-bash', 'dsh-workflow-node-agent', 'dsh-workflow-node-form']) {
   const root = `packages/${directory}`
   const manifest = JSON.parse(await readFile(`${root}/package.json`, 'utf8'))
   await rm(`${root}/lib`, { recursive: true, force: true }); await mkdir(`${root}/lib`, { recursive: true })

@@ -19,7 +19,7 @@ test('template tab rescans, shows invalid entries, and reuses and closes read-on
   globalThis.cancelAnimationFrame = handle => clearTimeout(handle)
   const prompt = '完整提示词\n第二行保留换行\n' + '长内容 '.repeat(80)
   const definition = { id: 'root', type: 'dag', description: '原始描述', dag: [
-    { id: 'write', type: 'node', node_kind: 'session_agent', prompt, dag: 'custom metadata', output_schema: { answer: 'string' }, custom: { zero: 0, flag: false, empty: '' } },
+    { id: 'write', type: 'node', node_kind: 'agent', prompt, dag: 'custom metadata', output_schema: { answer: 'string' }, custom: { zero: 0, flag: false, empty: '' } },
     { id: 'review', type: 'node', node_kind: 'bash', command: 'echo ok' },
     { type: 'edge', from: 'write', to: 'review', if: '$.answer == "yes"' },
   ] }

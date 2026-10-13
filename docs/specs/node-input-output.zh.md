@@ -1,3 +1,5 @@
+当前 Agent 规则（2026-10-13）由[Agent 节点结果交付规格](./session-agent-node-result-handoff.zh.md)更新：类型为 agent，支持台前/台后与声明输出。本文中 session_agent 拒绝输出、只提交空对象的规则为此前基线；输入引用、Bash、Form 和公共 DAG 规则继续适用。
+
 # 节点输入输出与统一顶点来源校验规格
 
 状态：正式规格，已确认并实施。本文是实施与代码审查的验收依据；验证结果和未验证项见[宿主验收记录](../acceptance/node-input-output.zh.md)。
@@ -145,6 +147,6 @@ session_agent 通过提示词中的 Django 风格变量引用使用输入，本�
 
 - 术语以[领域词汇表](../../CONTEXT.md)为准。架构边界继续遵守[节点契约归属](../adrs/0003-node-packages-and-contract.md)、[按 kind 解释配置](../adrs/0004-node-config-scoped-by-kind.md)与[节点业务状态和持久化分工](../adrs/0005-node-owned-business-state.md)。
 - [节点模块规格](./node-modules.zh.md)和[既有节点执行规格](./workflow-nodes.zh.md)的模块化、宿主行为、并发与恢复规则继续作为基础；与本规格冲突的占位输入输出和未使用输入行为以本规格为准。交付后同步[用户 DAG 语法](../dag-syntax.zh.md)。
-- session_agent 的[结果交付提案](./session-agent-node-result-handoff.zh.md)仍属于后续探索，不进入本期实施。
+- session_agent 的[结果交付提案](./session-agent-node-result-handoff.zh.md)已由该规格实施，本文保留先前输入输出改造的范围与验收依据。
 - 一个典型链路是：form 收集需求与仓库信息，session_agent 引用这两个输入处理任务，手动完成只提供执行依赖；后续 bash 同时从 form 获得业务输入、等待 session_agent 完成，并交付真实 JSON 结果。不能把 session_agent 的空输出当作数据透传。
 - 本轮按本地规格实施与审查。Issue tracker 与 triage 配置尚未提供，正式 Issue 发布和 ready-for-agent 标记须在项目完成 tracker 配置后进行；本文件不冒充已发布 Issue。

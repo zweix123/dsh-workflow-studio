@@ -8,6 +8,6 @@
   "peerDependencies": {
     "dsh-workflow-template": "0.1.0",
     "@dsh-workflow/node-form": "0.1.0",
-    "@dsh-workflow/node-session-agent": "0.1.0"
+    "@dsh-workflow/node-agent": "0.1.0"
   }
 }

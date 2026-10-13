@@ -1,0 +1,23 @@
+- id: agent-default-model
+  config:
+    provider: workflow-fixture
+    model: fixture
+- insert:
+    - id: agent-host-fixture
+      name: '@dsh-workflow/agent-host-fixture'
+    - id: agent-host-probe-template
+      name: dsh-workflow-template
+      config:
+        directory: '@dsh-workflow/agent-host-fixture/templates/probe'
+    - id: agent-handoff-template
+      name: dsh-workflow-template
+      config:
+        directory: '@dsh-workflow/agent-host-fixture/templates/handoff'
+    - id: agent-failures-template
+      name: dsh-workflow-template
+      config:
+        directory: '@dsh-workflow/agent-host-fixture/templates/failures'
+    - id: agent-environment-template
+      name: dsh-workflow-template
+      config:
+        directory: '@dsh-workflow/agent-host-fixture/templates/environment'

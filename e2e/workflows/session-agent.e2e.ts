@@ -2,7 +2,7 @@ import { expect } from 'e2e'
 import { test } from '../dsh.js'
 import { addWorkspace, createInstance, deleteDialog, detailField, inspectNode } from '../ui.js'
 
-test('session_agent 跨实例关联准确、对话往返不完成、重启复用与人工完成后仍可返回', async ({ app, screen, browser, dsh }) => {
+test('agent 跨实例关联准确、对话往返不完成、重启复用与人工完成后仍可返回', async ({ app, screen, browser, dsh }) => {
   await app.open('/')
   await addWorkspace(screen, dsh.workspace)
   await createInstance(screen, dsh.workspaceName, 'regression-session', 'session-first')

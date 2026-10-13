@@ -36,7 +36,7 @@ dag:
       memo: string
   - id: conversation
     type: node
-    node_kind: session_agent
+    node_kind: agent
     prompt: ''
   - type: edge
     from: input

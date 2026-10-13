@@ -11,7 +11,7 @@ import { join } from 'node:path'
 import * as registry from '../../dsh-workflow-node/lib/server.js'
 import * as bash from '../../dsh-workflow-node-bash/lib/server.js'
 import * as form from '../../dsh-workflow-node-form/lib/server.js'
-import * as session from '../../dsh-workflow-node-session-agent/lib/server.js'
+import * as session from '../../dsh-workflow-node-agent/lib/server.js'
 import * as plugin from '../lib/index.js'
 import { INSTANCES_PATH, STATUS_PATH, TEMPLATES_PATH } from '../src/shared/constants.js'
 
@@ -29,6 +29,10 @@ test('built host plugin serves HTTP and removes its route on disposal', async ()
     ctx.provide('shell', {} as never)
     ctx.provide('sandboxPolicy', {} as never)
     ctx.provide('sessionController', {} as never)
+    ctx.provide('agents', {} as never)
+    ctx.provide('subagents', {} as never)
+  ctx.provide('agentDefaultModel', {} as never)
+  ctx.provide('agentPresets', {} as never)
     await ctx.plugin(WebServer, { host: '127.0.0.1', port: 0 })
     await ctx.plugin(registry)
     await ctx.plugin(bash)

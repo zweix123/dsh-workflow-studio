@@ -20,7 +20,7 @@ dag:
 
   - id: 为需求起名
     type: node
-    node_kind: session_agent
+    node_kind: agent
     input_schema:
       request: string
     prompt: |
@@ -52,7 +52,7 @@ dag:
 
   - id: propose
     type: node
-    node_kind: session_agent
+    node_kind: agent
     input_schema: &change_input
       change_name: string
       request: string
@@ -83,7 +83,7 @@ dag:
 
   - id: apply
     type: node
-    node_kind: session_agent
+    node_kind: agent
     input_schema: *change_input
     prompt: |
       本次 OpenSpec change 名称：
@@ -107,7 +107,7 @@ dag:
 
   - id: archive
     type: node
-    node_kind: session_agent
+    node_kind: agent
     input_schema: *change_input
     prompt: |
       本次 OpenSpec change 名称：

@@ -49,7 +49,7 @@ ctx.workflowNodes.register(ctx, name, node, { dispose: releaseNodeResources })
 
 同 kind 不同来源不会混用组件或 handler。没有组件时保留通用详情及有效服务端按钮；没有 handler 时隐藏对应操作。组件渲染错误在局部隔离，动作异常由公共通道反馈。前端卸载/重载会清除临时草稿并提示，已保存数据保留。
 
-需要从宿主其他页面打开指定节点时，可注入 `workflowNavigation`，调用 `open({ instanceId, nodeInstanceId }, abortSignal)`；用真实身份定位，遵守取消信号，结果为 false 时不继续导航。session_agent 的会话头动作及关联 API 已由节点包自己装配。
+需要从宿主其他页面打开指定节点时，可注入 `workflowNavigation`，调用 `open({ instanceId, nodeInstanceId }, abortSignal)`；用真实身份定位，遵守取消信号，结果为 false 时不继续导航。agent 的会话头动作及关联 API 已由节点包自己装配。
 
 ## 模板联合装配
 

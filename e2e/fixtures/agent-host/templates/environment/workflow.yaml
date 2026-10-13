@@ -1,0 +1,22 @@
+id: agent-environment
+name: Agent workspace environment
+type: dag
+dag:
+  - id: input
+    type: node
+    node_kind: form
+    output_schema: { target_directory: string }
+    schema:
+      properties:
+        target_directory: { title: 目标工作目录 }
+  - id: task
+    type: node
+    node_kind: agent
+    mode: background
+    is_auto_start: true
+    input_schema: { target_directory: string }
+    output_schema: { result: string, directory: string }
+    prompt: 'Compute CONTEXT_MARKER_731. EXPECTED_CWD={{ target_directory }}'
+  - type: edge
+    from: input
+    to: task

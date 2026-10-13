@@ -60,7 +60,7 @@ packages/dsh-workflow-template/  # 通用模板加载与登记插件
 packages/dsh-workflow-template-*/ # 各模板的独立纯配置插件包
 packages/dsh-workflow-node/      # 公共节点契约、profile 级登记与可选浏览器能力
 packages/dsh-workflow-bundle/    # 普通 dsh 默认装配，引用节点与模板包
-packages/dsh-workflow-node-session-agent/      # session_agent 节点服务端与前端
+packages/dsh-workflow-node-agent/      # agent 节点服务端与前端
 packages/dsh-workflow-node-bash/      # bash 节点服务端与前端
 packages/dsh-workflow-node-form/      # form 节点服务端与前端
 ```

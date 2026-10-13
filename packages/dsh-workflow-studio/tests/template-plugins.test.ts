@@ -193,7 +193,11 @@ async function installBuiltinNodes(h: Awaited<ReturnType<typeof host>>) {
   h.ctx.provide('shell', {} as never)
   h.ctx.provide('sandboxPolicy', {} as never)
   h.ctx.provide('sessionController', {} as never)
-  for (const node of [await import('../../dsh-workflow-node-bash/lib/server.js'), await import('../../dsh-workflow-node-form/lib/server.js'), await import('../../dsh-workflow-node-session-agent/lib/server.js')]) await h.ctx.plugin(node)
+  h.ctx.provide('agents', {} as never)
+  h.ctx.provide('subagents', {} as never)
+  h.ctx.provide('agentDefaultModel', {} as never)
+  h.ctx.provide('agentPresets', {} as never)
+  for (const node of [await import('../../dsh-workflow-node-bash/lib/server.js'), await import('../../dsh-workflow-node-form/lib/server.js'), await import('../../dsh-workflow-node-agent/lib/server.js')]) await h.ctx.plugin(node)
 }
 
 test('the default templates use the public loader and registration contract', async () => {
@@ -278,7 +282,7 @@ test('loaded templates validate node configuration by kind and preserve unknown 
     await installBuiltinNodes(h)
     const yaml = (id: string, fragment: string) => `id: ${id}\nname: ${id}\ntype: dag\ndag:\n  - id: task\n    type: node\n    ${fragment}\n`
     await h.declare('@acme/workflows/templates/valid-bash', yaml('valid-bash', 'node_kind: bash\n    command: "  "\n    custom_note: keep\n    prompt: 42'))
-    await h.declare('@acme/workflows/templates/valid-agent', yaml('valid-agent', 'node_kind: session_agent\n    prompt: ""\n    command: null'))
+    await h.declare('@acme/workflows/templates/valid-agent', yaml('valid-agent', 'node_kind: agent\n    prompt: ""\n    command: null'))
     const detail = await (await h.request(`${TEMPLATES_PATH}/valid-bash`)).json()
     assert.equal(detail.definition.dag[0].custom_note, 'keep')
     assert.equal(detail.definition.dag[0].prompt, 42)
@@ -289,8 +293,8 @@ test('loaded templates validate node configuration by kind and preserve unknown 
       ['command-missing', 'node_kind: bash', /command/],
       ['command-null', 'node_kind: bash\n    command: null', /command/],
       ['auto-invalid', 'node_kind: bash\n    command: ""\n    is_auto_start: yes', /is_auto_start/],
-      ['prompt-missing', 'node_kind: session_agent', /prompt/],
-      ['prompt-invalid', 'node_kind: session_agent\n    prompt: 42', /prompt/],
+      ['prompt-missing', 'node_kind: agent', /prompt/],
+      ['prompt-invalid', 'node_kind: agent\n    prompt: 42', /prompt/],
     ] as const) {
       await h.declare(`@acme/workflows/templates/${id}`, yaml(id, fragment))
       const row = (await (await h.request(TEMPLATES_PATH)).json()).templates.find((row: any) => row.id === id)

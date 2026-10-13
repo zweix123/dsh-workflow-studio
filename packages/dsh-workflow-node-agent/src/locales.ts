@@ -8,6 +8,15 @@ export const en = {
   openSession: 'Open conversation',
   completeSessionAgent: 'Complete',
   executeNode: 'Execute',
+  agentProgress: 'Agent progress',
+  pendingResult: 'Pending result',
+  awaitingConfirmation: 'Result saved. Click Complete to deliver it downstream.',
+  attempts: 'Attempts',
+  openRecord: 'View record',
+  attemptRunning: 'Running',
+  attemptSucceeded: 'Succeeded',
+  attemptFailed: 'Failed',
+  attemptUnknown: 'Result unknown',
 }
 
 export const zh = {
@@ -20,6 +29,15 @@ export const zh = {
   openSession: '打开对话',
   completeSessionAgent: '完成',
   executeNode: '执行',
+  agentProgress: 'Agent 进展',
+  pendingResult: '待确认结果',
+  awaitingConfirmation: '结果已保存，点击“完成”后交付下游。',
+  attempts: '历次尝试',
+  openRecord: '查看记录',
+  attemptRunning: '执行中',
+  attemptSucceeded: '成功',
+  attemptFailed: '失败',
+  attemptUnknown: '结果未知',
 }
 
-declare module '@deepseek-ai/dsh-client-ui-slots' { interface LocaleNamespaceMap { '@dsh-workflow/node-session-agent': keyof typeof en } }
+declare module '@deepseek-ai/dsh-client-ui-slots' { interface LocaleNamespaceMap { '@dsh-workflow/node-agent': keyof typeof en } }

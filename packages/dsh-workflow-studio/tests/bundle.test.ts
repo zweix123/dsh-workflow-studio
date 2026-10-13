@@ -74,7 +74,7 @@ test('browser artifact uses dsh factory and host React, registers panel and side
   assert.equal(manifest.devDependencies['@deepseek-ai/dsh-client-locale'], '0.2.0-rc.1')
 })
 
-for (const [directory, kind] of [['dsh-workflow-node-bash', 'bash'], ['dsh-workflow-node-form', 'form'], ['dsh-workflow-node-session-agent', 'session_agent']]) {
+for (const [directory, kind] of [['dsh-workflow-node-bash', 'bash'], ['dsh-workflow-node-form', 'form'], ['dsh-workflow-node-agent', 'agent']]) {
   test(`${kind} browser artifact owns its capabilities, locale and cleanup`, async () => {
     const require = createRequire(import.meta.url)
     const source = await readFile(new URL(`../../${directory}/lib/client.js`, import.meta.url), 'utf8')

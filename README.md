@@ -10,9 +10,9 @@ Built for `@deepseek-ai/dsh@0.2.0-rc.1`. The plugin is currently installed from 
 
 ## What it does
 
-- Loads templates contributed by plugins in the active profile, with six English/Chinese defaults.
+- Loads templates contributed by plugins in the active profile, with two Chinese defaults.
 - Creates independent, persistent runs from template snapshots and shows their progress on a DAG canvas.
-- Runs `session_agent` nodes in DSH conversations, `bash` nodes in the host sandbox, and `form` nodes through user input.
+- Runs `agent` tasks in foreground conversations or background child executions, `bash` nodes in the host sandbox, and `form` nodes through user input.
 - Supports dependencies, conditional edges, item expansion, nested DAGs, and recursive DAG references. See the [DAG syntax guide (Chinese)](docs/dag-syntax.zh.md) for the full rules.
 
 ## Install from source
@@ -37,7 +37,7 @@ DSH itself is not bundled with this plugin. The default bundle installs the publ
 
 1. Use a default template or add your own pure configuration bundle following the [author guide](docs/template-plugin-authoring.zh.md).
 2. Open **Workflows** from the DSH sidebar. In **Instances**, choose a workspace, select the template, and create a run.
-3. Open the run to execute ready nodes and inspect its graph. A `session_agent` node is completed explicitly by the user; a successful `bash` command completes automatically; a `form` node completes on valid submission.
+3. Open the run to execute ready nodes and inspect its graph. A `agent` node is completed explicitly by the user; a successful `bash` command completes automatically; a `form` node completes on valid submission.
 
 Minimal package resource, exported and declared by a bundle:
 
@@ -48,7 +48,7 @@ type: dag
 dag:
   - id: draft
     type: node
-    node_kind: session_agent
+    node_kind: agent
     prompt: Write a short draft.
 ```
 
@@ -56,9 +56,9 @@ Templates are read only when their declaration loads or reloads. Page refreshes 
 
 ## Current limitation
 
-`session_agent` consumes declared inputs through `{{ name }}` / `{{ object.field }}` in its prompt and completes with `{}`; it cannot declare business outputs. `bash` uses the same references as independently escaped Shell arguments. With output declarations, its complete stdout must be a valid JSON object matching the output contract; logs belong on stderr. Without output declarations it completes with `{}` and keeps stdout as logs. `form` submits real user data. Workshop templates have no external root input: use an entry form to collect it. See the [DAG syntax guide (Chinese)](docs/dag-syntax.zh.md).
+`agent` consumes declared inputs through `{{ name }}` / `{{ object.field }}`. Its default foreground mode keeps an ordinary conversation; Complete hands declared outputs to a native fork using `structured_output`. Background mode executes in a read-only native child record and saves a result awaiting Complete. With no outputs, foreground completion skips the handoff; background still runs the task. Failures and interrupted attempts require an explicit retry, and earlier records remain available. `bash` uses the same references as independently escaped Shell arguments. With output declarations, its complete stdout must be a valid JSON object matching the output contract; logs belong on stderr. Without output declarations it completes with `{}` and keeps stdout as logs. `form` submits real user data. Workshop templates have no external root input: use an entry form to collect it. See the [DAG syntax guide (Chinese)](docs/dag-syntax.zh.md).
 
-The former `chat` kind is now `session_agent`. Update custom templates to the new kind and recreate existing runs that retain the old template snapshot.
+New templates use `node_kind: agent` and optional `mode: foreground | background` (default `foreground`). This change provides no compatibility or migration for old configurations or instances; existing data is retained.
 
 ## Development
 

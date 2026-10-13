@@ -1,0 +1,36 @@
+id: agent-handoff
+name: Agent handoff
+type: dag
+dag:
+  - id: foreground
+    type: node
+    node_kind: agent
+    prompt: 'Remember CONTEXT_MARKER_731'
+    output_schema: { result: string }
+  - id: background
+    type: node
+    node_kind: agent
+    mode: background
+    prompt: 'Compute CONTEXT_MARKER_731'
+    output_schema: { result: string }
+  - id: empty
+    type: node
+    node_kind: agent
+    mode: background
+    prompt: 'Perform the no-output task'
+  - id: after
+    type: node
+    node_kind: form
+    input_schema: { result: string }
+    output_schema: { result: string }
+  - type: edge
+    from: background
+    to: after
+  - id: foreground-after
+    type: node
+    node_kind: bash
+    command: ''
+    input_schema: { result: string }
+  - type: edge
+    from: foreground
+    to: foreground-after

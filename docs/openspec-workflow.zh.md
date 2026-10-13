@@ -1,12 +1,12 @@
 # OpenSpec 需求交付工作流
 
-内置中文模板，模板 ID 为 `openspec-delivery.zh`，由默认 bundle 与 mattpocock 中文模板一起装配，使用已有 form 和 session_agent 节点。
+内置中文模板，模板 ID 为 `openspec-delivery.zh`，由默认 bundle 与 mattpocock 中文模板一起装配，使用已有 form 和 agent 节点。
 
 流程：**需求表单 → AI 起名 → 名称结果表单 → propose → apply → archive**。
 
 入口表单提供 `request`；起名会话推荐名称，用户在结果表单提交 `change_name`。两个字段直接传给 propose、apply、archive，不依赖会话节点透传。propose 同时收到名称和完整原始需求，有实质歧义时会在自己的会话询问并等待答案。澄清结论进入规划文档，后续独立会话从实际 OpenSpec 产物恢复上下文。
 
-session_agent 不提取 AI 回复，所有会话节点仅在用户手动标记完成后提交 `{}`。因此名称需要人工填写。propose、apply、archive 均手动启动：完成当前阶段并核对实际结果后，在工坊标记完成，再启动下一阶段。没有另加提案审批或归档确认表单；archive 技能自身要求的同步选择和未完成项确认仍在归档会话处理。
+本模板的 Agent 未声明输出，在用户点击“完成”后提交 `{}`。名称确认表单保留为独立的人工确认步骤；这不表示 Agent 类型不能声明输出。propose、apply、archive 均手动启动：完成当前阶段并核对实际结果后，在工坊标记完成，再启动下一阶段。没有另加提案审批或归档确认表单；archive 技能自身要求的同步选择和未完成项确认仍在归档会话处理。
 
 起名只读，不创建 change。名称进入 DAG 后保持固定；如 propose 中决定另起名称，应重新创建实例并填写新名称，后续阶段不会自动改用其他 change。技能缺失、未初始化的项目、阻塞、失败和取消须在对应会话处理，不能仅靠手动完成按钮证明业务成功。
 

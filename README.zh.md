@@ -10,9 +10,9 @@
 
 ## 功能
 
-- 从当前 profile 的插件声明加载模板，默认提供三对中英文模板。
+- 从当前 profile 的插件声明加载模板，默认提供两个中文模板。
 - 基于模板快照创建独立、可持久化的工作流实例，在 DAG 画布中查看进展。
-- 使用 DSH 对话执行 `session_agent` 节点、宿主沙箱执行 `bash` 节点、用户填写并提交 `form` 节点。
+- 使用台前对话或台后子执行处理 `agent` 节点、宿主沙箱执行 `bash` 节点、用户填写并提交 `form` 节点。
 - 支持依赖、条件边、逐项展开、嵌套 DAG 和递归 DAG 引用。完整规则见 [DAG 语法文档](docs/dag-syntax.zh.md)。
 
 ## 从源码安装
@@ -37,7 +37,7 @@ dsh web
 
 1. 使用默认模板，或按照[模板作者指南](docs/template-plugin-authoring.zh.md)添加自己的纯配置 bundle。
 2. 从 DSH 侧边栏打开 **工作流**，在 **实例管理** 中选择工作区和模板，创建实例。
-3. 打开实例，在运行图中执行就绪节点。`session_agent` 节点需用户明确标记完成；`bash` 命令成功后自动完成；`form` 节点在有效提交后完成。
+3. 打开实例，在运行图中执行就绪节点。`agent` 节点需用户明确标记完成；`bash` 命令成功后自动完成；`form` 节点在有效提交后完成。
 
 包内最小模板（须由 bundle 声明并通过 exports 暴露）：
 
@@ -48,7 +48,7 @@ type: dag
 dag:
   - id: draft
     type: node
-    node_kind: session_agent
+    node_kind: agent
     prompt: 写一段简短的初稿。
 ```
 
@@ -56,9 +56,9 @@ dag:
 
 ## 当前限制
 
-`session_agent` 通过 prompt 中的 `{{ name }}` / `{{ object.field }}` 消费声明输入，完成提交 `{}`，不能声明业务输出。`bash` 使用相同引用作为独立且安全转义的 Shell 参数；声明输出时 stdout 必须整体为符合输出契约的 JSON 对象，日志写 stderr；不声明输出时提交 `{}`，stdout 仅作日志。`form` 正式提交真实用户数据。工坊模板没有外部根输入，请用入口表单收集。详见 [DAG 语法文档](docs/dag-syntax.zh.md)。
+`agent` 通过 prompt 中的 `{{ name }}` / `{{ object.field }}` 消费输入。缺省为台前模式：点击“完成”后用继承对话上下文的原生 fork 与 `structured_output` 核验并交付声明输出；无输出时直接提交 `{}`。台后模式直接执行任务，保存结果后等待人工点击“完成”，记录只读。失败或中断仅由用户明确重试，历次记录保留。`bash` 使用相同引用作为独立且安全转义的 Shell 参数；声明输出时 stdout 必须整体为符合输出契约的 JSON 对象，日志写 stderr；不声明输出时提交 `{}`，stdout 仅作日志。`form` 正式提交真实用户数据。工坊模板没有外部根输入，请用入口表单收集。详见 [DAG 语法文档](docs/dag-syntax.zh.md)。
 
-原 `chat` 类型已更名为 `session_agent`。自定义模板需更新 `node_kind`；保留旧模板快照的已有实例需重新创建。
+新模板使用 `node_kind: agent`，`mode: foreground | background` 可省略，默认台前。本次不提供旧配置与旧实例兼容或迁移；已有数据保留。
 
 ## 开发
 

@@ -61,7 +61,7 @@ npm run test:e2e -- e2e/workflows
 npm run test:e2e -- e2e/workflows/bash.e2e.ts --grep "宿主中断"
 ```
 
-宿主对话导航不改变 URL；用例通过侧边栏已选中行的公开身份及页面结果核对对话。session_agent 初始提示词会被真实宿主接收；隔离环境没有模型凭据，模型运行会显示缺少认证，回归只验证关联、导航与人工完成，不验证模型回复。语言、主题、窄屏组合与画布视角保留尚未覆盖。
+宿主对话导航不改变 URL；用例通过侧边栏已选中行的公开身份及页面结果核对对话。上述原关联链路的 agent 初始提示词会被真实宿主接收；该夹具没有模型凭据，模型运行会显示缺少认证，只验证关联、导航与人工完成，不验证模型回复。Agent 模型边界及语言、主题、窄屏覆盖见下文新增回归；画布视角保留尚未覆盖。
 
 ## 新功能怎样留下回归测试
 
@@ -74,3 +74,6 @@ npm run test:e2e -- e2e/workflows/bash.e2e.ts --grep "宿主中断"
 Codex 内置浏览器继续用于探索新场景、人工检查界面和故障定位，稳定场景应沉淀到本目录。
 
 行为规则见[规格](../docs/specs/reusable-browser-e2e.zh.md)，实际验证见[验收记录](../docs/acceptance/reusable-browser-e2e.zh.md)。
+
+
+Agent 结果交付新增 [agent-host.e2e.ts](./workflows/agent-host.e2e.ts) 与 [agent-handoff.e2e.ts](./workflows/agent-handoff.e2e.ts)，使用[确定性模型边界夹具](./fixtures/agent-host/README.md)驱动真实 rc.1 宿主，覆盖父会话隐藏、原生 fork/structured_output、子记录重启、台前补充重试、台后待确认恢复、失败/中断、双工作区自动任务实际写读产物和语言主题窄屏。原 [session-agent.e2e.ts](./workflows/session-agent.e2e.ts) 已切换为 agent 类型并保留对话关联回归。模型夹具不代表真实模型交付质量，范围见[验收记录](../docs/acceptance/agent-result-handoff.zh.md)。
