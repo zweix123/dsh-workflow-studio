@@ -4,6 +4,9 @@ export const zh = {
 
   runState: '状态',
   runningInformation: '运行信息',
+  runOverview: '运行概况',
+  nodeInputOutput: '输入与输出',
+  nodeProgress: '节点操作与进展',
   definitionDetails: '定义详情',
   definitionMissing: '无法定位此对象的定义。',
   nodeInstance: '节点实例',

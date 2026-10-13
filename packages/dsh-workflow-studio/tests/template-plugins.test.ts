@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
 import { test } from 'node:test'
 import { Context } from '@deepseek-ai/cordis'
 import WebServer from '@deepseek-ai/dsh-host-webserver'
@@ -199,6 +200,55 @@ async function installBuiltinNodes(h: Awaited<ReturnType<typeof host>>) {
   h.ctx.provide('agentPresets', {} as never)
   for (const node of [await import('../../dsh-workflow-node-bash/lib/server.js'), await import('../../dsh-workflow-node-form/lib/server.js'), await import('../../dsh-workflow-node-agent/lib/server.js')]) await h.ctx.plugin(node)
 }
+
+test('the all-node example loads all built-in kinds and passes form, real Bash and nested Agent results through the DAG', async () => {
+  const h = await host()
+  try {
+    await installBuiltinNodes(h)
+    const base = new URL('../../../examples/all-nodes/', import.meta.url)
+    const manifest = JSON.parse(await readFile(new URL('package.json', base), 'utf8'))
+    const patch = parse(await readFile(new URL(manifest.dsh.bundle.patch, base), 'utf8'))
+    const directory = patch[0].insert[0].config.directory
+    assert.equal(directory, manifest.name)
+    const yaml = await readFile(new URL(manifest.exports['./workflow.yaml'], base), 'utf8')
+    await h.declare(directory, yaml)
+    const catalog = (await (await h.request(TEMPLATES_PATH)).json()).templates
+    assert.equal(catalog[0].error, undefined)
+    const response = await h.request(INSTANCES_PATH, { workspaceId: 'a', name: 'All nodes', templateId: 'all-nodes-example.zh' })
+    assert.equal(response.status, 201)
+    const { definition } = await response.json()
+    const execution = compile(definition, {}).createExecution({})
+    const current = (id: string) => {
+      const frontier = execution.getFrontier()
+      assert.deepEqual(frontier.map(node => node.definition.id), [id])
+      return frontier[0]!
+    }
+    const request = '入门需求：中文、"引号"、单引号\'与换行\n$HOME、$(printf injected)、`printf injected` 保持原文。'
+    const form = current('填写需求')
+    assert.equal(form.definition.node_kind, 'form')
+    execution.submit(form.instanceId, { request })
+    const bash = current('命令处理')
+    assert.equal(bash.definition.node_kind, 'bash')
+    assert.deepEqual(bash.input, { request })
+    const command = renderTextTemplate(bash.definition.command as string, bash.input, true)
+    const output = JSON.parse(execFileSync('/bin/sh', ['-c', command], { encoding: 'utf8' }))
+    assert.deepEqual(output, { prepared_request: request })
+    execution.submit(bash.instanceId, output)
+    const foreground = current('台前讨论')
+    assert.equal(foreground.definition.node_kind, 'agent')
+    assert.equal(foreground.definition.mode, 'foreground')
+    assert.deepEqual(foreground.input, { prepared_request: request })
+    assert.ok(renderTextTemplate(foreground.definition.prompt as string, foreground.input).includes(request))
+    execution.submit(foreground.instanceId, { summary: '先安装，再熟悉目录，最后完成小任务。' })
+    const background = current('台后整理')
+    assert.equal(background.definition.node_kind, 'agent')
+    assert.equal(background.definition.mode, 'background')
+    assert.deepEqual(background.input, { summary: '先安装，再熟悉目录，最后完成小任务。' })
+    assert.ok(renderTextTemplate(background.definition.prompt as string, background.input).includes(background.input.summary as string))
+    execution.submit(background.instanceId, { report: '1. 安装环境\n2. 熟悉目录\n3. 完成小任务' })
+    assert.deepEqual(execution.getResult(), { status: 'completed', output: { report: '1. 安装环境\n2. 熟悉目录\n3. 完成小任务' } })
+  } finally { await h.close() }
+})
 
 test('the default templates use the public loader and registration contract', async () => {
   const h = await host()

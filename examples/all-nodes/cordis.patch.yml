@@ -1,0 +1,5 @@
+- insert:
+    - id: workflow-template-all-nodes-example.zh
+      name: dsh-workflow-template
+      config:
+        directory: '@example/workflow-all-nodes'

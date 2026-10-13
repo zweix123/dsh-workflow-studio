@@ -55,6 +55,8 @@ npm run test:e2e -- e2e/form-handoff.e2e.ts
 - [serial-chain-layout.e2e.ts](./workflows/serial-chain-layout.e2e.ts)：使用独立串行链夹具验证模板预览与实例的四阶段对齐、全部依赖可见、跨节点边避开卡片、提交后位置稳定，以及中英文、浅深主题和窄屏下的排布与详情操作。
 - [bash.e2e.ts](./workflows/bash.e2e.ts)：自动启动、非零退出与输出类型错误、原命令重试、真实数据交付、空命令完成、重启不重跑、执行中删除保护、中断后的结果未知与显式重试。
 - [dag.e2e.ts](./workflows/dag.e2e.ts)：条件激活与跳过、分支汇合、for 项独立身份、部分完成后重启、逆序完成但按源顺序聚合、空数组不创建虚构项。
+- [node-details.e2e.ts](./workflows/node-details.e2e.ts)：模板只读定义、实例运行概况／输入输出／节点操作与进展的顺序和归属、等待跳过及根 DAG 省略空块，以及语言、主题和窄屏滚动。
+- [all-nodes-template.e2e.ts](./workflows/all-nodes-template.e2e.ts)：独立全节点示例的登记与实例创建、表单和 Bash 的真实数据交付、台前／台后 Agent 定义及嵌套 DAG；不调用模型。
 - [session-agent.e2e.ts](./workflows/session-agent.e2e.ts)：相同节点定义在不同实例中关联不同对话、对话往返、Tab 保留与去重、持久关联恢复、人工完成、完成后返回、删除实例保留对话并移除返回入口。
 
 ```sh

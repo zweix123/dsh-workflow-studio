@@ -196,25 +196,36 @@ export function InstanceRunPanel({ nodes = emptyNodeViews, detail, t, onUpdate, 
         <div className="dsh-workflow-inspector-body">
           <section aria-label={t('runningInformation')}>
             <h4>{t('runningInformation')}</h4>
-            <DetailFields fields={[
-              ...(item ? [[t(item.type === 'node' ? 'nodeInstance' : 'dagInstance'), `${item.definitionId} · ${item.instanceId}`] as [string, unknown]] : [[t('definitionId'), inspection.definitionId] as [string, unknown]]),
-              ...(inspection.parentInstanceId !== null ? [[t('parentInstanceId'), parent ? `${parent.definitionId} · ${parent.instanceId}` : inspection.parentInstanceId] as [string, unknown]] : []),
-              [t('runState'), inspectionStatus],
-              ...(item?.forItem ? [[t('forItemIdentity'), item.forItem] as [string, unknown]] : []),
-              ...(item ? [[t('nodeInput'), item.input] as [string, unknown]] : []),
-              ...(output !== undefined ? [[t('nodeOutput'), output] as [string, unknown]] : []),
-            ]} />
+            <section className="dsh-workflow-runtime-block" aria-label={t('runOverview')}>
+              <h5>{t('runOverview')}</h5>
+              <DetailFields fields={[
+                ...(item ? [[t(item.type === 'node' ? 'nodeInstance' : 'dagInstance'), `${item.definitionId} · ${item.instanceId}`] as [string, unknown]] : [[t('definitionId'), inspection.definitionId] as [string, unknown]]),
+                ...(inspection.parentInstanceId !== null ? [[t('parentInstanceId'), parent ? `${parent.definitionId} · ${parent.instanceId}` : inspection.parentInstanceId] as [string, unknown]] : []),
+                [t('runState'), inspectionStatus],
+                ...(item?.forItem ? [[t('forItemIdentity'), item.forItem] as [string, unknown]] : []),
+              ]} />
+            </section>
+            {item && <section className="dsh-workflow-runtime-block" aria-label={t('nodeInputOutput')}>
+              <h5>{t('nodeInputOutput')}</h5>
+              <DetailFields fields={[
+                [t('nodeInput'), item.input],
+                ...(output !== undefined ? [[t('nodeOutput'), output] as [string, unknown]] : []),
+              ]} />
+            </section>}
           {item?.type === 'node' && definition?.type === 'node' && (() => {
             const view = detail.nodeViews?.[item.instanceId]
             const entry = nodes.get(String(definition.node_kind), view?.source)
             const Panel = entry?.node.Panel
             const props = propsFor(item.instanceId)!
-            return <>
-              <div className="dsh-workflow-business-actions">{visibleActions(view?.actions ?? [], nodes, String(definition.node_kind), view?.source).map(action => <NodeButton key={action.id} action={action} nodes={nodes} pending={pending.includes(item.instanceId)} blocked={Boolean(detail.incompatible)} onClick={() => void invoke(item.instanceId, action.id)} />)}</div>
+            const actions = visibleActions(view?.actions ?? [], nodes, String(definition.node_kind), view?.source)
+            if (!actions.length && !Panel && !view?.data && !execution) return null
+            return <section className="dsh-workflow-runtime-block" aria-label={t('nodeProgress')}>
+              <h5>{t('nodeProgress')}</h5>
+              {actions.length > 0 && <div className="dsh-workflow-business-actions">{actions.map(action => <NodeButton key={action.id} action={action} nodes={nodes} pending={pending.includes(item.instanceId)} blocked={Boolean(detail.incompatible)} onClick={() => void invoke(item.instanceId, action.id)} />)}</div>}
               {Panel && entry ? <NodeBoundary key={`${item.instanceId}:${entry.generation}`} message={t('nodeViewFailed')}><Panel {...props} /></NodeBoundary> : null}
               {!Panel && (view?.data || execution) ? <pre>{JSON.stringify(view?.data ?? execution, null, 2)}</pre> : null}
               {execution?.error ? <p role="alert">{execution.error}</p> : null}
-            </>
+            </section>
           })()}
           </section>
           <section aria-label={t('definitionDetails')}>

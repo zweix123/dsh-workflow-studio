@@ -1,0 +1,85 @@
+id: all-nodes-example.zh
+name: 全节点类型示例
+type: dag
+description: 演示表单、命令、台前 Agent、台后 Agent 和嵌套 DAG，以及它们的输入、输出和详情。
+output_schema:
+  report: string
+dag:
+  - id: 填写需求
+    type: node
+    node_kind: form
+    description: 提交后输入会交付给命令节点，表单结果变为只读。
+    output_schema:
+      request: string
+    schema:
+      properties:
+        request:
+          title: 示例需求
+          description: 可以修改默认需求，再提交表单。
+          default: 为新同事设计一个简单的项目入门流程。
+    uiSchema:
+      request:
+        ui:widget: textarea
+
+  - id: 命令处理
+    type: node
+    node_kind: bash
+    description: 点击“执行”，将需求原样转换为 JSON 输出；命令不修改工作区文件。
+    input_schema:
+      request: string
+    output_schema:
+      prepared_request: string
+    # 输入引用是独立 Shell 参数，JSON.stringify 负责处理引号与换行。
+    command: >-
+      node -e 'console.log(JSON.stringify({prepared_request: process.argv[1]}))' {{ request }}
+
+  - id: 台前讨论
+    type: node
+    node_kind: agent
+    mode: foreground
+    description: 点击“执行”后打开对话，可以继续讨论；生成结束后点击“完成”交付摘要。
+    input_schema:
+      prepared_request: string
+    output_schema:
+      summary: string
+    prompt: |
+      示例需求：
+      {{ prepared_request }}
+
+      请用中文给出一个简短的三步方案，直接在对话中说明，无须修改文件或运行命令。
+      用户可以继续与你讨论和修改方案。
+      方案确认后，提醒用户返回工坊点击“完成”。交付结果的 summary 是最终方案的简短摘要。
+
+  - id: 台后整理组
+    type: dag
+    description: 嵌套 DAG 接收摘要，将内部台后 Agent 的报告作为组输出。
+    input_schema:
+      summary: string
+    output_schema:
+      report: string
+    dag:
+      - id: 台后整理
+        type: node
+        node_kind: agent
+        mode: background
+        description: 点击“执行”运行一次任务；结果保存后，点击“完成”确认交付。
+        input_schema:
+          summary: string
+        output_schema:
+          report: string
+        prompt: |
+          已确认的方案摘要：
+          {{ summary }}
+
+          把摘要整理为一份简短的中文执行清单，不增加新任务，不修改文件或运行命令。
+          使用 structured_output 提交 report 字符串，内容为整理后的完整清单。
+
+  - type: edge
+    from: 填写需求
+    to: 命令处理
+  - type: edge
+    from: 命令处理
+    to: 台前讨论
+  - type: edge
+    from: 台前讨论
+    to: 台后整理组

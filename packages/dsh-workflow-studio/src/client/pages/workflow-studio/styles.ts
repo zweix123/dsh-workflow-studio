@@ -132,7 +132,10 @@ ${reactFlowCss}
 .dsh-workflow-inspector > header { flex: none; }
 .dsh-workflow-inspector-body { flex: 1; min-height: 0; }
 .dsh-workflow-template-inspector dl { margin: 0; }
-.dsh-workflow-inspector-body section + section { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--dsw-alias-border-l2); }
+.dsh-workflow-inspector-body > section + section { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--dsw-alias-border-l2); }
+.dsh-workflow-runtime-block + .dsh-workflow-runtime-block { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--dsw-alias-border-l3); }
+.dsh-workflow-runtime-block > h5 { margin: 0 0 12px; font-size: 12px; font-weight: 600; color: var(--dsw-alias-label-secondary); }
+.dsh-workflow-runtime-block > dl { margin: 0; }
 .dsh-workflow-inspector-body h4 { margin: 0 0 12px; font-size: 13px; font-weight: 600; }
 .dsh-workflow-detail-field { border-bottom: .5px solid var(--dsw-alias-border-l3); padding: 9px 0; }
 .dsh-workflow-detail-field:first-child { padding-top: 0; }

@@ -2,6 +2,8 @@
 
 模板作者提供 package.json、bundle 补丁和包内 YAML；通用插件 `dsh-workflow-template` 定位文件并向 Studio 登记。先在所需 profile 中添加默认 bundle，再添加自己的模板 bundle。固定适配 dsh `0.2.0-rc.1`，本期只通过本地目录添加。
 
+需要同时查看 form、bash、Agent 台前/台后和嵌套 DAG 时，可使用[全节点类型示例](../examples/all-nodes/README.zh.md)，其包名为 `@example/workflow-all-nodes`，通过本地目录独立添加。
+
 可直接使用[完整示例](../examples/review-templates/README.zh.md)。其包名为 `@acme/workflows`：
 
 ```json

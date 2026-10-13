@@ -1,5 +1,22 @@
 # 模板插件分发第二阶段验收
 
+## 2026-10-13 全节点类型示例
+
+依据：[模板插件分发规格](../specs/template-plugin-distribution.zh.md)及[模板作者指南](../template-plugin-authoring.zh.md)。新增独立纯配置示例 `examples/all-nodes/`，本轮不改变默认 bundle 的两份模板。流程为 form → bash → 台前 Agent → 嵌套 DAG（内部为台后 Agent），根 DAG 输出 `report`。
+
+环境：本机 dsh 0.2.0-rc.1、Node v26.7.0、npm 11.19.0、pnpm 11.25.0；E2E 使用隔离临时 home、工作区、非默认端口、Chromium 1440×900，正常结束后夹具已清理。没有读取模型凭据或调用真实模型。
+
+| 验证 | 预期与实际 | 状态 |
+| --- | --- | --- |
+| 模板登记和创建 | 独立包以包名定位根 YAML，内置节点校验有效；模板可选，实例创建成功 | HTTP 自动化与真实宿主浏览器通过 |
+| 表单与 Bash | 默认需求可编辑；含中文、引号、换行、Shell 特殊字符的输入提交后，真实命令输出 `prepared_request` 保持原文，下游台前 Agent 接收相同内容 | 自动化与真实宿主浏览器通过 |
+| 两种 Agent 及嵌套 DAG 定义 | 台前 `mode: foreground`、台后 `mode: background` 和嵌套 `type: dag` 可在模板详情查看；实例台前就绪，台后组等待且无业务区 | 真实宿主浏览器通过 |
+| 完整 DAG 数据链 | 自动化以确定输出推进两个 Agent，验证摘要输入、嵌套组输出及根输出 `report` | 自动化通过；非真实模型执行 |
+| 完整检查 | 串行运行 `npm run check`，类型检查、构建、169 项测试全部通过 | 通过 |
+| 真实模型业务和新增人工视觉验收 | 本轮未运行两个 Agent 的真实模型任务，未另做人工视觉检查；既有节点业务验收不能替代本示例的模型语义验收 | 未验证 |
+
+复现：`npm run test:e2e -- e2e/workflows/all-nodes-template.e2e.ts`，1/1 通过；模板加载与完整数据链的自动化用例位于 `packages/dsh-workflow-studio/tests/template-plugins.test.ts`，名称包含 `all-node example`。完整报告及检查日志保留于忽略提交的 `.e2e/all-nodes-template/`，宿主日志在 `.e2e/logs/` 且登录 token 已脱敏；长期证据为上述用例、示例文件与本记录。
+
 ## 2026-10-13 单模板包根目录复验
 
 依据：[模板插件分发规格](../specs/template-plugin-distribution.zh.md)。被测范围为本次工作区的单模板包目录简化及加载器地址校验：两份内置模板、纯配置示例和作者技能 starter 均将 `workflow.yaml` 放到包根目录，导出 `./workflow.yaml`，加载声明直接填写包名；两份内置模板的 ID、名称及内容保持原样。节点 peer 依赖和 bundle 统一装配约定已同步作者指南。

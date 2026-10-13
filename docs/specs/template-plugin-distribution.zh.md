@@ -244,4 +244,6 @@ git diff --stat
 
 当前内置模板为 mattpocock 和 OpenSpec 需求交付两个中文版；默认登记、目录及实例创建由自动化验证。OpenSpec 实施及验证状态见[对应规格](./openspec-delivery-template.zh.md)。历史上 2026-10-07 曾仅保留 mattpocock 中文版；此前验收记录中的六份模板与双语结构结论仅适用于当时版本。
 
+独立[全节点示例](../../examples/all-nodes/README.zh.md)通过本地目录按需添加，不纳入默认装配。2026-10-13 完整检查（169 项测试）及示例真实宿主浏览器用例通过；真实模型任务尚未验证，范围见[验收记录](../acceptance/template-plugin-distribution.zh.md#2026-10-13-全节点类型示例)。
+
 本阶段依用户明确要求以本地 spec 为依据，不配置 tracker、不发布 Issue、不自动 commit。
