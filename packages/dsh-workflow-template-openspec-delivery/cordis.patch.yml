@@ -1,0 +1,5 @@
+- insert:
+    - id: workflow-template-openspec-delivery.zh
+      name: dsh-workflow-template
+      config:
+        directory: '@dsh-workflow/template-openspec-delivery'

@@ -4,12 +4,16 @@
 
 模板附属文件扩展（2026-10-08）：已实现；项目检查及六条新增集成场景通过，固定 rc.1 真实宿主的包外读取、特殊路径、exports 映射、重启、当前文档与缺失错误已验证。其余真实宿主生命周期场景尚待逐项复验，范围及限制见[附属文件验收记录](../acceptance/template-attached-files.zh.md)；既有插件化验收不代替本扩展验证。
 
+独立模板包（2026-10-12）：两份中文模板已拆到与 Studio 平级的纯配置包；类型检查、构建、152 项自动化测试和默认模板装配及实例流程的两条真实宿主浏览器用例通过，范围及未复验项见[模板分发复验记录](../acceptance/template-plugin-distribution.zh.md#2026-10-12-独立模板包复验)。
+
+模板包组织与依赖（2026-10-13）：单模板的 YAML 已移至包根目录，加载器支持直接填写包名并保留多模板子目录地址；两份内置模板及作者示例声明加载器和所用节点包的 peer 版本，bundle 统一装配。类型检查、构建、153 项自动化及两条相关真实宿主浏览器用例通过，范围及未验证项见[根目录复验记录](../acceptance/template-plugin-distribution.zh.md#2026-10-13-单模板包根目录复验)。
+
 本文更新[模板管理规格](./template-management.zh.md)和[实例 Tab 规格](./instance-tab.zh.md)中的模板来源、身份、名称和读取时机规则；模板图浏览、定义详情、实例快照及实例存储作用域继续沿用各自规格。
 
 ## 目标与范围
 
 - 新增 `dsh-workflow-template` 包，提供用于加载和注册工作流模板的 dsh 插件。
-- 第三方通过自己的 dsh bundle 提供模板；内置模板使用同一套加载与注册机制。
+- 第三方通过自己的 dsh bundle 提供模板；内置模板使用同一套加载与注册机制。每份内置模板位于与 Studio 平级的独立纯配置插件包 `packages/dsh-workflow-template-*/`，提供包清单、bundle 补丁及 YAML 资源 exports；默认 bundle 依赖模板包并声明相同加载配置，Studio 不携带模板资源。
 - 打通模板从随包提供、装配加载到工坊使用的完整流程；第三方作者无须编写注册代码。
 - 节点扩展机制由[节点插件化注册规格](./node-plugin-registration.zh.md)定义；本文消费工坊已经装配的节点能力，不自行实现节点扩展。
 - 继续适配项目固定的 `@deepseek-ai/dsh@0.2.0-rc.1`。
@@ -21,6 +25,7 @@
 - 模板定义只在模板声明自身加载或重新加载时读取。页面查询和创建实例使用已经加载的定义，不因读取页面而重新加载包内 YAML；所需节点类型消失或恢复时，只重新判定当前已读定义的依赖与配置，不重读文件。已有实例仍持有自己的定义快照。
 - 模板可见性跟随启用该 bundle 的 dsh profile；同一 profile 中各工作区共享可用模板。此范围仅针对模板库，不改变实例存储的既有作用域。
 - 模板使用同一 profile 中装配的节点类型；节点库同样在该 profile 的工作区之间共享，不为不同工作区选择不同的节点实现。
+- 独立模板包通过 `peerDependencies` 声明通用模板加载器及所用节点插件包的兼容版本；包含多份模板时声明其依赖的并集。组合 bundle 通过 `dependencies` 提供这些包，并在补丁中启用节点和声明模板加载；包版本依赖不代表节点已在 profile 中启用。模板包自身的补丁只加载模板，不重复装配消费的节点。运行时仍从完整 YAML 的 `node_kind` 收集所需类型，不在补丁中维护第二份类型清单，也不增加运行时包版本校验。
 - 第三方模板作者提供 `package.json`、补丁和模板 YAML，可在模板目录中携带脚本、文档和配置等附属文件；定义定位、读取和注册由通用模板插件承担。
 - 模板加载时读取 YAML 定义并保留其所在目录；Bash 执行时通过 `DSH_TEMPLATE_DIR` 引用附属文件，工作目录继续为实例所属工作区。附属文件读取执行时的内容，不随 YAML 登记缓存或保存实例副本。
 - 使用 `workflow.yaml` 根 `id` 作为模板 ID，根 `name` 作为前端展示名称。目录只用于定位。第三方补丁的 `config` 只指定模板来源路径，不重复声明模板 ID 或名称。
@@ -42,7 +47,7 @@
 
 一条补丁声明指向一个模板目录，以该目录中的 `workflow.yaml` 为定义入口。同一个 bundle 可以贡献多个模板。
 
-加载插件的包名为 `dsh-workflow-template`。声明的 `config.directory` 提供带包名的目录资源地址，例如 `@acme/workflows/templates/review`。加载器追加固定的 `/workflow.yaml`，通过当前 profile 的模块解析器定位完整资源地址，再以文件方式读取和解析 YAML；不把 YAML 当作 JavaScript 模块执行。
+加载插件的包名为 `dsh-workflow-template`。单模板包将 `workflow.yaml` 放在包根目录，声明的 `config.directory` 直接填写包名，例如 `@acme/workflows`；有多份模板时继续支持带包名的资源子目录地址，例如 `@acme/workflows/templates/review`。加载器追加固定的 `/workflow.yaml`，通过当前 profile 的模块解析器定位完整资源地址，再以文件方式读取和解析 YAML；不把 YAML 当作 JavaScript 模块执行。支持 scoped 和 unscoped 包名，拒绝文件系统路径、URL 及 `.`/`..` 路径段。
 
 贡献包必须通过 `package.json` 的 `exports` 暴露对应 `workflow.yaml`。`directory` 是包资源地址，不是相对宿主进程工作目录或补丁文件的文件系统路径。安装位置变化不需要修改地址。
 
@@ -77,13 +82,11 @@
 acme-workflows/
 ├── package.json
 ├── cordis.patch.yml
-└── templates/
-    └── review/
-        ├── workflow.yaml
-        ├── scripts/
-        │   └── inspect.sh
-        └── docs/
-            └── review-guide.md
+├── workflow.yaml
+├── scripts/
+│   └── inspect.sh
+└── docs/
+    └── review-guide.md
 ```
 
 `package.json`：
@@ -96,7 +99,11 @@ acme-workflows/
   "type": "module",
   "dsh": { "bundle": { "patch": "./cordis.patch.yml" } },
   "exports": {
-    "./templates/*/workflow.yaml": "./templates/*/workflow.yaml"
+    "./workflow.yaml": "./workflow.yaml"
+  },
+  "peerDependencies": {
+    "dsh-workflow-template": "0.1.0",
+    "@dsh-workflow/node-bash": "0.1.0"
   }
 }
 ```
@@ -108,10 +115,10 @@ acme-workflows/
     - id: acme-review-loader
       name: dsh-workflow-template
       config:
-        directory: '@acme/workflows/templates/review'
+        directory: '@acme/workflows'
 ```
 
-`templates/review/workflow.yaml`：
+`workflow.yaml`：
 
 ```yaml
 id: acme-review
@@ -124,7 +131,7 @@ dag:
     command: bash "$DSH_TEMPLATE_DIR/scripts/inspect.sh"
 ```
 
-`templates/review/scripts/inspect.sh`：
+`scripts/inspect.sh`：
 
 ```sh
 #!/usr/bin/env bash
@@ -135,9 +142,9 @@ git diff --stat
 
 说明文档通过模板目录读取；`git diff` 仍针对用户工作区执行。上面的目录及命令示例使用已实现的附属文件引用契约，实际访问仍受宿主沙箱及系统权限约束。
 
-示例中的目录 `review` 与模板 ID `acme-review` 有意不同，以说明二者没有相等要求。补丁只提供来源，模板身份和名称均由 YAML 自身声明。
+示例中的包名 `@acme/workflows` 与模板 ID `acme-review` 有意不同，以说明二者没有相等要求。补丁只提供来源，模板身份和名称均由 YAML 自身声明。
 
-包名来自贡献 bundle 的 `package.json`。上述 wildcard exports 暴露包内模板定义文件，使加载器可以解析 `@acme/workflows/templates/review/workflow.yaml`。
+包名来自贡献 bundle 的 `package.json`。上述 exports 暴露根目录的模板定义文件，使加载器可以解析 `@acme/workflows/workflow.yaml`。多模板包继续支持子目录和 wildcard exports。
 
 ## 改造前的根 ID 和包内资源核实
 
@@ -177,8 +184,8 @@ git diff --stat
 
 - Studio 提供当前 profile 的模板登记与查询能力，统一负责模板元数据、DAG 和已有节点类型的校验、ID 冲突判定，以及工坊与实例创建所使用的可用性结果。
 - 新模板加载插件消费上述能力：解析包资源地址、读取 YAML、提交定义及解析后的模板目录或读取失败诊断，并将注销动作绑定到声明自身的生命周期。Studio 将目录保存为实例内部元数据并通过公共节点上下文传递，不要求作者重复配置。
-- 第三方 bundle 只提供包资源与加载声明；内置六份模板也使用同一个加载插件和登记入口。
-- 默认 bundle 同时装配工坊、公共登记能力、三个内置节点、通用模板加载插件及唯一的内置模板 mattpocock 中文版（`matt-pocock-wayfinder-workflow.zh`），用户不需要逐一添加这些默认组件；第三方 bundle 仍可独立提供模板。
+- 第三方 bundle 只提供包资源与加载声明；两个中文内置模板也使用同一个加载插件和登记入口。
+- 默认 bundle 同时装配工坊、公共登记能力、三个内置节点、通用模板加载插件及 mattpocock 和 OpenSpec 需求交付两个中文内置模板（`matt-pocock-wayfinder-workflow.zh`、`openspec-delivery.zh`），用户不需要逐一添加这些默认组件；第三方 bundle 仍可独立提供模板。
 - 通过 Cordis 服务注入保证依赖就绪，不依赖补丁条目的排列顺序。Studio 不在自身初始化中等待依赖自己的所有模板声明完成，宿主负责等待加载树收敛。
 - 具体节点类型的可用性接入节点登记能力提供的宿主依赖机制；仅等待登记服务本身不能证明模板所需类型已存在。未满足具体类型依赖时不登记为可创建实例的有效模板，同时保留工坊诊断所需的信息。
 - 读取模板资源与等待节点依赖分别协调，不能为了等待某个节点类型而失去不可用模板的诊断，也不能将节点依赖变化误作模板声明自身重载。具体节点依赖依据已读定义确定，作者不在补丁中维护第二份节点类型清单。
@@ -190,7 +197,7 @@ git diff --stat
 
 1. 在固定 rc.1 宿主中从本地目录添加一个纯配置 bundle，模板出现在所属 profile 下各工作区的选择器中。
 2. 目录名与模板 ID 不同仍能加载；UI 显示 YAML 的 `name`，请求与实例关联使用 YAML 的 `id`。
-3. 内置六份模板通过相同声明机制加载；补齐展示名称与互不冲突的根 ID，保留中英文独立条目和结构对应关系。
+3. 两个中文内置模板通过相同声明机制加载，具有展示名称与互不冲突的根 ID；OpenSpec 需求交付行为见[对应规格](./openspec-delivery-template.zh.md)。
 4. 两条声明提供相同模板 ID 时均不可用并可定位来源；移除冲突贡献后，剩余有效模板恢复可用。
 5. 文件不可定位、YAML 错误、ID 或名称缺失、为空或仅含空白，以及节点配置无效时，工坊展示失败原因，其他模板与已有实例仍可使用；仅有 `layout` 警告的模板仍可用。
 6. 修改包内 YAML 后，仅刷新页面不重读文件；声明重新加载后，新实例使用新定义，旧实例保留原定义及名称。
@@ -199,7 +206,7 @@ git diff --stat
 9. 实现涉及工坊列表、选择器和名称展示时，按项目浏览器验收技能在隔离宿主中验收。
 10. 分别验证宿主在重载前拒绝新配置，以及卸载后新一轮 YAML 读取或校验失败：前者不主动撤销尚在运行的旧贡献，后者不恢复旧有效定义；失败诊断与贡献状态一致，不新增模板回滚机制。
 11. 模板先于所需节点可用时，工坊显示不可用模板及具体缺失类型；节点随后可用且校验通过时自动恢复。再使类型缺失或冲突，验证列表、详情与创建入口使用同一可用性结果；移除阻塞后恢复，不依赖补丁排列顺序。
-12. 在干净的隔离 profile 中仅添加默认 bundle，即可使用三个内置节点和唯一的内置模板 mattpocock 中文版（`matt-pocock-wayfinder-workflow.zh`）；内置模板与独立第三方 bundle 使用相同加载和登记入口。
+12. 在干净的隔离 profile 中仅添加默认 bundle，即可使用三个内置节点和 mattpocock、OpenSpec 需求交付两个中文内置模板（`matt-pocock-wayfinder-workflow.zh`、`openspec-delivery.zh`）；内置模板与独立第三方 bundle 使用相同加载和登记入口。
 13. 模板因缺少节点而等待期间修改 YAML，再恢复节点：仍使用本次已读取的定义判定和创建实例；模板声明自身重载后才使用新文件内容，之前创建的实例快照不变。
 14. 在两个 profile 中分别启用不同节点贡献，验证模板只消费所属 profile 的节点能力，同一 profile 的各工作区结果一致，不改变实例存储作用域。
 
@@ -229,10 +236,12 @@ git diff --stat
 - 旧规格已标注由本文更新的规则；实施时同步更新面向用户的 DAG 文档及模板作者说明，使根 `id`、`name` 和 bundle 示例与实现一致。
 - 输入来源和节点能力校验继续遵循[节点输入输出规格](./node-input-output.zh.md)，模板只读图与定义详情继续遵循[模板管理](./template-management.zh.md)和[共享定义详情](./shared-definition-details.zh.md)。改为插件来源不恢复占位输入输出，也不装配模板业务操作。
 
+独立模板包验收：仅添加默认 bundle 时，各模板从独立包根目录加载并可创建实例，工坊来源直接显示包名；模板 ID 与名称不因目录调整改变。独立包的加载声明与默认 bundle 一致，资源能够按 exports 定位；原多模板包的资源子目录继续可用。scoped/unscoped 包名均可加载，文件路径、URL 和遍历路径不得交给解析器作为有效模板地址。
+
 ## 节点阶段衔接（2026-10-04）
 
 第一阶段公共节点接口已核实并复用，见[节点作者指南](../node-plugin-authoring.zh.md)和[节点阶段验收](../acceptance/node-plugin-registration.zh.md)。第二阶段完成通用模板加载、登记与内置模板统一分发；默认 bundle 一次装配节点与模板。作者接入见[模板作者指南](../template-plugin-authoring.zh.md)及 `examples/review-templates`。同时贡献第三方节点与模板的 bundle 已完成已列联合场景；结论与未验证项见[联合验收记录](../acceptance/node-template-joint.zh.md)。
 
-2026-10-07：内置模板已收敛为唯一的 mattpocock 中文版，保留现有 ID `matt-pocock-wayfinder-workflow.zh`。类型检查、构建及全部 136 项自动化测试通过，覆盖唯一目录、默认加载声明、公共加载登记及实例创建；本次未复验真实宿主浏览器。此前验收记录中的六份模板与双语结构结论仅适用于当时版本。
+当前内置模板为 mattpocock 和 OpenSpec 需求交付两个中文版；默认登记、目录及实例创建由自动化验证。OpenSpec 实施及验证状态见[对应规格](./openspec-delivery-template.zh.md)。历史上 2026-10-07 曾仅保留 mattpocock 中文版；此前验收记录中的六份模板与双语结构结论仅适用于当时版本。
 
 本阶段依用户明确要求以本地 spec 为依据，不配置 tracker、不发布 Issue、不自动 commit。

@@ -1,5 +1,37 @@
 # 模板插件分发第二阶段验收
 
+## 2026-10-13 单模板包根目录复验
+
+依据：[模板插件分发规格](../specs/template-plugin-distribution.zh.md)。被测范围为本次工作区的单模板包目录简化及加载器地址校验：两份内置模板、纯配置示例和作者技能 starter 均将 `workflow.yaml` 放到包根目录，导出 `./workflow.yaml`，加载声明直接填写包名；两份内置模板的 ID、名称及内容保持原样。节点 peer 依赖和 bundle 统一装配约定已同步作者指南。
+
+环境：本机已有 dsh `0.2.0-rc.1`、Node `26.7.0`、npm `11.19.0`、pnpm `11.25.0`；真实宿主用例使用 `e2e/dsh.ts` 的隔离临时 home 与工作区、中文 Chromium、1440×900，不配置模型凭据。用例结束后夹具清理宿主及临时数据。
+
+| 验证 | 预期与实际 | 结果 |
+| --- | --- | --- |
+| 类型检查、构建及技能校验 | Studio、加载器和 E2E 类型检查及构建成功；作者技能校验通过；示例和 starter 的根 exports、加载声明及 DAG 编译有效 | 通过 |
+| 模板专项与完整自动化 | 专项 14/14、完整 153/153 通过；scoped/unscoped 包名地址可登记并创建实例，文件路径、URL 和 `.`/`..` 路径段被拒绝；原子目录声明继续可用，两份内置模板按根 exports 定位 | 自动化通过；模块解析使用现有文件解析替身 |
+| [templates.e2e.ts](../../e2e/workflows/templates.e2e.ts) | 真实默认 bundle 从两个包根目录加载模板；来源准确为包名，名称及详情正确；两份模板均创建实例，真实宿主重启后实例保留、模板仍可用 | 真实宿主浏览器通过，1/1 |
+| [template-assets.e2e.ts](../../e2e/template-assets.e2e.ts) | 既有子目录地址及 YAML exports 映射继续有效；附属脚本/文档读取、工作区产物、当前文档、重启不重跑及缺失文件错误仍符合原场景 | 真实宿主浏览器通过，1/1 |
+
+复现：先运行 `npm run test:e2e -- e2e/workflows/templates.e2e.ts`，再运行 `npm run test:e2e -- e2e/template-assets.e2e.ts`。报告分别保留于忽略提交的 `.e2e/template-root/` 和 `.e2e/template-root-assets/`，宿主脱敏日志保留于 `.e2e/logs/`；长期证据为上述用例、夹具和本记录。两份内置模板自身补丁与默认加载声明的一致性由自动化验证，本轮未单独通过 CLI 添加模板包，也未验证模型业务链路。
+
+## 2026-10-12 独立模板包复验
+
+依据：[模板插件分发规格](../specs/template-plugin-distribution.zh.md)、[模板管理规格](../specs/template-management.zh.md)。被测范围为本次模板拆包后的工作区：mattpocock 中文版和 OpenSpec 需求交付中文版分别位于 `packages/dsh-workflow-template-matt-pocock-wayfinder/`、`packages/dsh-workflow-template-openspec-delivery/`，Studio 不再携带模板 YAML，模板 ID 与内容保持原样。下文 2026-10-04 的六份模板与双语范围为历史结果，不代表当前范围。
+
+环境：本机已有 dsh `0.2.0-rc.1`、Node `26.7.0`、npm `11.19.0`、pnpm `11.25.0`；每条浏览器用例使用隔离临时 home 与工作区、中文 Chromium、1440×900。复用 `e2e/dsh.ts`，无模型凭据或模型调用，结束后夹具清理宿主及临时数据。
+
+| 验证 | 预期与实际 | 结果 |
+| --- | --- | --- |
+| 类型检查与构建 | Studio、公共加载器与 E2E 类型检查通过，插件构建成功 | 通过 |
+| `npm test` | 152/152 通过；模板包的补丁与默认声明一致、依赖及 exports 解析正确，两份 YAML 可校验、登记和创建实例 | 自动化通过 |
+| [templates.e2e.ts](../../e2e/workflows/templates.e2e.ts) | 默认装配后两份中文模板按钮可用，来源分别指向独立包；详情显示原名称，两份模板均可创建实例；真实宿主重启后实例保留、模板继续可用 | 真实宿主浏览器通过，1/1 |
+| [instances.e2e.ts](../../e2e/workflows/instances.e2e.ts) | 既有名称校验、创建表单保留、详情 Tab 去重、重启恢复、取消与永久删除行为保持 | 真实宿主浏览器通过，1/1 |
+
+复现：`npm run test:e2e -- e2e/workflows/templates.e2e.ts`，再运行 `npm run test:e2e -- e2e/workflows/instances.e2e.ts`。报告分别保留于忽略提交的 `.e2e/template-packages/` 与 `.e2e/`，宿主日志位于 `.e2e/logs/` 并脱敏；长期证据为随仓库保存的用例、夹具及本记录。独立模板包单独添加的真实宿主流程、插件开关和模型业务链路本轮未复验；本轮结论仅覆盖默认装配与上述回归。
+
+## 2026-10-04 历史验收
+
 日期：2026-10-04。依据：[模板插件分发规格](../specs/template-plugin-distribution.zh.md)、[节点插件登记规格](../specs/node-plugin-registration.zh.md)、[ADR 0006](../adrs/0006-independent-node-plugin-registry.md)。本记录只给出第二阶段结果；第三方节点与模板联合 bundle 的整体验收未执行。
 
 ## 被测范围与环境

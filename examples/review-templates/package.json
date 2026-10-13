@@ -8,7 +8,11 @@
       "patch": "./cordis.patch.yml"
     }
   },
+  "peerDependencies": {
+    "dsh-workflow-template": "0.1.0",
+    "@dsh-workflow/node-bash": "0.1.0"
+  },
   "exports": {
-    "./templates/*/workflow.yaml": "./templates/*/workflow.yaml"
+    "./workflow.yaml": "./workflow.yaml"
   }
 }

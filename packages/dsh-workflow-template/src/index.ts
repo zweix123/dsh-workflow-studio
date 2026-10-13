@@ -16,7 +16,7 @@ export type Config = z.infer<typeof Config>
 export async function apply(ctx: Context, config: Config): Promise<void> {
   let contribution: { definition: unknown; templateDirectory: string } | { error: string }
   try {
-    if (!/^(?:@[^/]+\/[^/]+|[^./:@][^/]*)\/.+/.test(config.directory)
+    if (!/^(?:@[^/:]+\/[^/:]+|[^./:@][^/:]*)(?:\/[^/]+)*$/.test(config.directory)
       || config.directory.split('/').some(part => part === '..' || part === '.')) throw new Error('directory must be a package resource address')
     const resolver = ctx.loader.internal
     if (!resolver) throw new Error('Profile module resolver is unavailable')

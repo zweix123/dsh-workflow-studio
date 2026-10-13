@@ -7,7 +7,7 @@ description: 为 dsh-workflow-studio 定义或修改工作流模板，编写 DAG
 
 将用户的流程做成可加载的模板 bundle。适配本项目固定的 `@deepseek-ai/dsh@0.2.0-rc.1`；不安装或内置 dsh CLI，不增加 npm 发布流程。
 
-通常只需三个文件：`package.json` 声明 bundle 和资源导出，`cordis.patch.yml` 声明模板加载器，`templates/<name>/workflow.yaml` 描述流程。默认 bundle 提供 Studio、模板加载器及三个内置节点，不为普通模板新写 TypeScript 注册服务。
+单模板包通常只需三个根目录文件：`package.json` 声明 bundle、资源导出及所用节点包的 peer 版本，`cordis.patch.yml` 声明模板加载器，`workflow.yaml` 描述流程。一个包实际提供多份模板时再使用 `templates/<name>/workflow.yaml`。默认 bundle 提供 Studio、模板加载器及三个内置节点，不为普通模板新写 TypeScript 注册服务。
 
 ## 先确定流程与交付范围
 
@@ -45,13 +45,13 @@ description: 为 dsh-workflow-studio 定义或修改工作流模板，编写 DAG
 - `is_auto_start` 只用于 session_agent/bash，默认 false；按用户要求决定自动启动，不能把它当成自动完成或自动授权后续动作。
 - 提示词写清任务、输入、范围、产物和人工交接方式。不能用“输出 JSON”的提示词伪装 session_agent 已支持结构化交付。其他对话的上下文也不会自动成为本节点输入。
 
-项目仅维护 `packages/dsh-workflow-studio/templates/matt-pocock-wayfinder-workflow.zh/workflow.yaml` 这一份 mattpocock 中文内置模板，保留现有模板 ID，不补建英文版或其他内置模板。`.zh` 是目录语言后缀。第三方模板如按用户要求提供多语言版本，各版使用独立根 ID；修改根 ID 时同步其根自递归引用。
+内置模板的当前范围见 `docs/specs/template-management.zh.md`。每份模板作为 `packages/dsh-workflow-template-*/` 下的独立纯配置插件包维护，由默认 bundle 装配；模板资源不放在 Studio 包内。模板范围与语言版本按需求确定，不在本技能中固定。
 
 ## 构造模板插件
 
 复制 starter 到用户目标目录，再统一修改包名、loader ID、模板 ID、展示名称及目录地址。starter 是独立的中文单模板示例，不属于项目内置模板；第三方模板只在用户明确需要双语时增加对应版本。
 
-`package.json` 的 `dsh.bundle.patch` 指向补丁文件，`exports` 暴露对应 `workflow.yaml`。补丁中每个加载器实例只配置 `directory: '<包名>/templates/<目录>'`，它是包资源地址，不是文件系统相对路径。不重复写 `config.id`、`config.name` 或节点清单。
+`package.json` 的 `dsh.bundle.patch` 指向补丁文件，`exports` 暴露对应 `workflow.yaml`。单模板包使用 `"./workflow.yaml": "./workflow.yaml"`，加载器只配置 `directory: '<包名>'`；多模板包可使用 `directory: '<包名>/templates/<目录>'`。两者都是包资源地址，不是文件系统相对路径。不重复写 `config.id`、`config.name` 或节点清单。
 
 一个包可以贡献多份模板，每份有独立 loader ID、directory 和模板根 ID。消费默认节点时只贡献模板，不重复装配默认节点。模板加载时读取 YAML 并保存解析后的父目录；包内脚本和文档可用 Bash 的 DSH_TEMPLATE_DIR 引用，例如 `bash "$DSH_TEMPLATE_DIR/scripts/init.sh"`。无需 input_schema 或资源字段，附属文件无需逐个 exports；普通相对路径和产物仍基于工作区。YAML 为实例快照，附属文件读取执行时当前内容；成功节点不因更新重跑，缺失或移动沿用 Bash 错误与人工重试，历史实例不自动补来源。session_agent 不注入路径，沿用沙箱且不提升权限。
 

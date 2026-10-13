@@ -1,0 +1,13 @@
+{
+  "name": "@dsh-workflow/template-openspec-delivery",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dsh": { "bundle": { "patch": "./cordis.patch.yml" } },
+  "exports": { "./workflow.yaml": "./workflow.yaml" },
+  "peerDependencies": {
+    "dsh-workflow-template": "0.1.0",
+    "@dsh-workflow/node-form": "0.1.0",
+    "@dsh-workflow/node-session-agent": "0.1.0"
+  }
+}

@@ -8,7 +8,6 @@
 - 按需建设：没有实现需求时，不创建预留目录或增加抽象。
 - 可重复 E2E：UI 功能与修复的稳定验收场景保存到 `e2e/**/*.e2e.ts`，随功能提交；通过 `npm run test:e2e` 在隔离的真实 dsh 宿主中运行。AI 探索操作应转成明确操作和断言；不能只留下文字验收或截图。组织与执行约定见下文，环境要求和当前覆盖见 `e2e/README.md`；Codex 内置浏览器用于探索、人工检查与定位。
 - 模块依赖：`workflow/` 通过公共登记选择并调用独立节点插件的能力，负责工作流执行状态与持久化协调；节点插件不依赖 Studio 的 `workflow/`、`dag/` 或工作流实例状态类型。
-- 内置模板：仅保留 `packages/dsh-workflow-studio/templates/matt-pocock-wayfinder-workflow.zh/workflow.yaml`，为 mattpocock 的中文版；不维护英文版或其他内置模板。目录名中的 `.zh` 是语言后缀，保留现有模板 ID。
 
 ## 可重复浏览器 E2E 约定
 
@@ -57,8 +56,10 @@ packages/dsh-workflow-studio/
 ├── scripts/build.mjs
 ├── package.json
 └── cordis.patch.yml
+packages/dsh-workflow-template/  # 通用模板加载与登记插件
+packages/dsh-workflow-template-*/ # 各模板的独立纯配置插件包
 packages/dsh-workflow-node/      # 公共节点契约、profile 级登记与可选浏览器能力
-packages/dsh-workflow-bundle/    # 普通 dsh 默认装配，模板部分留待下一阶段
+packages/dsh-workflow-bundle/    # 普通 dsh 默认装配，引用节点与模板包
 packages/dsh-workflow-node-session-agent/      # session_agent 节点服务端与前端
 packages/dsh-workflow-node-bash/      # bash 节点服务端与前端
 packages/dsh-workflow-node-form/      # form 节点服务端与前端

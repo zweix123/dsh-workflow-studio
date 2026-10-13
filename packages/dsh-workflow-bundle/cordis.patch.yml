@@ -12,4 +12,8 @@
     - id: workflow-template-matt-pocock-wayfinder-workflow.zh
       name: dsh-workflow-template
       config:
-        directory: dsh-workflow-studio/templates/matt-pocock-wayfinder-workflow.zh
+        directory: '@dsh-workflow/template-matt-pocock-wayfinder'
+    - id: workflow-template-openspec-delivery.zh
+      name: dsh-workflow-template
+      config:
+        directory: '@dsh-workflow/template-openspec-delivery'

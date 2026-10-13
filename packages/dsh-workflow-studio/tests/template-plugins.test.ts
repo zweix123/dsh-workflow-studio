@@ -15,6 +15,8 @@ import type { ServerNode } from 'dsh-workflow-node/contract'
 import * as studio from '../lib/index.js'
 import * as loader from '../../dsh-workflow-template/src/index.js'
 import { INSTANCES_PATH, TEMPLATES_PATH } from '../src/shared/constants.js'
+import { compile } from '../lib/host/dag/index.js'
+import { renderTextTemplate } from '../../dsh-workflow-node/src/text-template.js'
 
 async function host() {
   const root = await mkdtemp(join(tmpdir(), 'template-plugins-'))
@@ -57,6 +59,24 @@ test('template identity and display name come from loaded YAML across workspaces
       const response = await h.request(INSTANCES_PATH, { workspaceId, name: 'Run', templateId: 'acme-review' })
       assert.equal(response.status, 201)
       assert.equal((await response.json()).definition.name, 'Team review')
+    }
+  } finally { await h.close() }
+})
+
+
+test('package-root templates support scoped and unscoped names and reject filesystem and URL addresses', async () => {
+  const h = await host()
+  try {
+    for (const [directory, id] of [['@acme/root-template', 'scoped-root'], ['root-template', 'unscoped-root']]) {
+      await h.declare(directory, `id: ${id}\nname: ${id}\ntype: dag\ndag: []\n`)
+      const detail = await (await h.request(`${TEMPLATES_PATH}/${id}`)).json()
+      assert.equal(detail.source, directory)
+      assert.equal((await h.request(INSTANCES_PATH, { workspaceId: 'a', name: id, templateId: id })).status, 201)
+    }
+    for (const directory of ['../template', '/tmp/template', '@acme', '@acme/template/..', '@acme/template/./nested', 'file:///tmp/template', 'https://example.com/template']) {
+      await h.ctx.plugin(loader, { directory })
+      const rows = (await (await h.request(TEMPLATES_PATH)).json()).templates
+      assert.match(rows.find((row: any) => row.source === directory).error, /package resource address/)
     }
   } finally { await h.close() }
 })
@@ -176,24 +196,81 @@ async function installBuiltinNodes(h: Awaited<ReturnType<typeof host>>) {
   for (const node of [await import('../../dsh-workflow-node-bash/lib/server.js'), await import('../../dsh-workflow-node-form/lib/server.js'), await import('../../dsh-workflow-node-session-agent/lib/server.js')]) await h.ctx.plugin(node)
 }
 
-test('the Chinese Matt Pocock default template uses the public loader and registration contract', async () => {
+test('the default templates use the public loader and registration contract', async () => {
   const h = await host()
   try {
     await installBuiltinNodes(h)
     const patch = parse(await readFile(new URL('../../dsh-workflow-bundle/cordis.patch.yml', import.meta.url), 'utf8'))
     const templates = patch[0].insert.filter((entry: any) => entry.name === 'dsh-workflow-template')
-    const names = ['matt-pocock-wayfinder-workflow.zh']
-    assert.deepEqual(templates.map((entry: any) => entry.config.directory), names.map(name => `dsh-workflow-studio/templates/${name}`))
-    for (const name of names) await h.declare(`dsh-workflow-studio/templates/${name}`, await readFile(new URL(`../templates/${name}/workflow.yaml`, import.meta.url), 'utf8'))
+    const names = ['matt-pocock-wayfinder-workflow.zh', 'openspec-delivery.zh']
+    const packages = ['dsh-workflow-template-matt-pocock-wayfinder', 'dsh-workflow-template-openspec-delivery']
+    assert.equal(templates.length, packages.length)
+    const bundle = JSON.parse(await readFile(new URL('../../dsh-workflow-bundle/package.json', import.meta.url), 'utf8'))
+    for (const [index, packageDirectory] of packages.entries()) {
+      const root = new URL(`../../${packageDirectory}/`, import.meta.url)
+      const manifest = JSON.parse(await readFile(new URL('package.json', root), 'utf8'))
+      const patch = parse(await readFile(new URL(manifest.dsh.bundle.patch, root), 'utf8'))
+      assert.deepEqual(patch[0].insert, [templates[index]])
+      assert.equal(bundle.dependencies[manifest.name], manifest.version)
+      const directory = manifest.name
+      assert.equal(templates[index].config.directory, directory)
+      await h.declare(directory, await readFile(new URL(import.meta.resolve(`${directory}/workflow.yaml`)), 'utf8'))
+    }
     const rows = (await (await h.request(TEMPLATES_PATH)).json()).templates
     assert.deepEqual(rows.map((row: any) => row.id), names)
     assert.ok(rows.every((row: any) => row.name && !row.error))
-    const response = await h.request(INSTANCES_PATH, { workspaceId: 'a', name: 'Default run', templateId: 'matt-pocock-wayfinder-workflow.zh' })
-    assert.equal(response.status, 201)
-    assert.equal((await response.json()).definition.name, 'Matt-Pocock-工程工作流')
+    for (const [templateId, templateName] of [
+      ['matt-pocock-wayfinder-workflow.zh', 'Matt-Pocock-工程工作流'],
+      ['openspec-delivery.zh', 'OpenSpec 需求交付工作流'],
+    ]) {
+      const response = await h.request(INSTANCES_PATH, { workspaceId: 'a', name: templateId, templateId })
+      assert.equal(response.status, 201)
+      assert.equal((await response.json()).definition.name, templateName)
+    }
   } finally { await h.close() }
 })
 
+
+test('the OpenSpec template preserves requirement and name across separate, ordered sessions', async () => {
+  const h = await host()
+  try {
+    await installBuiltinNodes(h)
+    const directory = '@dsh-workflow/template-openspec-delivery'
+    const yaml = await readFile(new URL(import.meta.resolve(`${directory}/workflow.yaml`)), 'utf8')
+    await h.declare(directory, yaml)
+    const catalog = (await (await h.request(TEMPLATES_PATH)).json()).templates
+    assert.equal(catalog.length, 1)
+    assert.equal(catalog[0].id, 'openspec-delivery.zh')
+    assert.equal(catalog[0].error, undefined)
+    const response = await h.request(INSTANCES_PATH, { workspaceId: 'a', name: 'OpenSpec run', templateId: catalog[0].id })
+    assert.equal(response.status, 201)
+    const { definition } = await response.json()
+    const execution = compile(definition, {}).createExecution({})
+    const submit = (id: string, output: Record<string, string>) => {
+      const frontier = execution.getFrontier()
+      assert.deepEqual(frontier.map(node => node.definition.id), [id])
+      execution.submit(frontier[0]!.instanceId, output)
+    }
+    const request = '修复登录重定向循环。\n复现：登录后返回原页面。保留中文、"引号"和 <标记>。'
+    const change_name = 'fix-login-redirect-loop'
+    submit('填写需求', { request })
+    assert.deepEqual(execution.getFrontier()[0]!.input, { request })
+    submit('为需求起名', {})
+    submit('确认需求名称', { change_name })
+    for (const id of ['propose', 'apply', 'archive']) {
+      const [node] = execution.getFrontier()
+      assert.equal(node!.definition.id, id)
+      assert.deepEqual(node!.input, { request, change_name })
+      const prompt = renderTextTemplate(node!.definition.prompt as string, node!.input)
+      assert.ok(prompt.includes(request))
+      assert.ok(prompt.includes(change_name))
+      assert.ok(!prompt.includes('{{'))
+      assert.notEqual(node!.definition.is_auto_start, true)
+      submit(id, {})
+    }
+    assert.deepEqual(execution.getResult(), { status: 'completed', output: {} })
+  } finally { await h.close() }
+})
 
 test('loaded templates validate node configuration by kind and preserve unknown business fields', async () => {
   const h = await host()

@@ -11,7 +11,11 @@
   "private": true,
   "type": "module",
   "dsh": { "bundle": { "patch": "./cordis.patch.yml" } },
-  "exports": { "./templates/*/workflow.yaml": "./templates/*/workflow.yaml" }
+  "exports": { "./workflow.yaml": "./workflow.yaml" },
+  "peerDependencies": {
+    "dsh-workflow-template": "0.1.0",
+    "@dsh-workflow/node-bash": "0.1.0"
+  }
 }
 ```
 
@@ -21,11 +25,11 @@
     - id: acme-review-loader
       name: dsh-workflow-template
       config:
-        directory: '@acme/workflows/templates/review'
+        directory: '@acme/workflows'
 ```
 
 ```yaml
-# templates/review/workflow.yaml
+# workflow.yaml（包根目录）
 id: acme-review
 name: 团队代码审查
 type: dag
@@ -36,7 +40,9 @@ dag:
     command: git diff --stat
 ```
 
-`directory` 必须是带包名的资源地址，加载器追加 `/workflow.yaml`，通过所属 profile 的模块解析器和包 exports 定位文件，再读为 YAML。它不是 cwd、补丁文件或 loader 包旁边的相对文件路径。安装位置变化无须改补丁。一个补丁可声明多个 loader 实例；不提供 config.id、config.name 或 node_kind 清单。
+单模板包将 `workflow.yaml` 放在包根目录，`directory` 直接填写包名。一个包提供多份模板时，可按 `templates/review/workflow.yaml`、`templates/delivery/workflow.yaml` 组织，通过 `"./templates/*/workflow.yaml": "./templates/*/workflow.yaml"` 导出，分别配置 `directory: '<包名>/templates/review'` 等地址。
+
+`directory` 必须是包名或带包名的资源子目录地址，加载器追加 `/workflow.yaml`，通过所属 profile 的模块解析器和包 exports 定位文件，再读为 YAML。它不是 cwd、补丁文件或 loader 包旁边的相对文件路径；不接受文件系统路径、URL 或 `.`/`..` 路径段。安装位置变化无须改补丁。一个补丁可声明多个 loader 实例；不提供 config.id、config.name 或 node_kind 清单。
 
 YAML 根 id 和 name 均必须为非空、非纯空白字符串。id 是同一 profile 中的稳定身份，name 是展示名称；目录只定位文件。中英文模板分别提供独立 ID。改根 ID 时同步根自递归引用，嵌套 DAG/节点 ID 规则不变。
 
@@ -53,7 +59,61 @@ npm run build
 dsh plugin --profile web add /绝对路径/dsh-workflow-studio/packages/dsh-workflow-bundle
 ```
 
-默认 bundle 一次装配 Studio、公共节点登记、bash/session_agent/form、通用模板加载器及唯一的内置模板 mattpocock 中文版（`matt-pocock-wayfinder-workflow.zh`）。旧 DSH home 模板目录不再自动发现，也不再复制内置模板；旧文件不会自动删除。
+默认 bundle 一次装配 Studio、公共节点登记、bash/session_agent/form、通用模板加载器及两个中文内置模板：mattpocock（`matt-pocock-wayfinder-workflow.zh`）和 [OpenSpec 需求交付](./openspec-workflow.zh.md)（`openspec-delivery.zh`）。旧 DSH home 模板目录不再自动发现，也不再复制内置模板；旧文件不会自动删除。
+
+内置模板也使用独立纯配置插件包，与 Studio 平级：
+
+- `packages/dsh-workflow-template-matt-pocock-wayfinder/`：mattpocock 中文版。
+- `packages/dsh-workflow-template-openspec-delivery/`：OpenSpec 需求交付中文版。
+
+各包包含根目录的 `package.json`、`cordis.patch.yml` 和 `workflow.yaml`，可在已经装配 Studio、节点和加载器的 profile 中通过本地目录单独添加；默认 bundle 依赖这些资源包，并以包名声明同样的加载器配置。模板包无须编译或增加 JavaScript 入口。Studio 只提供模板登记服务，不携带模板 YAML。当前模板范围由[模板管理规格](./specs/template-management.zh.md)维护。
+
+## 节点依赖与组合 bundle
+
+推荐第三方作者沿用本项目的结构：独立节点包提供业务能力，独立模板包组合节点，bundle 提供一次添加的入口。仅提供模板时保留模板包即可；一个模板包也可以包含多份模板。
+
+模板包的 `peerDependencies` 声明 `dsh-workflow-template` 及实际使用的节点插件包和兼容版本。多模板包声明所用节点包的并集。Wayfinder 使用 form、session_agent、bash，声明对应三个包；OpenSpec 交付模板只使用 form 和 session_agent，不声明 bash。节点类型名与包名不一定相同，作者需根据实际提供该类型的插件填写包名。
+
+模板包自己的补丁只声明模板加载器，消费同一 profile 已装配的节点。组合 bundle 则在 `dependencies` 中包含要提供的包，并在补丁中显式启用节点、加载模板。例如，在已添加本项目默认 bundle 的 profile 中，第三方可以添加自己的组合 bundle：
+
+```text
+acme-workflows/packages/
+├── node-review/       # @acme/node-review，提供 acme_review
+├── template-review/   # @acme/template-review，peer 依赖节点和加载器
+└── bundle/            # @acme/workflows，组合入口
+```
+
+组合入口的 manifest 关键字段：
+
+```json
+{
+  "name": "@acme/workflows",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dsh": { "bundle": { "patch": "./cordis.patch.yml" } },
+  "dependencies": {
+    "@acme/node-review": "0.1.0",
+    "@acme/template-review": "0.1.0",
+    "dsh-workflow-template": "0.1.0"
+  }
+}
+```
+
+```yaml
+# 组合入口的 cordis.patch.yml
+- insert:
+    - id: acme-review-node
+      name: '@acme/node-review'
+    - id: acme-review-template
+      name: dsh-workflow-template
+      config:
+        directory: '@acme/template-review'
+```
+
+组合 bundle 为模板资源包声明加载器，不再同时添加同一模板包自身的 bundle 声明。节点也只装配一次；默认 bundle 已提供的公共登记、Studio 和内置节点无需再次启用。需要完全独立的安装入口时，参考 `packages/dsh-workflow-bundle`，同时提供并装配这些基础插件。当前仍通过本地目录添加，不增加 npm 发布流程。
+
+包依赖用于表达兼容版本和供包管理器解析，不能保证对应插件已启用。运行时从完整 YAML（含嵌套 DAG）的 `node_kind` 自动收集所需类型，以实际登记结果判断可用性；缺失或冲突时保留模板诊断，恢复后重新校验。不在补丁中添加第二份节点类型清单，也不由 Studio 额外校验包版本。
 
 ## Bash 引用模板附属文件
 

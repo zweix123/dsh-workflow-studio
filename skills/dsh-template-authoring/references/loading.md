@@ -43,7 +43,7 @@ YAML 只在模板声明加载或重载时读取。刷新页面、切换工作区
 
 | 现象 | 优先核对 |
 | --- | --- |
-| 模板资源无法解析 | package.name、exports、config.directory 三者是否一致；目录中是否有 workflow.yaml |
+| 模板资源无法解析 | package.name、exports、config.directory 三者是否一致；单模板的 workflow.yaml 位于包根目录，directory 填包名；多模板可用带包名的资源子目录地址 |
 | 模板没有出现 | 模板 bundle 与默认 bundle 是否在同一 profile，补丁是否由 dsh.bundle.patch 引用并加载 |
 | 模板 ID 冲突 | 同一 profile 内所有同 ID 贡献都会不可用，无先到先得规则；定位并修正重复贡献 |
 | 缺少节点类型 | profile 是否装配所需节点实现；恢复节点会重验已读模板，无须改补丁排序 |

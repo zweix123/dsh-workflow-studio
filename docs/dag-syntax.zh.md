@@ -246,7 +246,7 @@ dag:
     to: verify
 ```
 
-verify 同时等待会话完成并从 request 接收真实 text；会话空输出不会透传业务字段。唯一的 mattpocock 中文内置模板同样通过需求表单取得真实输入，会话处理后由结果表单确认业务字段。对象或数组可由 form 的结构化契约直接收集；需要粘贴 JSON 文本时，也可由 `printf '%s' {{ result_json }}` 的 bash 节点交付并校验 JSON 对象。内置模板保留现有 JSON 文本输入方式及条件分支和递归流程。
+verify 同时等待会话完成并从 request 接收真实 text；会话空输出不会透传业务字段。mattpocock 与 OpenSpec 中文内置模板同样通过需求表单取得真实输入，会话处理后由结果表单确认业务字段。对象或数组可由 form 的结构化契约直接收集；需要粘贴 JSON 文本时，也可由 `printf '%s' {{ result_json }}` 的 bash 节点交付并校验 JSON 对象。mattpocock 模板保留现有 JSON 文本输入方式及条件分支和递归流程；[OpenSpec 模板](./openspec-workflow.zh.md)在需求和名称表单后依次执行 propose、apply、archive，并将原始需求和名称直接传给各会话节点。
 
 ### Bash 引用模板附属文件
 

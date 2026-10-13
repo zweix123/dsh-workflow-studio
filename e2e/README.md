@@ -51,6 +51,7 @@ npm run test:e2e -- e2e/form-handoff.e2e.ts
 `workflows/` 保存关键能力回归，使用[独立测试模板包](./fixtures/core-regression/README.md)。每条用例均可独立运行：
 
 - [instances.e2e.ts](./workflows/instances.e2e.ts)：名称为空与重复校验、表单保留、详情 Tab 去重、重启恢复、取消及永久删除、列表计数与详情 Tab 清理。
+- [templates.e2e.ts](./workflows/templates.e2e.ts)：默认 bundle 从独立模板包根目录加载两份中文模板、来源准确显示包名、浏览模板详情、创建实例及真实宿主重启后的可用性。
 - [bash.e2e.ts](./workflows/bash.e2e.ts)：自动启动、非零退出与输出类型错误、原命令重试、真实数据交付、空命令完成、重启不重跑、执行中删除保护、中断后的结果未知与显式重试。
 - [dag.e2e.ts](./workflows/dag.e2e.ts)：条件激活与跳过、分支汇合、for 项独立身份、部分完成后重启、逆序完成但按源顺序聚合、空数组不创建虚构项。
 - [session-agent.e2e.ts](./workflows/session-agent.e2e.ts)：相同节点定义在不同实例中关联不同对话、对话往返、Tab 保留与去重、持久关联恢复、人工完成、完成后返回、删除实例保留对话并移除返回入口。

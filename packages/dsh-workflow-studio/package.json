@@ -21,8 +21,7 @@
     "./templates": {
       "types": "./lib/types/packages/dsh-workflow-studio/src/host/service/template-registry.d.ts",
       "default": "./lib/templates.js"
-    },
-    "./templates/*/workflow.yaml": "./templates/*/workflow.yaml"
+    }
   },
   "dsh": {
     "bundle": {
