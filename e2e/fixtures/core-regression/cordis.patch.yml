@@ -23,3 +23,7 @@
       name: dsh-workflow-template
       config:
         directory: "@dsh-workflow/core-regression-fixture/templates/session"
+    - id: regression-serial-chain
+      name: dsh-workflow-template
+      config:
+        directory: "@dsh-workflow/core-regression-fixture/templates/serial-chain"

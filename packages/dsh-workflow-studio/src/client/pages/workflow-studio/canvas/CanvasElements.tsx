@@ -25,6 +25,7 @@ const WorkflowNode = memo(function WorkflowNode({ data }: NodeProps<CanvasNode>)
       {view.control}
       <button type="button" className="nodrag nopan" aria-label={`${view.detailsLabel} ${data.label}${forItem ? ` ${forItem.key}` : ''}`} onClick={event => { event.stopPropagation(); view.onInspect() }}>ⓘ {view.detailsLabel}</button>
     </div>
+    <Handle id="top" type="source" position={Position.Top} /><Handle id="left" type="source" position={Position.Left} />
     <Handle id="right" type="source" position={Position.Right} /><Handle id="bottom" type="source" position={Position.Bottom} />
   </div>
 })
@@ -39,24 +40,36 @@ const DagGroupNode = memo(function DagGroupNode({ data }: NodeProps<CanvasNode>)
       {data.source !== 'template' && <span className="dsh-workflow-node-status"><i aria-hidden="true" />{view.statusLabel}</span>}
       <button type="button" className="nodrag nopan" aria-label={`${view.detailsLabel} ${data.label}`} onClick={event => { event.stopPropagation(); view.onInspect() }}>ⓘ {view.detailsLabel}</button>
     </div>
+    <Handle id="top" type="source" position={Position.Top} /><Handle id="left" type="source" position={Position.Left} />
     <Handle id="right" type="source" position={Position.Right} /><Handle id="bottom" type="source" position={Position.Bottom} />
   </div>
 })
 
 function AggregateNode({ data }: NodeProps<CanvasNode>) {
-  return <div className="dsh-workflow-aggregate" aria-label={String(data.label)}><Handle id="left" type="target" position={Position.Left} /><Handle id="top" type="target" position={Position.Top} /><span>{String(data.label)}</span><Handle id="right" type="source" position={Position.Right} /><Handle id="bottom" type="source" position={Position.Bottom} /></div>
+  return <div className="dsh-workflow-aggregate" aria-label={String(data.label)}><Handle id="left" type="target" position={Position.Left} /><Handle id="top" type="target" position={Position.Top} /><span>{String(data.label)}</span><Handle id="top" type="source" position={Position.Top} /><Handle id="left" type="source" position={Position.Left} />
+    <Handle id="right" type="source" position={Position.Right} /><Handle id="bottom" type="source" position={Position.Bottom} /></div>
 }
 
 function ExpressionEdge(props: EdgeProps<CanvasEdge>) {
   const data = props.data
   if (!data) return null
   const [smoothPath, smoothX, smoothY] = getSmoothStepPath(props)
-  const path = data.routeY === undefined ? smoothPath
+  const perimeter = data.perimeter
+  const horizontal = perimeter?.axis === 'y'
+  const start = horizontal ? props.sourceX : props.sourceY
+  const end = horizontal ? props.targetX : props.targetY
+  const radius = Math.min(8, Math.abs(end - start) / 2)
+  const sign = end >= start ? 1 : -1
+  const at = (main: number, cross: number) => horizontal ? `${main},${cross}` : `${cross},${main}`
+  const outerPath = perimeter && `M ${props.sourceX},${props.sourceY} L ${at(start, perimeter.coordinate + radius)} Q ${at(start, perimeter.coordinate)} ${at(start + sign * radius, perimeter.coordinate)} L ${at(end - sign * radius, perimeter.coordinate)} Q ${at(end, perimeter.coordinate)} ${at(end, perimeter.coordinate + radius)} L ${props.targetX},${props.targetY}`
+  const path = outerPath || (data.routeY === undefined ? smoothPath
     : data.routeX !== undefined && data.routeTopY !== undefined
       ? `M ${props.sourceX},${props.sourceY} L ${props.sourceX},${data.routeY} L ${data.routeX},${data.routeY} L ${data.routeX},${data.routeTopY} L ${props.targetX},${data.routeTopY} L ${props.targetX},${props.targetY}`
-      : `M ${props.sourceX},${props.sourceY} L ${props.sourceX + 24},${props.sourceY} L ${props.sourceX + 24},${data.routeY} L ${props.targetX - 24},${data.routeY} L ${props.targetX - 24},${props.targetY} L ${props.targetX},${props.targetY}`
-  const x = data.routeY === undefined ? smoothX : data.routeX ?? (props.sourceX + props.targetX) / 2
-  const y = data.routeY === undefined ? smoothY : data.routeY
+      : `M ${props.sourceX},${props.sourceY} L ${props.sourceX + 24},${props.sourceY} L ${props.sourceX + 24},${data.routeY} L ${props.targetX - 24},${data.routeY} L ${props.targetX - 24},${props.targetY} L ${props.targetX},${props.targetY}`)
+  const x = perimeter ? horizontal ? (props.sourceX + props.targetX) / 2 : perimeter.coordinate
+    : data.routeY === undefined ? smoothX : data.routeX ?? (props.sourceX + props.targetX) / 2
+  const y = perimeter ? horizontal ? perimeter.coordinate : (props.sourceY + props.targetY) / 2
+    : data.routeY === undefined ? smoothY : data.routeY
   const label = [data.condition && data.conditionLabel, data.each && data.eachLabel].filter(Boolean).join(' / ')
   return <><BaseEdge path={path} markerEnd={props.markerEnd} />{label && <EdgeLabelRenderer><button type="button" className="dsh-workflow-edge-label nodrag nopan" style={{ transform: `translate(-50%, -50%) translate(${x}px, ${y}px)` }}
     aria-label={`${label}: ${[data.condition, data.each].filter(Boolean).join('; ')}`} onFocus={() => data.open?.(props.id, data)} onClick={() => data.open?.(props.id, data)}>{label}</button></EdgeLabelRenderer>}</>
@@ -64,7 +77,7 @@ function ExpressionEdge(props: EdgeProps<CanvasEdge>) {
 export const nodeTypes = { workflow: WorkflowNode, dagGroup: DagGroupNode, aggregate: AggregateNode }
 export const edgeTypes = { expression: ExpressionEdge }
 
-export function CanvasNavigation({ nodes, candidates, active, ready, inspectorWidth, t, template = false, restored = false }: { nodes: CanvasNode[]; candidates: WorkCandidate[]; active: boolean; ready: boolean; inspectorWidth: number; t: WorkflowTranslate; template?: boolean; restored?: boolean }) {
+export function CanvasNavigation({ nodes, edges, candidates, active, ready, inspectorWidth, t, template = false, restored = false }: { nodes: CanvasNode[]; edges: CanvasEdge[]; candidates: WorkCandidate[]; active: boolean; ready: boolean; inspectorWidth: number; t: WorkflowTranslate; template?: boolean; restored?: boolean }) {
   const { setViewport, zoomTo } = useReactFlow()
   const element = useRef<HTMLDivElement>(null)
   const first = useRef(restored)
@@ -73,12 +86,13 @@ export function CanvasNavigation({ nodes, candidates, active, ready, inspectorWi
   const area = () => element.current?.closest('.dsh-workflow-graph') as HTMLDivElement | null
   const bounds = useMemo(() => {
     const roots = nodes.filter(node => !node.parentId)
-    const x = Math.min(...roots.map(node => node.position.x))
-    const y = Math.min(...roots.map(node => node.position.y))
+    const routes = edges.flatMap(edge => edge.data.perimeter ? [edge.data.perimeter] : [])
+    const x = Math.min(...roots.map(node => node.position.x), ...routes.filter(route => route.axis === 'x').map(route => route.coordinate - 16))
+    const y = Math.min(...roots.map(node => node.position.y), ...routes.filter(route => route.axis === 'y').map(route => route.coordinate - 16))
     const right = Math.max(...roots.map(node => node.position.x + Number(node.style?.width || 184)))
     const bottom = Math.max(...roots.map(node => node.position.y + Number(node.style?.height || 112)))
     return { x, y, width: right - x, height: bottom - y }
-  }, [nodes])
+  }, [nodes, edges])
   const move = useCallback((viewport: Viewport, animate = true) => {
     void setViewport(viewport, { duration: animate && !window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 180 : 0 })
   }, [setViewport])

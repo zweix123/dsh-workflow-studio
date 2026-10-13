@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import type { Edge, Node } from '@xyflow/react'
 import type { DefinitionPath, ForItemIdentity } from '../../../../host/dag/index.js'
 import type { LayoutDirection } from '../../../../shared/layout.js'
+import type { PerimeterRoute } from './layout-graph.js'
 
 export type DefinitionRef = { definitionPath: DefinitionPath }
 export type CanvasStatus = 'ready' | 'completed' | 'running' | 'waiting' | 'skipped'
@@ -37,6 +38,7 @@ type EdgeData = Expression & {
   conditionLabel?: string; eachLabel?: string
   open?: (id: string, expression: Expression) => void
   routeY?: number; routeX?: number; routeTopY?: number
+  perimeter?: PerimeterRoute
 }
 export type CanvasEdgeData = EdgeData & (
   | (DefinitionRef & { source: 'template'; definitionId?: string })

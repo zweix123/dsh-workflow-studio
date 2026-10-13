@@ -2,6 +2,7 @@ import dagre from '@dagrejs/dagre'
 import { MarkerType } from '@xyflow/react'
 import type { DagDefinition } from '../../../../host/dag/index.js'
 import { inspectLayout, type LayoutDirection } from '../../../../shared/layout.js'
+import { edgeKey, layoutGraph, type PerimeterRoute } from '../canvas/layout-graph.js'
 
 import type { CanvasGraph, TemplateCanvasNode, CanvasEdge } from '../canvas/types.js'
 
@@ -50,6 +51,7 @@ export function buildTemplateGraph(root: DagDefinition): CanvasGraph {
     }
     let width = 0
     let height = 0
+    const perimeterRoutes = new Map<string, PerimeterRoute>()
     const placed = segments.filter(part => part.ids.length).map(part => {
       const graph = new dagre.graphlib.Graph()
       graph.setGraph({ rankdir: part.direction === 'vertical' ? 'TB' : 'LR', ranksep: 88, nodesep: 36, marginx: 0, marginy: 0 })
@@ -59,11 +61,15 @@ export function buildTemplateGraph(root: DagDefinition): CanvasGraph {
         graph.setNode(name, { width: Number(node.style?.width), height: Number(node.style?.height) })
       }
       for (const item of dag.dag) if (item.type === 'edge' && part.ids.includes(item.from) && part.ids.includes(item.to)) graph.setEdge(item.from, item.to)
-      dagre.layout(graph)
-      return { ...part, graph, width: graph.graph().width || WIDTH, height: graph.graph().height || HEIGHT }
+      const routes = layoutGraph(graph)
+      return { ...part, graph, routes, width: graph.graph().width || WIDTH, height: graph.graph().height || HEIGHT }
     })
     const rowHeight = Math.max(HEIGHT, ...placed.map(part => part.height))
     for (const part of placed) {
+      for (const [key, route] of part.routes) perimeterRoutes.set(key, { ...route,
+        coordinate: route.coordinate + (route.axis === 'x' ? width + (path.length ? PADDING : 0)
+          : (rowHeight - part.height) / 2 + (path.length ? HEADER : 0)),
+      })
       for (const name of part.ids) {
         const node = byName.get(name)!
         const box = part.graph.node(name) as { x: number; y: number; width: number; height: number }
@@ -86,13 +92,14 @@ export function buildTemplateGraph(root: DagDefinition): CanvasGraph {
       const source = byName.get(item.from)
       const target = byName.get(item.to)
       if (!source || !target) continue
+      const perimeter = perimeterRoutes.get(edgeKey(item.from, item.to))
       const sourceDirection = source.data.direction ?? 'horizontal'
       const targetDirection = target.data.direction ?? 'horizontal'
       edges.push({
         id: `${parent}/edge/${index}`, source: source.id, target: target.id,
-        sourceHandle: sourceDirection === 'vertical' ? 'bottom' : 'right',
-        targetHandle: targetDirection === 'vertical' ? 'top' : 'left',
-        type: 'expression', data: { source: 'template', definitionPath: [...path, index].flatMap(index => ['dag', index]), ...(item.id && { definitionId: item.id }), ...(item.if && { condition: item.if }), ...(item.for && { each: item.for }) },
+        sourceHandle: perimeter ? perimeter.axis === 'x' ? 'left' : 'top' : sourceDirection === 'vertical' ? 'bottom' : 'right',
+        targetHandle: perimeter ? perimeter.axis === 'x' ? 'left' : 'top' : targetDirection === 'vertical' ? 'top' : 'left',
+        type: 'expression', data: { source: 'template', definitionPath: [...path, index].flatMap(index => ['dag', index]), ...(item.id && { definitionId: item.id }), ...(item.if && { condition: item.if }), ...(item.for && { each: item.for }), ...(perimeter && { perimeter: { ...perimeter } }) },
         markerEnd: { type: MarkerType.ArrowClosed, color: 'var(--dsw-alias-label-secondary)' }, selectable: false,
       })
     }
@@ -101,5 +108,14 @@ export function buildTemplateGraph(root: DagDefinition): CanvasGraph {
   visit(root, [], [root.id])
   const depth = (node: TemplateCanvasNode): number => node.parentId ? 1 + depth(nodes.find(item => item.id === node.parentId)!) : 0
   nodes.sort((a, b) => depth(a) - depth(b))
+  const byId = new Map(nodes.map(node => [node.id, node]))
+  for (const edge of edges) if (edge.data.perimeter) {
+    let parent = byId.get(edge.source)?.parentId
+    while (parent) {
+      const group = byId.get(parent)!
+      edge.data.perimeter.coordinate += group.position[edge.data.perimeter.axis]
+      parent = group.parentId
+    }
+  }
   return { nodes, edges }
 }

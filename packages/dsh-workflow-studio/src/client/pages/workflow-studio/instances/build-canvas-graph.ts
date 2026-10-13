@@ -4,6 +4,7 @@ import type { PositionSnapshot, RuntimeEdgeSnapshot } from '../../../../host/dag
 import type { InstanceDetail } from '../../../../shared/types/workflow-instance.js'
 import { inspectLayout, type LayoutDirection } from '../../../../shared/layout.js'
 import { canvasPosition } from '../canvas/navigation.js'
+import { edgeKey, layoutGraph, type PerimeterRoute } from '../canvas/layout-graph.js'
 import { definitionAt } from '../DefinitionDetails.js'
 import type { CanvasGraph, CanvasNode, CanvasEdge, RuntimeCanvasNode } from '../canvas/types.js'
 
@@ -65,6 +66,7 @@ export function buildCanvasGraph(detail: InstanceDetail): CanvasGraph {
   snapshot.waitingPositions.forEach(position => placeholder(position, 'waiting'))
   snapshot.skippedPositions.forEach(position => placeholder(position, 'skipped'))
 
+  const perimeterRoutes = new Map<string, Map<string, PerimeterRoute>>()
   const frames = new Set<string>()
   function layout(frameId: string): { width: number; height: number } {
     if (frames.has(frameId)) return { width: NODE_WIDTH, height: NODE_HEIGHT }
@@ -97,6 +99,8 @@ export function buildCanvasGraph(detail: InstanceDetail): CanvasGraph {
       return parentPath && path && path.length === parentPath.length && path.every((part, index) => part === parentPath[index])
     }).map(([id]) => id))
     if (frameDefinition?.type === 'dag' && positions.has(frameDefinition.id)) recursive.add(frameDefinition.id)
+    const routes = new Map<string, PerimeterRoute>()
+    perimeterRoutes.set(frameId, routes)
     let width = 0
     let height = 0
     if (!plan || plan.issues.length) {
@@ -116,7 +120,9 @@ export function buildCanvasGraph(detail: InstanceDetail): CanvasGraph {
       for (const edge of frameEdges) if (positions.has(edge.from.definitionId) && positions.has(edge.to.definitionId) && edge.from.definitionId !== edge.to.definitionId) {
         graph.setEdge(edge.from.definitionId, edge.to.definitionId)
       }
-      dagre.layout(graph)
+      // Recursion is stacked below its source after layout, so it cannot be part of a straight chain.
+      if (recursive.size) dagre.layout(graph)
+      else for (const [key, route] of layoutGraph(graph)) routes.set(key, route)
       for (const [id, row] of positions) {
         if (recursive.has(id)) continue
         const position = graph.node(id)
@@ -150,7 +156,7 @@ export function buildCanvasGraph(detail: InstanceDetail): CanvasGraph {
         current = startIndex.get(id) ?? current
         if (positions.has(id) && !recursive.has(id)) segments[current]!.ids.push(id)
       }
-      const placed: Array<{ graph: InstanceType<typeof dagre.graphlib.Graph>; direction: LayoutDirection; ids: string[]; width: number; height: number }> = []
+      const placed: Array<{ graph: InstanceType<typeof dagre.graphlib.Graph>; direction: LayoutDirection; ids: string[]; width: number; height: number; routes: Map<string, PerimeterRoute> }> = []
       for (const segment of segments) {
         if (!segment.ids.length) continue
         const segmentIds = new Set(segment.ids)
@@ -166,14 +172,17 @@ export function buildCanvasGraph(detail: InstanceDetail): CanvasGraph {
           portion.setNode(id, segment.direction === 'vertical' ? { width: cross, height: main } : { width: main, height: cross })
         }
         for (const edge of frameEdges) if (segmentIds.has(edge.from.definitionId) && segmentIds.has(edge.to.definitionId)) portion.setEdge(edge.from.definitionId, edge.to.definitionId)
-        dagre.layout(portion)
-        placed.push({ graph: portion, direction: segment.direction, ids: segment.ids, width: portion.graph().width || NODE_WIDTH, height: portion.graph().height || NODE_HEIGHT })
+        const segmentRoutes = layoutGraph(portion)
+        placed.push({ routes: segmentRoutes, graph: portion, direction: segment.direction, ids: segment.ids, width: portion.graph().width || NODE_WIDTH, height: portion.graph().height || NODE_HEIGHT })
       }
       const fullHeight = Math.max(NODE_HEIGHT, ...placed.map(part => part.height))
       width = 0
       height = fullHeight
       for (const [segmentIndex, part] of placed.entries()) {
         const yOffset = (fullHeight - part.height) / 2
+        for (const [key, route] of part.routes) routes.set(key, { ...route,
+          coordinate: route.coordinate + (route.axis === 'x' ? width : yOffset),
+        })
         for (const id of part.ids) {
           const box = part.graph.node(id) as { x: number; y: number; width: number; height: number }
           let left = width + box.x - box.width / 2
@@ -201,11 +210,13 @@ export function buildCanvasGraph(detail: InstanceDetail): CanvasGraph {
       if (frameId !== snapshot.rootInstanceId) {
         for (const item of items) item.position = { ...item.position, y: item.position.y + 24 }
         height += 24 // Leave an edge corridor below the nested DAG heading.
+        for (const route of routes.values()) if (route.axis === 'y') route.coordinate += 24
       }
     }
     if (frameId !== snapshot.rootInstanceId) for (const item of items) {
       item.position = { x: item.position.x + GROUP_PADDING, y: item.position.y + GROUP_HEADER }
     }
+    if (frameId !== snapshot.rootInstanceId) for (const route of routes.values()) route.coordinate += route.axis === 'x' ? GROUP_PADDING : GROUP_HEADER
     return { width: Math.max(width, NODE_WIDTH), height: Math.max(height, NODE_HEIGHT) }
   }
   layout(snapshot.rootInstanceId)
@@ -245,7 +256,15 @@ export function buildCanvasGraph(detail: InstanceDetail): CanvasGraph {
       return at.y + (Number(item.style?.height) || NODE_HEIGHT)
     })) + 16]))
 
-  const edgePorts = (source: string, target: string, frameId: string) => {
+  const edgePorts = (source: string, target: string, edge: RuntimeEdgeSnapshot) => {
+    const frameId = edge.parentInstanceId
+    const route = perimeterRoutes.get(frameId)?.get(edgeKey(edge.from.definitionId, edge.to.definitionId))
+    if (route) {
+      const parent = nodeById.get(frameId)
+      const offset = parent ? canvasPosition(parent, nodeById)[route.axis] : 0
+      const handle = route.axis === 'x' ? 'left' : 'top'
+      return { sourceHandle: handle, targetHandle: handle, data: { perimeter: { ...route, coordinate: route.coordinate + offset } } }
+    }
     const from = nodeById.get(source)
     const to = nodeById.get(target)
     const crosses = from?.data.segment !== undefined && to?.data.segment !== undefined
@@ -284,7 +303,7 @@ export function buildCanvasGraph(detail: InstanceDetail): CanvasGraph {
         : source && targets[0] ? [[source, targets[0]] as const] : []
       : source && targetPosition ? [[source, targetPosition] as const] : []
     return pairs.map(([source, target], pairIndex): CanvasEdge => {
-      const ports = edgePorts(source, target, edge.parentInstanceId)
+      const ports = edgePorts(source, target, edge)
       return {
         id: `${edgeIndex}:${pairIndex}`,
         source, target,

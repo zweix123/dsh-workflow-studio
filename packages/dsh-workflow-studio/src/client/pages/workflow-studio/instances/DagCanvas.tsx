@@ -61,7 +61,7 @@ export function DagCanvas({ nodes: nodeViews = emptyNodeViews, detail, t, onActi
       panOnDrag zoomOnScroll nodesDraggable={false} nodesConnectable={false} nodesFocusable={false} edgesFocusable={false}
       elementsSelectable={false} onNodeClick={() => {}} deleteKeyCode={null} proOptions={{ hideAttribution: true }}>
       <Controls showInteractive={false} showFitView={false} />
-      <CanvasNavigation restored={Boolean(reading?.viewport)} nodes={nodes} candidates={candidates} active={active} ready={ready} inspectorWidth={inspectorWidth} t={t} />
+      <CanvasNavigation restored={Boolean(reading?.viewport)} nodes={nodes} edges={edges} candidates={candidates} active={active} ready={ready} inspectorWidth={inspectorWidth} t={t} />
     </ReactFlow>
     {currentExpression && <aside className="dsh-workflow-expression" role="dialog" aria-label={t('fullExpression')}><header><strong>{t('fullExpression')}</strong><button type="button" aria-label={t('closeExpression')} onClick={() => setExpression(null)}>×</button></header>
       {currentExpression.condition && <><span>{t('conditionMark')} · if</span><pre>{currentExpression.condition}</pre></>}

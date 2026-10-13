@@ -1,0 +1,40 @@
+id: regression-serial-chain
+name: 串行链跨节点依赖回归
+type: dag
+dag:
+  - id: 填写需求
+    type: node
+    node_kind: form
+    output_schema:
+      request: string
+    schema:
+      properties:
+        request:
+          title: 原始需求
+    uiSchema:
+      request:
+        ui:widget: textarea
+  - id: 澄清需求与生成方案
+    type: node
+    node_kind: bash
+    input_schema:
+      request: string
+    output_schema:
+      change_name: string
+    command: printf '{"change_name":"fix-layout"}'
+  - id: 实施与验证
+    type: node
+    node_kind: bash
+    input_schema:
+      change_name: string
+    command: ""
+  - id: 同步规格与归档
+    type: node
+    node_kind: bash
+    input_schema:
+      change_name: string
+    command: ""
+  - { type: edge, from: 填写需求, to: 澄清需求与生成方案 }
+  - { type: edge, from: 澄清需求与生成方案, to: 实施与验证 }
+  - { type: edge, from: 实施与验证, to: 同步规格与归档 }
+  - { type: edge, from: 澄清需求与生成方案, to: 同步规格与归档 }

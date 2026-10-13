@@ -2,6 +2,8 @@
 
 状态：代码、自动化测试与浏览器视觉验收已完成（2026-09-26）。验收以本规格与 `docs/dag-syntax.zh.md` 为准。
 
+串行链与跨节点依赖的自动排布补充（2026-10-13）：保留现有方向和合法分段规则，已实施并通过自动化与真实宿主回归；实际结果见[验收记录](../acceptance/serial-chain-layout.zh.md)。
+
 本规格接续[实例运行图阅读与操作体验](./instance-graph-readability.zh.md)、[实例 Tab 产品规格](./instance-tab.zh.md)和 [DAG 语法规范](../dag-syntax.zh.md)。领域术语遵循[工作流工坊词汇表](../../CONTEXT.md)。此前固定横向的要求适用于未配置排布的模板和实例；配置了有效 `layout` 的 DAG 层按本规格展示。
 
 ## Problem Statement
