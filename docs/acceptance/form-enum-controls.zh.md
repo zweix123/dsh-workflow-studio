@@ -1,6 +1,6 @@
 # form 枚举名称与多选验收
 
-日期：2026-10-14。依据：[枚举名称与多选规格](../specs/form-enum-controls.zh.md)、[结构化表单规格](../specs/form-structured-fields.zh.md)及 [DAG 表单语法](../dag-syntax.zh.md#32-表单节点)。
+日期：2026-10-14。依据：[枚举名称与多选规格](../specs/form-enum-controls.zh.md)、[结构化表单规格](../specs/form-structured-fields.zh.md)及 [Form 节点语法](../nodes/form/README.zh.md)。
 
 被测范围：基于 `48624ce` 的本轮本地改动，涉及 form 插件 `src/fields.ts`、`src/client.tsx` 的枚举名称与唯一数组多选实现，以及随功能保存的 HTTP 集成用例、浏览器用例和独立模板夹具。未新增依赖，不改变公共节点契约、DAG 或存储格式。
 

@@ -8,6 +8,8 @@ Built for `@deepseek-ai/dsh@0.2.0-rc.1`. The plugin is currently installed from 
 
 > `npm install -g @deepseek-ai/dsh@0.2.0-rc.1 --registry=https://registry.npmjs.org`
 
+See the [documentation index (Chinese)](docs/README.zh.md) for the overall DAG syntax, built-in node guides, and template authoring.
+
 ## What it does
 
 - Loads templates contributed by plugins in the active profile, with two Chinese defaults.

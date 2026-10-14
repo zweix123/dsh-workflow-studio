@@ -1,5 +1,7 @@
 # 用纯配置 bundle 提供工作流模板
 
+[文档导航](./README.zh.md) · [整体 DAG 语法](./dag-syntax.zh.md)
+
 模板作者提供 package.json、bundle 补丁和包内 YAML；通用插件 `dsh-workflow-template` 定位文件并向 Studio 登记。先在所需 profile 中添加默认 bundle，再添加自己的模板 bundle。固定适配 dsh `0.2.0-rc.1`，本期只通过本地目录添加。
 
 本仓库的正式模板就是完整接入实现，直接参考：
@@ -9,11 +11,17 @@
 - [通用加载器](../packages/dsh-workflow-template/src/index.ts)：包资源解析、读取和登记。
 - [开发功能模板包](../packages/dsh-workflow-dev-templates/README.zh.md)：同一个纯配置包提供多份模板，只在开发宿主附加装配。
 
-不另维护最小教学实现；下文解释正式代码所遵循的资源、依赖和生命周期约定。
+接入以正式实现为参考；下文解释资源、依赖和生命周期约定。需要从空目录开始时，可复制 [skill 的 starter 资产](../skills/dsh-template-authoring/assets/starter/)到自己的模板目录，并修改包名、loader ID、模板 ID、展示名称与资源地址；不要直接把技能资产目录加载为正式模板。
+
+## 包结构与资源声明
+
+单模板包包含 `package.json`、`cordis.patch.yml` 和 `workflow.yaml`。`package.json` 用 `dsh.bundle.patch` 指向补丁文件，`exports` 暴露模板 YAML，`peerDependencies` 声明加载器与所用节点包的兼容版本。补丁为每份模板声明独立 loader ID 和 `config.directory`。
 
 单模板包将 `workflow.yaml` 放在包根目录，`directory` 直接填写包名。一个包提供多份模板时，可按 `templates/review/workflow.yaml`、`templates/delivery/workflow.yaml` 组织，通过 `"./templates/*/workflow.yaml": "./templates/*/workflow.yaml"` 导出，分别配置 `directory: '<包名>/templates/review'` 等地址。
 
 `directory` 必须是包名或带包名的资源子目录地址，加载器追加 `/workflow.yaml`，通过所属 profile 的模块解析器和包 exports 定位文件，再读为 YAML。它不是 cwd、补丁文件或 loader 包旁边的相对文件路径；不接受文件系统路径、URL 或 `.`/`..` 路径段。安装位置变化无须改补丁。一个补丁可声明多个 loader 实例；不提供 config.id、config.name 或 node_kind 清单。
+
+## 模板身份与加载生命周期
 
 YAML 根 id 和 name 均必须为非空、非纯空白字符串。id 是同一 profile 中的稳定身份，name 是展示名称；目录只定位文件。中英文模板分别提供独立 ID。改根 ID 时同步根自递归引用，嵌套 DAG/节点 ID 规则不变。
 
@@ -23,7 +31,11 @@ YAML 只在声明加载或重载时读取。刷新页面、查询详情、创建
 
 宿主在重载前拒绝新配置时旧贡献保持；真正卸载后重新读取/校验失败会显示新失败记录，不恢复旧有效定义。仅撤销模板不影响已创建实例的定义快照、名称及执行；撤销所需节点时按[节点规范](./specs/node-plugin-registration.zh.md)暂停新执行，仍保留查看。
 
-默认入口：
+## 本地加载
+
+用户自行安装固定版本 dsh；本项目仅提供插件。先确认目标 profile 与实例工作区，模板包目录不等于工作区。需要安装项目公开依赖时按仓库包管理方式安装，npm 命令显式追加 `--registry=https://registry.npmjs.org`。
+
+首次在目标 profile 使用 Studio 时，在仓库根构建并添加默认 bundle；已添加时不重复装配。默认入口：
 
 ```sh
 npm run build
@@ -86,33 +98,45 @@ acme-workflows/packages/
 
 包依赖用于表达兼容版本和供包管理器解析，不能保证对应插件已启用。运行时从完整 YAML（含嵌套 DAG）的 `node_kind` 自动收集所需类型，以实际登记结果判断可用性；缺失或冲突时保留模板诊断，恢复后重新校验。不在补丁中添加第二份节点类型清单，也不由 Studio 额外校验包版本。
 
-## Bash 引用模板附属文件
+## 模板附属文件
 
-可在 workflow.yaml 旁提供 scripts/init.sh、docs/guide.md 等附属文件，无须资源字段、文件清单、固定子目录或逐个 exports。Bash 命令写为：
+脚本、文档和配置可随模板包提供，无须新增资源字段、文件清单或逐个 exports。模板目录按实际解析到的 `workflow.yaml` 位置确定。Bash 的 `DSH_TEMPLATE_DIR`、路径引用、工作区、权限及文件更新语义统一见 [Bash 节点的模板附属文件](./nodes/bash/README.zh.md#模板附属文件)。
 
-~~~yaml
-command: bash "$DSH_TEMPLATE_DIR/scripts/init.sh"
-~~~
+## 添加自己的模板
 
-脚本可以通过同一变量读取文档，并在当前工作区创建产物：
+默认 bundle 与模板包须进入同一 profile。将纯配置模板放到交付目录后添加；模板包本身不需要编译或安装 dsh CLI：
 
-~~~sh
-#!/usr/bin/env bash
-set -e
-cat "$DSH_TEMPLATE_DIR/docs/guide.md" >&2
-git diff --stat > review-stat.txt
-~~~
+```sh
+dsh plugin --profile web add /绝对路径/team-workflows
+```
 
-DSH_TEMPLATE_DIR 来自模块解析器返回的 YAML 文件 URL 的父目录。exports 映射到其他位置时使用实际位置，不从模板 ID 或声明字符串猜测。系统通过宿主 Shell 的 dshEnv 提供它，无须 input_schema 声明，也不用 Django 占位符。路径按 Shell 规则用双引号包住；可与独立的业务参数引用同用：
+路径替换为实际目录。若 profile 先前单独添加过 Studio，按[项目安装说明](../README.zh.md#从源码安装)迁移到默认 bundle，避免重复装配。
 
-~~~yaml
-command: bash "$DSH_TEMPLATE_DIR/scripts/init.sh" {{ repository }}
-~~~
+## 校验与验证
 
-Bash 的 cwd 和沙箱 workspaceRoot 继续使用用户工作区。附属文件用于读取或执行，产物写工作区；访问受现有沙箱和系统权限约束，不提升权限，也不承诺模板目录被强制只读隔离。本次不向 agent 注入路径。
+先检查 YAML/JSON、包 exports 与资源地址、定义 ID、输入来源和具体节点配置。仓库可用时，使用[内部引擎](./development/dag-engine-api.zh.md)的 `compile(definition, {})` 校验工坊没有外部根输入的前提，并使用已登记节点的 `validate` 校验业务字段；DAG 编译通过不等于节点配置合法，仅解析 YAML 也不足以证明模板可用。
 
-实例保存创建时的 YAML 定义和来源目录，不复制附属文件。嵌套、递归和逐项 Bash 使用同一来源，重启或仅撤销登记不清除目录，也不重绑定其他同 ID 模板。缺少来源的历史实例不自动补回变量，普通工作区命令继续可用。
+打开目标 profile 的工坊模板页，核对根 `id`、展示名称、包来源及可用状态，选择实际工作区创建新实例。验证人工输入到达下游、节点的完成条件和根输出。真实模型未执行时，不能把静态校验或模拟节点结果写成业务流程跑通。
 
-YAML 修改须重载声明后作用于新实例；脚本和文档读取实际执行时的当前内容。文件更新不使已成功节点重跑；文件删除、包移动或读取失败沿用 Bash 错误和人工重试，定义快照不保证原文件一直可访问。
+starter 的流程是：request 表单填写 task → discuss 台前 Agent 消费 task → confirm 表单填写 summary 和 approved。discuss 未声明输出，后面的边只等待它完成；根结果来自 confirm。若要在 confirm 预填 task，需增加 request → confirm，并在 confirm 的输入与输出中声明 task。数据不会沿空输出节点自动透传。
 
-模板只读图及输入输出语义见[DAG 用户文档](./dag-syntax.zh.md)，验证范围见[附属文件验收记录](./acceptance/template-attached-files.zh.md)。
+真实宿主验证可使用隔离的 `DSH_HOME`、非默认端口与明确的 profile；环境准备见 [E2E 说明](../e2e/README.md)。区分静态校验、真实宿主与模型实际执行，记录尚未验证的部分。缺少项目编译器时明确该层未验证。
+
+## 修改与重载
+
+文件修改后重载对应模板声明。使用当前宿主实际提供的插件重载入口；命令不确定时先查看 `dsh plugin --profile web --help`，不要猜测 `reload` 子命令。也可在合适的维护窗口重启同一 profile 的宿主。不要反复添加同一 bundle 模拟重载。
+
+重载后检查新定义并创建新实例。既有实例继续使用创建时快照；刷新页面、切换工作区、创建实例或节点依赖恢复都不会重读 YAML。重载失败与撤销登记的具体行为见[加载生命周期](#模板身份与加载生命周期)。
+
+## 故障定位
+
+| 现象 | 优先核对 |
+| --- | --- |
+| 模板资源无法解析 | `package.name`、`exports`、`config.directory` 是否对应；directory 是包名或带包名的资源目录 |
+| 模板没有出现 | 模板与默认 bundle 是否在同一 profile，补丁是否由 `dsh.bundle.patch` 引用并加载 |
+| 模板 ID 冲突 | 定位同一 profile 内所有同 ID 贡献并修正，不存在先到先得规则 |
+| 缺少节点类型 | profile 是否装配所需节点；恢复节点会重验已读模板，无须改补丁排序 |
+| 根输入或节点输入报来源缺失 | 工坊没有外部根输入；每个输入字段是否有上游输出声明 |
+| Agent 完成后下游没有结果 | 是否声明输出，台后是否已人工完成，是否存在交付错误；见 [Agent 节点](./nodes/agent/README.zh.md) |
+| 修改后仍是旧内容 | 是否真正重载声明，查看的是否是已有实例快照 |
+| Bash 找不到附属脚本 | 核对实例保存的来源、包及文件是否仍存在、宿主权限；见 [Bash 节点](./nodes/bash/README.zh.md#模板附属文件) |

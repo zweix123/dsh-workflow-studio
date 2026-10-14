@@ -117,6 +117,6 @@ form 根据输出契约生成字符串、数字、布尔值、对象和数组字
 
 - 术语沿用[领域词汇表](../../CONTEXT.md)。遵守[节点配置归属](../adrs/0004-node-config-scoped-by-kind.md)、[节点业务状态分工](../adrs/0005-node-owned-business-state.md)和[公共节点契约独立](../adrs/0006-independent-node-plugin-registry.md)。本次沿用既有边界，无需新增 ADR。
 - 本规格扩展[节点模块与表单规格](./node-modules.zh.md)的 form 类型范围和[节点输入输出规格](./node-input-output.zh.md)的结构化预填与提交行为；其他已确认能力继续有效。旧规格中的“不支持对象／数组”是历史阶段限制，本次实现以本文为准。
-- [DAG 用户文档](../dag-syntax.zh.md#32-表单节点)已同步五种类型、递归注解、预填、默认值及提交规则；验证边界见验收记录。
+- [Form 节点文档](../nodes/form/README.zh.md)已同步五种类型、递归注解、预填、默认值及提交规则；验证边界见验收记录。
 - 实现沿用已确认测试边界，真实宿主使用固定 dsh 0.2.0-rc.1；不改变公共 DAG 语义。
 - 本仓库尚未提供 Issue tracker 和 triage 配置。本文件是本地正式规格，未发布 Issue，也未应用 ready-for-agent 标签；需要发布时先运行 /setup-matt-pocock-skills 配置 tracker。

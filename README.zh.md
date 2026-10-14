@@ -8,6 +8,8 @@
 
 > `npm install -g @deepseek-ai/dsh@0.2.0-rc.1 --registry=https://registry.npmjs.org`
 
+完整阅读入口见[文档导航](docs/README.zh.md)：先了解整体 DAG 语法，再查阅各内置节点与模板接入指南。
+
 ## 功能
 
 - 从当前 profile 的插件声明加载模板，默认提供两个中文模板。

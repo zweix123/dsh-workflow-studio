@@ -2,7 +2,7 @@
 
 日期：2026-10-14。被测范围：`LayoutNotices` 移除有效排布的 INFO，保留无效配置的 WARN、中英文文案和详情交互；排布算法与执行规则未修改。
 
-依据：[模板作者可配置的实例运行图排布](../specs/template-layout.zh.md)、[DAG 语法文档](../dag-syntax.zh.md#34-实例运行图排布-layout)。
+依据：[模板作者可配置的实例运行图排布](../specs/template-layout.zh.md)、[DAG 语法文档](../dag-syntax.zh.md#32-实例运行图排布-layout)。
 
 ## 环境与方法
 

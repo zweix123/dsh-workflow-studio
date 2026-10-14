@@ -2,7 +2,7 @@
 
 当前实现：工作流工坊内置 DAG 引擎，默认 bundle 装配 `agent`、`bash`、`form` 三种节点。
 
-新模板使用 `node_kind: agent`。本次不提供旧配置、旧实例兼容或迁移；已有实例快照和数据保留，不会自动改写或删除。
+适配 `@deepseek-ai/dsh@0.2.0-rc.1`。从[文档导航](./README.zh.md)选择阅读入口；各内置节点的业务配置与操作说明在 [Agent](./nodes/agent/README.zh.md)、[Bash](./nodes/bash/README.zh.md)、[Form](./nodes/form/README.zh.md) 中维护。新模板使用 `node_kind: agent`，不提供旧配置、旧实例兼容或迁移；已有实例快照和数据保留，不会自动改写或删除。
 
 本文面向 DAG 语法的使用者，说明标准字段、书写规则、静态合法性、执行语义和使用示例。产品需求、功能范围与验收规格统一维护在 `docs/specs/`；内部数据结构、模块和算法属于实现设计。
 
@@ -10,8 +10,9 @@
 
 | 章节 | 回答的问题 |
 | --- | --- |
+| 1.1 最小可运行模板 | 如何先写出并运行一个工作流？ |
 | 2. 概念模型 | 节点、边、DAG、定义和实例分别是什么？ |
-| 3～5. 书写规则 | 定义结构、输入输出 Schema、`if` 和 `for` 怎么写？ |
+| 3～5. 书写规则 | 定义结构、节点类型选择、输入输出 Schema、`if` 和 `for` 怎么写？排布按需阅读 §3.2。 |
 | 6. 静态检查 | 哪些定义合法，哪些必须在执行前拒绝？ |
 | 7～10. 执行语义 | 如何激活、合并与校验输入、展开、聚合和递归？ |
 | 11. 完整示例 | 如何把这些规则组合成程序？ |
@@ -21,13 +22,40 @@
 
 工坊的模板配置使用 YAML 存储。模板声明加载或重载时读取并登记定义，实例管理 Tab 创建实例时使用当前可用的已加载定义；实例详情 Tab 展示初始化快照。引擎本身不负责文件存储或文本解析，定义的数据结构与文件序列化格式分开约定。本文的 JSON 示例用于表达解析后的数据结构，不要求配置文件使用 JSON。
 
-工坊模板的 YAML 根 `id` 是同一 profile 中唯一的稳定身份，根 `name` 是展示名称，两者必须是非空且非纯空白的字符串。目录只定位资源，不作为身份或名称。模板作者通过纯配置 bundle 声明带包名的目录资源地址并 exports 暴露 `workflow.yaml`，完整示例见[模板作者指南](./template-plugin-authoring.zh.md)。中英文模板分别使用独立根 ID。此名称要求仅针对模板根，不改变嵌套 DAG、节点及引擎标准字段。
-
-同 ID 贡献全部不可用；缺失或冲突 node_kind 的模板保留来源与诊断，节点恢复后重验已读定义。列表、详情和创建共用登记结果，刷新不重读 YAML；已有实例名称与定义来自创建时快照。旧 DSH home 模板目录不再自动发现或复制。
+模板的包结构、身份登记、加载与重载规则见[模板作者指南](./template-plugin-authoring.zh.md)。本文负责定义本身的结构与编排语义。
 
 “必须”和“不得”表示强制要求。“待确定”表示尚未规定，不能假定实现已支持。“编译期”或“静态检查”指执行前对源程序定义的检查，不要求实现生成机器码。
 
 本期只定义有限字段引用与条件比较，不定义节点代码、通用表达式语言、并发调度、错误恢复、重试或迭代间依赖，不保证递归终止。
+
+### 1.1 最小可运行模板
+
+工作流模板描述流程，创建实例后执行其中的节点；边决定依赖顺序并传递数据。下面的表单收集 `task`，Agent 接收它并与用户讨论。Agent 未声明输出，用户完成节点后根 DAG 以空结果完成。
+
+```yaml
+id: discuss-task
+name: 讨论任务
+type: dag
+dag:
+  - id: request
+    type: node
+    node_kind: form
+    output_schema:
+      task: string
+  - id: discuss
+    type: node
+    node_kind: agent
+    input_schema:
+      task: string
+    prompt: |
+      请分析以下任务并给出建议：
+      {{ task }}
+  - type: edge
+    from: request
+    to: discuss
+```
+
+将其保存为模板包的 `workflow.yaml`，按[模板作者指南](./template-plugin-authoring.zh.md)添加到已装配默认 bundle 的 profile。创建实例后提交表单，执行 Agent 并打开对话，交流结束后返回工坊点击“完成”。声明业务输出、切换台后模式等用法见 [Agent 节点](./nodes/agent/README.zh.md)。
 
 ## 2. 概念模型
 
@@ -91,241 +119,21 @@ DAG 的内容由顶点和边组成。顶点分为节点（`node`）和 DAG（`da
 
 自定义字段不得改变该实体标准字段的含义或校验要求。本节的扩展规则适用于 `node`、`dag`、`edge` 实体；Schema 中的键表示业务字段，含义见下一节。
 
-### 3.1 工作流模板的节点字段
+### 3.1 工作流模板与节点类型
 
-工作流模板中的每个普通 `node` 必须显式提供 `node_kind`，当前接受 `agent`、`bash` 或 `form`。`agent` 必须提供字符串 `prompt`，`bash` 必须提供字符串 `command`；两者的 `is_auto_start` 可省略，默认 `false`，显式提供时必须是布尔值。`prompt` 和 `command` 都允许空字符串或纯空白字符串，原始配置不被裁剪。agent 台前模式先渲染 prompt；结果为空或纯空白时发送默认提示词「请先询问我希望处理什么任务。」，否则原样发送渲染结果。未声明输出的空白 command 作为空操作成功结束；声明输出时空命令仍因缺少 JSON 结果而失败。每种节点只校验当前 kind 的业务字段；其他自定义字段原样保留，但不获得业务或编排含义。
+工坊模板的根 `id`、`name` 必须是非空且非纯空白的字符串。每个普通 `node` 必须显式提供 `node_kind`，选择当前 profile 已登记的节点插件。默认 bundle 装配三种内置节点，第三方插件可提供其他 kind；缺失或冲突的类型使模板不可用。
 
-```yaml
-id: example
-name: 示例工作流
-type: dag
-dag:
-  - id: discuss
-    type: node
-    node_kind: agent
-    prompt: 整理方案
-  - id: verify
-    type: node
-    node_kind: bash
-    command: npm test
-    is_auto_start: true
-  - type: edge
-    from: discuss
-    to: verify
-```
+| `node_kind` | 用途 | 节点文档 |
+| --- | --- | --- |
+| `agent` | Agent 处理任务，支持台前与台后模式 | [Agent 节点](./nodes/agent/README.zh.md) |
+| `bash` | 在宿主沙箱执行 Shell 命令 | [Bash 节点](./nodes/bash/README.zh.md) |
+| `form` | 收集用户输入并提交结构化结果 | [Form 节点](./nodes/form/README.zh.md) |
 
-agent/bash 的手动“执行”只启动选中的就绪节点实例；`is_auto_start` 默认 false，设为 true 时在首次就绪后启动。bash 成功后自动完成，失败可用同一按钮重试。form 就绪后直接填写并提交，不需要开始按钮，关闭详情不会提交。成功业务结果若 DAG 提交失败，后续只重试已保存结果；下游就绪后是否自动启动由下游自身配置决定。
-
-Agent 的 `mode` 为 `foreground | background`，省略时默认 `foreground`：
-
-- **台前**：创建独立的普通宿主对话，可以持续交流。主对话生成中或有排队消息时，“完成”不可用，服务端同样拒绝完成请求。有输出声明时，点击“完成”启动继承已结束轮次有效上下文的原生 fork，仅整理、读取与核验已完成任务的结果，不补做任务或修改业务产物。它通过宿主按 `output_schema` 提供的 `structured_output` 工具提交结果；公共输出校验通过后保存并交付 DAG，无须第二次点击。没有输出声明时跳过额外交付子 Agent，以 `{}` 完成。
-- **台后**：子 Agent 直接执行 prompt 中的任务，同样用 `structured_output` 交付声明输出。没有输出声明时仍执行任务，成功结果为 `{}`。结果保存后等待用户点击“完成”，确认不重新执行任务；重启后仍等待确认，不自动推进。按工作区复用隐藏的空闲父 Agent，工作目录、权限与当前宿主默认模型配置来自宿主，不同工作区隔离。
-- **尝试与恢复**：详情列出历次尝试的结果、错误和原生子会话记录入口；记录只读，不支持继续发消息。普通失败不自动重试：台前可在原对话补充材料后再次完成，台后可再次执行任务。中断且无确定结果时显示结果未知，用户决定是否重试。已获准提交且保存成功的结果只重试 DAG 提交。
-
-DAG 的输出字段在每层对象均为必需字段，额外字段仍允许；节点按此语义映射到宿主 JSON Schema，不从普通文本解析或猜测结果。输出声明中的附加信息不会变成额外约束。结构合法不保证任务语义正确，材料缺失或读取失败应交付失败。fork 使用已结束轮次重建的有效上下文，压缩遮蔽的旧材料不会重新纳入；后续消息不混入当次交付，但工作区文件没有快照。固定 rc.1 的 fork 只包含末次完整轮次之前的事件；若该轮次之后又手动压缩，交付会明确失败，需先继续对话并等待新轮次结束，再重试“完成”，避免重新引入已遮蔽材料。长对话仍受模型容量限制，不能保证重读完整未压缩历史。`for` 展开的每个 Agent 实例各有自己的对话或子执行。本期不增加自动结束配置、结束任务工具、取消功能或自定义 trace。
-
-bash 声明非空输出时，成功命令的 stdout 必须整体是一个 JSON 对象，日志应写到 stderr。结果须完整满足输出契约且能可靠保存；空输出、非法或非对象 JSON、缺字段、类型错误和被截断的 stdout 均使节点失败，下游不会推进。省略或空输出声明时 stdout 仅作为日志，完成提交 `{}`。form 的有效正式提交交付真实结果。
-
-运行实例中的命令只读，接口不接受命令覆盖。执行失败后使用原有“执行”按钮重试快照中的原命令；源模板修改后需创建新实例。合法结果先保存再提交 DAG；提交失败时保留结果和错误，再次执行只提交结果，不重复命令。重启恢复保留已接受结果；执行结果未知时不自动重跑。
+公共编排字段由 DAG 解释；业务字段由所选 kind 解释和校验，其他自定义字段原样保留。`prompt`、`command`、`mode`、`schema`、`uiSchema`、`is_auto_start` 的支持范围见对应节点文档；不能将某个节点的能力推定为所有节点共有能力。Agent/Bash 的 `{{ }}` 文本引用见[输入引用](./nodes/input-references.zh.md)，与边上 `if` / `for` 的表达式分别约定。
 
 工坊创建实例没有外部业务输入。根 DAG 与普通节点、嵌套 DAG 一样检查输入来源；非空根输入声明没有提供方，模板不可用，也不会生成占位根输入。需要人工数据时使用入口 form，新填写字段只声明在输出中。公共 DAG 引擎的外部调用方仍可明确提供根输入。
 
-### 3.2 表单节点
-
-form 已支持五种类型、组合嵌套和数组增删。实施规格见[对象与数组字段扩展](./specs/form-structured-fields.zh.md)，验证范围见[验收记录](./acceptance/form-structured-fields.zh.md)。
-
-form 的字段名与类型直接来自 `output_schema`，支持 `string`、`number`、`boolean`，以及带属性声明的 `object` 和带元素声明的 `array`。用户填写的字段不必出现在 `input_schema`；用于同名预填的字段可写入输入契约，且必须存在于输出契约中、递归结构类型一致。可选的 `schema.properties` 为字段补充 `title`、`description`、`default`、标量 `enum`，也可声明与输出契约一致的 `type`；`uiSchema` 可配置 `ui:widget` 和枚举显示名称，唯一枚举数组支持下文的多选控件。标量支持的控件如下：
-
-| 类型 | 默认控件 | 可选 `ui:widget` |
-| --- | --- | --- |
-| `string` | 单行文本；有 `enum` 时单选 | `text`、`textarea`、`select`（须有 `enum`） |
-| `number` | 数字输入；有 `enum` 时单选 | `updown`、`select`（须有 `enum`） |
-| `boolean` | 开关；有 `enum` 时单选 | `checkbox`、`select`（须有 `enum`） |
-
-对象与数组支持下文的结构化填写，不支持文件上传或表外的标量控件。`enum` 中的值及 `default` 必须符合输出字段类型，默认值若有枚举还必须属于枚举。正式提交必须在每一层包含且仅包含全部声明字段，并符合类型与标量枚举约束；空字符串是合法的字符串值。
-
-```yaml
-id: collect
-name: 示例工作流
-type: node
-node_kind: form
-output_schema:
-  note: string
-  priority: number
-  approved: boolean
-schema:
-  properties:
-    note:
-      title: 处理说明
-      description: 请填写审核意见
-    priority:
-      default: 0
-      enum: [0, 1, 2]
-uiSchema:
-  note:
-    ui:widget: textarea
-```
-
-首次打开时，同名上游输入优先，其次使用 `default`；零、`false` 与空字符串均是有效值。缺失值留给用户填写，不自动猜测。类型不匹配的预填值不会转换。当前工作流页面内关闭详情或切换节点可保留未提交草稿；刷新或离开页面会丢弃草稿。提交后结果只读，额外上游字段不会混入输出。
-
-#### 对象与数组字段
-
-对象与数组沿用第 4 节的结构化类型描述。对象按 `properties` 展开，数组按 `items` 展开，支持组合嵌套；数组允许末尾新增、删除任意项及提交空数组。原有标量控件在嵌套字段中继续有效。
-
-以下示例表示数量不固定的任务列表，每项包含名称与优先级。结构只在 `output_schema` 中定义；`schema` 沿 `properties`、`items` 补充注解，`uiSchema` 沿对象字段名、数组 `items` 配置已有控件。
-
-```yaml
-id: collect_items
-type: node
-node_kind: form
-output_schema:
-  tasks:
-    type: array
-    items:
-      type: object
-      properties:
-        name: string
-        priority: string
-schema:
-  properties:
-    tasks:
-      title: 任务列表
-      items:
-        properties:
-          name:
-            title: 名称
-          priority:
-            title: 优先级
-            enum: [高, 中, 低]
-            default: 中
-uiSchema:
-  tasks:
-    items:
-      name:
-        ui:widget: textarea
-```
-
-默认值和预填遵循以下规则：
-
-- 已有草稿保持原样，不重新补预填或默认值。首次初始化逐顶层字段使用同名上游值；已有对象或数组整体采用，不与其自身或子字段的默认值合并。上游对象缺少的字段由用户填写，零、false、空字符串和空数组不会触发默认值。
-- 没有预填时，有显式 `default` 就复制并采用整个值；对象或数组默认值必须完整符合声明和嵌套枚举，不能包含额外字段。不再合并其子字段默认值。
-- 没有整体默认值的对象按子字段初始化；没有整体默认值的数组从空数组开始。点击添加时按 `items` 初始化新项：应用该项或其子字段已有默认值，没有默认值的标量留待填写，不自动补空字符串、零或 false。
-- 编辑和增删不会修改上游数据、模板默认值或其他项。删除后不按默认值重新补项，已删除的内容不会因重开详情而恢复。
-
-`enum` 继续仅用于标量字段或标量元素，对象和数组本身不支持枚举。预填递归只取声明字段；正式提交则在每一层要求全部声明字段存在，拒绝额外字段，并校验类型与标量枚举。空字符串和空数组合法；无默认值且未填写的标量不能因控件显示为空或未选中而被视为已填写。错误须能指出具体字段或数组下标。服务端接受结果后所有嵌套编辑和增删操作只读，结果交付失败仅重试已接受结果。
-
-结构化填写支持数组增删及下文的枚举多选，不增加排序、复制、联动、上传、远程选项或持久化草稿。其逐层字段范围与唯一性限制只属于 form，不改变公共 DAG 对额外字段的规则。
-
-#### 枚举显示名称与多选
-
-枚举值仍在 `schema` 的 `enum` 中声明，`uiSchema` 可通过 RJSF 的 `ui:enumNames` 配置显示名称。支持按位置对应的字符串数组，或按枚举值的字符串形式对应的对象。允许部分覆盖，未配置的名称使用原值；名称数组不能多于枚举项，对象不能包含未知选项键，名称必须是字符串。没有 `enum` 时不能配置名称。
-
-```yaml
-output_schema:
-  priority: string
-  approved: boolean
-schema:
-  properties:
-    priority:
-      enum: [high, medium, low]
-      default: medium
-    approved:
-      enum: [false, true]
-      default: false
-uiSchema:
-  priority:
-    ui:enumNames: [高优先级, 中优先级, 低优先级]
-  approved:
-    ui:enumNames: {'false': 否, 'true': 是}
-```
-
-界面显示“高优先级”或“否”，提交仍是 `"high"` 或 `false`，名称不改变类型、默认值、预填值或枚举约束。对象子字段及普通数组的标量元素同样支持名称配置；当前不支持 `oneOf`、`const` 或在 `schema` 中配置 `enumNames`。
-
-数组可在 `schema` 注解中声明布尔 `uniqueItems`。省略或为 `false` 时保留原有逐项增删；为 `true` 时提交拒绝重复值。若 `items` 同时声明标量 `enum`，自动显示多选框；数组级 `ui:widget` 可显式选择 `select` 或 `checkboxes`。不满足唯一标量枚举条件的数组不能指定这些控件。
-
-```yaml
-output_schema:
-  tags:
-    type: array
-    items: string
-schema:
-  properties:
-    tags:
-      title: 标签
-      uniqueItems: true
-      default: [frontend]
-      items:
-        enum: [frontend, backend, test]
-uiSchema:
-  tags:
-    ui:widget: checkboxes
-    items:
-      ui:enumNames: [前端, 后端, 测试]
-```
-
-此例显示复选框组，提交例如 `{"tags": ["frontend", "test"]}`。省略 `ui:widget` 使用原生多选 select。数字与布尔枚举数组也支持多选，保持 `0`、`false` 等真实类型。名称优先按 `items` 定位；未提供 `items` 时，多选数组也可直接在数组级配置 `ui:enumNames`。普通枚举数组的名称配置在 `items` 下。
-
-多选没有逐项添加／删除按钮；取消全部选项提交空数组，不重新应用默认值。复选框新选项追加到当前值末尾，取消保持剩余顺序；原生多选 select 编辑后按选项声明顺序输出。未编辑的上游值保持原顺序。
-
-唯一性也可用于非枚举数组，包括对象和嵌套数组：对象按内容比较、不受键顺序影响，数组按顺序比较。默认值同样校验，重复默认值使模板不可用；重复上游预填不静默去重，提交时指出重复项下标，用户修改后再提交。前后端均校验唯一性，提交后只读及恢复规则保持不变。规格与实际验证范围见[枚举名称与多选规格](./specs/form-enum-controls.zh.md)。
-
-### 3.3 prompt / command 输入引用
-
-仅支持 `{{ name }}` 和 `{{ object.field }}`；字段与对象路径都必须在当前节点 `input_schema` 中声明。变量名和路径段使用字母或下划线开头的标识符。未知路径、过滤器、条件、循环、数组索引和 `$.` 引用在模板判定阶段拒绝。不自动追加整份输入。
-
-字符串使用原值，数字、布尔值、对象、数组使用 JSON 文本。零、`false`、空字符串保留原值；来源关闭或跳过导致的正常缺失（包括不可到达的对象路径）替换为空文本。输入声明仍须具有潜在来源，不能以运行时的空文本规则绕过静态来源校验。
-
-bash 的占位符必须是独立、未额外加引号的数据参数；不能用作命令名、拼进参数或放进引号、注释、命令替换和 heredoc。节点使用 Shell 单引号转义，含空格、引号、换行和特殊字符的值始终保持为一个参数；缺失值形成一个空参数。
-
-```yaml
-id: input-example
-name: 示例工作流
-type: dag
-dag:
-  - id: request
-    type: node
-    node_kind: form
-    output_schema: { text: string }
-  - id: discuss
-    type: node
-    node_kind: agent
-    input_schema: { text: string }
-    prompt: "处理需求：{{ text }}"
-  - id: verify
-    type: node
-    node_kind: bash
-    input_schema: { text: string }
-    command: "printf '%s' {{ text }}"
-  - type: edge
-    from: request
-    to: discuss
-  - type: edge
-    from: request
-    to: verify
-  - type: edge
-    from: discuss
-    to: verify
-```
-
-verify 同时等待会话完成并从 request 接收真实 text；会话空输出不会透传业务字段。mattpocock 与 OpenSpec 中文内置模板通过需求表单取得真实输入。Wayfinder 的 Agent 节点直接声明业务输出，由完成操作核验并交付；OpenSpec 保留名称确认表单，之后各阶段采用无输出的台前会话。对象或数组可由 form 的结构化契约直接收集；需要粘贴 JSON 文本时，也可由 `printf '%s' {{ result_json }}` 的 bash 节点交付并校验 JSON 对象。mattpocock 模板保留条件分支与递归流程，并直接交付结构化 Agent 结果；[OpenSpec 模板](./openspec-workflow.zh.md)在需求和名称表单后依次执行 propose、apply、archive，并将原始需求和名称直接传给各会话节点。
-
-### Bash 引用模板附属文件
-
-模板目录中的脚本、文档和配置可随包提供，只需 exports 暴露 workflow.yaml，无须新增 YAML/config 资源字段或文件清单。Bash 可写：
-
-~~~yaml
-command: bash "$DSH_TEMPLATE_DIR/scripts/init.sh"
-~~~
-
-DSH_TEMPLATE_DIR 是系统通过宿主 Shell 的 dshEnv 注入的执行环境信息，来源为模块解析器返回的 workflow.yaml 文件 URL 的父目录，不是业务输入，无须 input_schema 声明，也不用 {{ DSH_TEMPLATE_DIR }}。普通业务引用仍须独立、未额外加引号；路径变量按 Shell 规则用双引号引用，例如 bash "$DSH_TEMPLATE_DIR/scripts/init.sh" {{ repository }}。
-
-cwd 和沙箱 workspaceRoot 仍是实例所属工作区；模板文件用于读取或执行，产物写工作区。沿用现有沙箱和系统权限，不提升权限，也不新增模板目录强制只读隔离。agent 不注入此变量。
-
-实例持久化创建时 YAML 定义和解析后的来源目录；嵌套、递归及逐项 Bash 共享此目录。重启或仅撤销模板登记仍使用保存的来源；缺少来源的历史实例不补回变量，不从宿主环境继承同名值。YAML 修改不热更新实例命令，脚本和文档则读取执行时的当前内容，不缓存副本；文件变化不会重跑成功节点。文件删除、包移动或读取失败沿用 Bash 错误和人工重试，不重新绑定其他模板。
-
-完整包与加载示例见[模板作者指南](./template-plugin-authoring.zh.md)。
-
-### 3.4 实例运行图排布 `layout`
+### 3.2 实例运行图排布 `layout`
 
 任意 DAG 定义可选配 `layout`，只影响该层实例画布的位置和连线方向。根 DAG、嵌套 DAG 及递归产生的每次 DAG 实例各用所引用定义的本层配置；父层不会覆盖子层。省略时沿用从左到右的横向画布。有效配置静默生效；只有配置无效、相关 DAG 层回退横向时显示 WARN，详情说明原因及修正建议。`layout` 不影响依赖、`if`、`for`、实例身份、输出、持久化和恢复。
 
@@ -771,6 +579,8 @@ node 和 dag 都是顶点，DAG 输出合并采用同样的尽早冲突检测规
 
 ## 11. 完整示例
 
+以下 JSON 示例用于单独说明引擎编排规则，其中包含合法与明确标注的非法示例。它们不是可直接加载的工坊模板：用于工坊时须补充根 `name`、各普通节点的 `node_kind` 及相应业务配置，并满足工坊无外部根输入的限制。可直接加载的 YAML 示例见[最小模板](#11-最小可运行模板)及各节点文档；直接调用引擎见[开发说明](./development/dag-engine-api.zh.md)。
+
 ### 11.1 普通连接
 
 ```json
@@ -984,78 +794,6 @@ check_order 是 outer 的结构入口和出口；check 是 check_order 的结构
 
 ### 12.2 实现设计范围
 
-本项目的初始化、查询和提交用法见第 13 节；完整类型和异常定义从 `packages/dsh-workflow-studio/src/host/dag/index.ts` 导出。实例 ID 的内部生成、状态存储、模块划分、解析和推进算法属于实现设计，不改变本规范的执行行为。
+本项目的初始化、查询和提交用法见[内部引擎 API](./development/dag-engine-api.zh.md)；完整类型和异常定义从 `packages/dsh-workflow-studio/src/host/dag/index.ts` 导出。实例 ID 的内部生成、状态存储、模块划分、解析和推进算法属于实现设计，不改变本规范的执行行为。
 
 实现必须遵守本文规定的可观察行为，包括静态拒绝条件、声明结构与额外引用的隔离边界、输入存在时检查类型、输出严格校验、提交回滚、实例数量及聚合顺序，不能将它们作为实现方自行选择的策略。
-
-
-## 13. 在项目中调用引擎
-
-引擎作为 Host 内部模块维护，源码入口为 `packages/dsh-workflow-studio/src/host/dag/index.ts`。定义、编译器、执行状态和数据校验均在项目内部，不依赖参考目录或其他引擎包。模块职责如下：
-
-| 文件 | 职责 |
-| --- | --- |
-| `index.ts` | 统一导出 `compile`、公开类型和异常 |
-| `compiler.ts` | 定义校验、Schema 与表达式检查、依赖计划 |
-| `runtime.ts` | 按需实例化、内部推进、快照与原子提交 |
-| `data.ts` | 数据容器检查、Schema 校验、声明结构复制 |
-| `expression.ts` | 有限表达式解析和求值 |
-| `errors.ts`、`types.ts` | 结构化异常与类型契约 |
-
-Host 源码从该模块入口导入。执行根目录的 `npm run build` 后，也可直接调用独立 ESM 产物 `packages/dsh-workflow-studio/lib/host/dag/index.js`；类型声明位于 `lib/types/host/dag/index.d.ts`（相对于插件目录）。运行环境与项目一致：Node.js `^22.19.0 || >=24.0.0`，无第三方运行时依赖。
-
-以下命令从项目根目录执行，展示普通节点由调用方完成并提交结果的完整过程：
-
-```bash
-node --input-type=module <<'JS'
-import { compile } from './packages/dsh-workflow-studio/lib/host/dag/index.js'
-
-const program = compile({
-  id: 'main',
-  type: 'dag',
-  input_schema: { value: 'number' },
-  output_schema: { result: 'number' },
-  dag: [{
-    id: 'double',
-    type: 'node',
-    input_schema: { value: 'number' },
-    output_schema: { result: 'number' },
-  }],
-})
-const execution = program.createExecution({ value: 3 })
-const [task] = execution.getFrontier()
-execution.submit(task.instanceId, { result: task.input.value * 2 })
-console.log(execution.getResult()) // { status: 'completed', output: { result: 6 } }
-JS
-```
-
-### 13.1 调用与状态
-
-| 调用 | 返回与含义 |
-| --- | --- |
-| `compile(definition, rootProvider?)` | 校验已解析的定义对象，返回可复用的 `Program`；可选的根提供方声明使用相同来源覆盖检查，工坊传入 `{}` 表示没有外部业务输入 |
-| `program.getDefinition()` | 返回完整定义副本，修改它不会改变已有程序 |
-| `program.createExecution(rootInput)` | 校验根输入并推进初始状态，返回独立 `Execution` |
-| `execution.getFrontier()` | 返回已创建、尚未成功提交结果的普通节点实例及其定义、输入和身份 |
-| `execution.submit(instanceId, output)` | 同步校验并推进；成功返回 `void`，失败抛错并回滚本次变更 |
-| `execution.getSnapshot()` | 返回已展开实例、等待/跳过位置和边状态 |
-| `execution.getResult()` | 返回 `{ status: 'running' }` 或 `{ status: 'completed', output }` |
-
-查询不推进执行，也不领取任务。普通节点快照的状态仅为 `ready` 或 `completed`；DAG 实例为 `running` 或 `completed`。边为 `pending`、`active` 或 `inactive`。引擎不记录外部任务的运行、失败、取消或重试状态，快照不是持久化恢复格式。
-
-`instanceId` 只在当前 Execution 内有效，提交时应使用前沿返回的值。`parentInstanceId` 指向直接容纳实例的 DAG，不是前驱节点；根实例的父身份为 `null`。逐项实例另带 `forItem: { key, index }`，其中 `index` 为原数组的零起始下标。快照中的 `definitionPath` 指向定义树，根路径为 `[]`；等待或跳过位置尚无实例。
-
-### 13.2 异常处理
-
-- `CompileError.issues` 给出错误码、定义路径和说明。
-- `InitializationError` 表示创建执行失败；此时没有可用的执行对象。
-- `SubmissionError` 表示本次提交失败，`submittedInstanceId` 标识提交者；错误实际位置可能在下游。
-- 后两者继承 `ExecutionError`，提供 `code`、`operation`、`phase`、`location`，以及适用时的 `dataPath`、`sources` 和 `cause`。调用方按这些字段处理，不解析错误文案。
-
-重复提交已完成节点会报 `ALREADY_COMPLETED`；提交 DAG 实例会报 `NOT_SUBMITTABLE`；未知实例会报 `UNKNOWN_INSTANCE`。错误不会自动跳过节点、设置整个执行失败或重试任务。
-
-### 13.3 验证
-
-在项目根目录运行 `npm run check`，完成类型检查、构建及全部测试。引擎行为测试直接导入本项目构建产物，覆盖静态拒绝、条件、逐项节点和 DAG、按序聚合、嵌套与自递归、事务回滚、结构隔离和数据容器限制；另有启用 `exactOptionalPropertyTypes` 的类型契约检查。
-
-实例管理 Tab 已接入模板读取、HTTP 接口、宿主领域存储和真实业务执行。创建时保存模板快照、空根输入与可恢复的实例运行图；详情画布展示运行图投影。agent 通过原生结构化输出交付声明结果，无输出时提交空对象；台后等待人工确认。bash 的合法 stdout JSON 对象和 form 的有效正式提交把真实结果交给 DAG。

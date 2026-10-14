@@ -5,62 +5,47 @@ description: 为 dsh-workflow-studio 定义或修改工作流模板，编写 DAG
 
 # 编写并加载 dsh 工作流模板
 
-将用户的流程做成可加载的模板 bundle。适配本项目固定的 `@deepseek-ai/dsh@0.2.0-rc.1`；不安装或内置 dsh CLI，不增加 npm 发布流程。
+将用户的流程做成可加载的模板 bundle。适配项目固定的 `@deepseek-ai/dsh@0.2.0-rc.1`；不安装或内置宿主，不增加发布流程。
 
-单模板包通常只需三个根目录文件：`package.json` 声明 bundle、资源导出及所用节点包的 peer 版本，`cordis.patch.yml` 声明模板加载器，`workflow.yaml` 描述流程。一个包实际提供多份模板时再使用 `templates/<name>/workflow.yaml`。默认 bundle 提供 Studio、模板加载器及三个内置节点，不为普通模板新写 TypeScript 注册服务。
+## 确定任务与交付范围
 
-## 先确定流程与交付范围
+提取目标、输入来源、步骤、人工决策、输出和目标目录。缺少会改变流程的信息时集中询问。只要求讲解时提供解释和命令；要求创建或修改时交付文件；要求加载时才操作相应宿主配置，沿用已授权范围。
 
-从当前请求提取目标、输入来源、步骤、人工决策、输出和目标目录。缺少会改变流程的信息时，集中询问；已有明确要求不重复确认。只要求讲解时提供实例和命令；要求创建或修改时交付真实文件；要求加载时才操作相应宿主配置，沿用已授权范围。
+先概括流程路径，逐个明确字段的产生方、消费方与节点完成条件，再编写定义。提示词要写清任务范围、输入材料、产物和人工交接方式，不假定其他节点的对话自动成为本节点上下文。
 
-先用一句具体路径说明设计，例如：用户填写需求 → Agent 处理 → 用户确认结果 → 命令检查。逐个明确字段由哪个节点产生、由哪个节点消费，以及每一步如何完成，随后再写 YAML。
+## 定位并读取权威文档
 
-## 读取当前契约
+完整语法、节点行为与装配规则集中维护在项目 `docs/`。本技能只组织工作步骤，不能仅凭本文或 starter 推定能力。
 
-在仓库内使用时，定位仓库根目录并遵守其 `AGENTS.md`。本技能保存在 `<repo>/skills/dsh-template-authoring`，不绑定个人绝对路径。下载时保留整个目录（含 references、assets 和 agents），可将 `SKILL.md` 作为 Agent 的入口；单独复制此文件会丢失示例及加载指南。
+1. **有对应本地仓库**：优先读取本地 `AGENTS.md` 和下表中对应的 docs 文件，与当前代码保持一致。本技能在仓库内的路径为 `skills/dsh-template-authoring`；独立安装后的技能目录不等于项目根目录。
+2. **没有本地仓库**：通过可用的网页读取、HTTP 或 GitHub 工具读取下表链接的正文，不能只记录链接或依据搜索摘要编写。链接中的 `HEAD` 跟随线上默认分支；若网页只返回页面框架，可用 `https://raw.githubusercontent.com/zweix123/dsh-workflow-studio/HEAD/<仓库相对路径>` 读取 Markdown，并按相同目录解析文档中的相对链接。
+3. **指定版本或 ref**：读取相应版本的文档；一次任务保持所用文档版本一致。无指定时使用本地版本，或线上默认分支。
+4. **读取失败**：说明哪些依据缺失，继续已有依据支持的工作；受影响的字段和能力暂不确认，不凭记忆补写。需要本地代码才能验证的部分标为未验证。
 
-仓库可用时，创建或修改前先读：
+| 何时读取 | 仓库相对路径 / 线上入口 |
+| --- | --- |
+| 开始编写；目录调整时定位新入口 | [docs/README.zh.md](https://github.com/zweix123/dsh-workflow-studio/blob/HEAD/docs/README.zh.md) |
+| 所有模板：定义、Schema、数据来源、依赖与控制流 | [docs/dag-syntax.zh.md](https://github.com/zweix123/dsh-workflow-studio/blob/HEAD/docs/dag-syntax.zh.md) |
+| 构造模板包、加载、重载和验证 | [docs/template-plugin-authoring.zh.md](https://github.com/zweix123/dsh-workflow-studio/blob/HEAD/docs/template-plugin-authoring.zh.md) |
+| 使用 Agent | [docs/nodes/agent/README.zh.md](https://github.com/zweix123/dsh-workflow-studio/blob/HEAD/docs/nodes/agent/README.zh.md) |
+| 使用 Bash | [docs/nodes/bash/README.zh.md](https://github.com/zweix123/dsh-workflow-studio/blob/HEAD/docs/nodes/bash/README.zh.md) |
+| 使用 Form | [docs/nodes/form/README.zh.md](https://github.com/zweix123/dsh-workflow-studio/blob/HEAD/docs/nodes/form/README.zh.md) |
+| 在 prompt / command 中引用输入 | [docs/nodes/input-references.zh.md](https://github.com/zweix123/dsh-workflow-studio/blob/HEAD/docs/nodes/input-references.zh.md) |
+| 使用项目编译器直接校验定义 | [docs/development/dag-engine-api.zh.md](https://github.com/zweix123/dsh-workflow-studio/blob/HEAD/docs/development/dag-engine-api.zh.md) |
+| 涉及自定义节点时核对公共接入契约 | [docs/node-plugin-authoring.zh.md](https://github.com/zweix123/dsh-workflow-studio/blob/HEAD/docs/node-plugin-authoring.zh.md) |
 
-- `docs/template-plugin-authoring.zh.md`：包、补丁、模板身份与加载契约。
-- `docs/dag-syntax.zh.md` 第 3～6 节：节点配置、Schema、表达式、输入来源和边界。
-- 用户指定的现有模板；没有指定时使用本技能的 [assets/starter](assets/starter) 作为小型可复制起点。
+按任务读取所需节点及相关主题，无须为普通模板读取所有开发文档。自定义节点还需取得该插件自己的配置说明和实际契约，不能仅在 YAML 新写 kind 就宣称支持。文档与代码矛盾时核对实现并说明，不把旧规格的历史基线当成当前规则。
 
-独立下载而没有仓库时，先读随附的 authoring 和 loading 两份参考，基础模板可从 starter 改写。需要它们未覆盖的语法、其他版本或自定义节点时，取得对应项目文档/代码再继续，不猜测能力；缺少项目编译器时标记这层验证未执行。
+## 编写与构造
 
-有条件、逐项执行、递归或复杂布局时，再读 DAG 文档对应章节。涉及自定义节点时检查 `docs/node-plugin-authoring.zh.md` 及其真实契约；不能仅在 YAML 写一个新 `node_kind` 就宣称支持。文档与代码矛盾时核对实现并说明，不将旧规格中的“历史基线”当成当前规则。
+优先修改用户指定的模板。新建时可复制 [assets/starter](assets/starter/)到交付目录，统一修改包名、loader ID、模板 ID、展示名称和资源地址。下载本技能时保留 assets 与 agents；资产是生成起点，完整规则仍按上表读取。
 
-## 编写内容
-
-遵守以下易错约束；完整示例和编写方法见 [references/authoring.md](references/authoring.md)。
-
-- 模板根为 `type: dag`，根 `id`、`name` 均非空。ID 在同一 profile 内唯一，目录只定位资源。整份定义中显式 ID 全局唯一，边引用本层顶点。
-- 工坊创建实例没有外部根业务输入，根 `input_schema` 省略或为 `{}`；人工输入用入口 `form` 收集。
-- 默认节点为 `form`、`agent`、`bash`。Schema 是字段到类型的映射，不是完整 JSON Schema；对象/数组使用带 `properties`/`items` 的结构化描述。
-- `form` 支持 string、number、boolean、结构化 object/array、组合嵌套和数组增删；字段结构以 `output_schema` 为准，`schema` 与 `uiSchema` 递归补充注解和已有控件。输入契约只写有上游来源、用于同名预填且与对应输出递归结构类型一致的字段。对象数组示例、默认值及提交约束见 [references/authoring.md](references/authoring.md#结构化表单)。
-- `agent` 提供 `prompt`，mode 默认 foreground，可设为 background。有输出声明时通过宿主原生 structured_output 交付，并再次按 DAG 校验；台前点击“完成”发起只读交付，台后先执行并保存结果，等待人工完成。无输出时台前跳过交付子 Agent，台后仍执行任务；两者结果为 `{}`，不自动透传输入。失败和中断由用户重试，历次记录保留。
-- `bash` 提供 `command`。有输出声明时 stdout 必须整体为满足契约的 JSON 对象，日志写 stderr；无输出声明时 stdout 只是日志，提交 `{}`。
-- 每个输入字段都必须有潜在上游输出声明，不能假定数据沿链路自动透传。多个前驱的同名输出会冲突，即使条件互斥；边没有自定义字段映射语法。
-- `prompt`/`command` 引用用 `{{ field }}` 或 `{{ object.field }}`，必须在本节点输入中声明。bash 占位符须独立、未额外加引号，不能拼进参数或命令名。
-- `if`、`for` 写在边上，使用 `$.field`。不支持 JavaScript 表达式、布尔组合、嵌套字段或索引。复杂需求先读取准确语义，不能自创字段。
-- `is_auto_start` 只用于 agent/bash，默认 false；按用户要求决定自动启动，不能把它当成自动完成或自动授权后续动作。
-- 提示词写清任务、输入、范围、产物和人工交接方式。声明 output_schema 才会为子 Agent 提供 structured_output；普通文本或提示词中的“输出 JSON”不能代替工具交付。其他对话的上下文也不会自动成为本节点输入。
-
-内置模板的当前范围见 `docs/specs/template-management.zh.md`。每份模板作为 `packages/dsh-workflow-template-*/` 下的独立纯配置插件包维护，由默认 bundle 装配；模板资源不放在 Studio 包内。模板范围与语言版本按需求确定，不在本技能中固定。
-
-## 构造模板插件
-
-复制 starter 到用户目标目录，再统一修改包名、loader ID、模板 ID、展示名称及目录地址。starter 是独立的中文单模板示例，不属于项目内置模板；第三方模板只在用户明确需要双语时增加对应版本。
-
-`package.json` 的 `dsh.bundle.patch` 指向补丁文件，`exports` 暴露对应 `workflow.yaml`。单模板包使用 `"./workflow.yaml": "./workflow.yaml"`，加载器只配置 `directory: '<包名>'`；多模板包可使用 `directory: '<包名>/templates/<目录>'`。两者都是包资源地址，不是文件系统相对路径。不重复写 `config.id`、`config.name` 或节点清单。
-
-一个包可以贡献多份模板，每份有独立 loader ID、directory 和模板根 ID。消费默认节点时只贡献模板，不重复装配默认节点。模板加载时读取 YAML 并保存解析后的父目录；包内脚本和文档可用 Bash 的 DSH_TEMPLATE_DIR 引用，例如 `bash "$DSH_TEMPLATE_DIR/scripts/init.sh"`。无需 input_schema 或资源字段，附属文件无需逐个 exports；普通相对路径和产物仍基于工作区。YAML 为实例快照，附属文件读取执行时当前内容；成功节点不因更新重跑，缺失或移动沿用 Bash 错误与人工重试，历史实例不自动补来源。agent 不注入路径，沿用沙箱且不提升权限。
+依据文档检查输入是否有声明来源、边是否表达预期依赖、输出能否交付下游，以及节点所选模式的完成条件。自动启动和人工确认按用户需求选择。普通模板使用纯配置 bundle；不要为它新增 TypeScript 注册服务或通用框架。只在用户需要时增加语言版本或新的节点插件。
 
 ## 校验、加载与交付
 
-按 [references/loading.md](references/loading.md) 核对 profile、加载前提、命令及重载语义。
+按模板作者指南校验包资源、YAML、DAG 和节点业务配置；分别说明解析成功、编译通过与节点校验通过，不能相互替代。
 
-校验 YAML/JSON、exports 与资源地址、ID、DAG 编译及具体节点配置。使用项目已有编译器时传入空根提供方 `compile(definition, {})`，随后用真实节点定义检查业务配置；仅解析 YAML 不足以证明模板可用。不为一份普通模板新建通用验证框架。
+用户要求加载或跑通时，按指南核对目标 profile、宿主前提、模板名称与来源、创建实例、数据传递和最终输出。区分模拟结果、真实宿主操作与真实模型执行。涉及 UI 改动时遵守仓库浏览器验收约定，纯模板编写无需修改 UI。
 
-若用户要求实际加载或跑通，在目标范围内验证模板名称与来源、创建实例、输入到达下游及完成结果。测试 agent 时区分人为确认完成与真实模型执行成功。涉及本项目 UI 改动时遵守项目浏览器验收技能；单纯写模板不必修改 UI。
-
-交付文件入口、流程阅读顺序、具体加载命令、验证结果及未验证项。只做静态验证就明确写静态通过。需要保留真实宿主结果时按项目约定写验收记录；不为技能或普通小模板强制创建规格、验收报告或提交 Git。
+交付文件入口、流程说明、具体加载命令、验证结果和未验证项。需要长期保留真实宿主结果时按仓库约定写验收记录；普通模板任务不强制增加规格或报告，也不自动提交 Git。
