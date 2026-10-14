@@ -412,7 +412,6 @@ ${reactFlowCss}
 .dsh-workflow-layout-notices { display: grid; gap: 8px; min-width: 0; margin: 10px 20px; }
 .dsh-workflow-create .dsh-workflow-layout-notices { margin: 12px 0 0; }
 .dsh-workflow-layout-notice { --layout-tone: var(--dsw-alias-state-warning-primary, #a8690d); border-left: 3px solid var(--layout-tone); border-radius: 3px 7px 7px 3px; background: color-mix(in srgb, var(--layout-tone) 9%, var(--dsw-alias-bg-layer-1)); color: var(--dsw-alias-label-primary); padding: 9px 11px; font-size: 12px; line-height: 1.5; }
-.dsh-workflow-layout-notice[data-level='info'] { --layout-tone: var(--dsw-alias-state-business-primary); }
 .dsh-workflow-layout-line { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 .dsh-workflow-layout-line strong { flex: none; color: var(--layout-tone); font-size: 10px; letter-spacing: .04em; }
 .dsh-workflow-layout-line span { flex: 1; min-width: 0; }

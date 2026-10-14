@@ -14,7 +14,7 @@ const report: LayoutReport = { layers: [
   ] },
 ], issues: [{ level: 'WARN', path: ['root', 'inner'], startAt: 'b', code: 'unsafeStart', suggestion: 'publish' }] }
 
-for (const dictionary of [zh, en]) test(`layout notices expand independently and show localized copy (${dictionary === zh ? 'zh' : 'en'})`, async () => {
+for (const dictionary of [zh, en]) test(`layout warnings expand and show localized copy; valid layouts stay silent (${dictionary === zh ? 'zh' : 'en'})`, async () => {
   const dom = new JSDOM('<!doctype html><div id="root"></div>')
   const oldWindow = Object.getOwnPropertyDescriptor(globalThis, 'window')
   const oldDocument = Object.getOwnPropertyDescriptor(globalThis, 'document')
@@ -28,18 +28,23 @@ for (const dictionary of [zh, en]) test(`layout notices expand independently and
   try {
     await act(async () => root.render(<LayoutNotices report={report} t={t} surface="create" />))
     const buttons = [...container.querySelectorAll<HTMLButtonElement>('button')]
-    assert.equal(buttons.length, 2)
-    assert.deepEqual(buttons.map(item => item.getAttribute('aria-expanded')), ['false', 'false'])
+    assert.equal(buttons.length, 1)
+    assert.equal(container.querySelector('[data-level="info"]'), null)
+    assert.equal(buttons[0]!.getAttribute('aria-expanded'), 'false')
     assert.match(container.textContent!, new RegExp(dictionary.layoutCanCreate))
-    buttons[1]!.focus()
-    assert.equal(dom.window.document.activeElement, buttons[1])
-    await act(async () => buttons[1]!.click())
-    assert.deepEqual(buttons.map(item => item.getAttribute('aria-expanded')), ['false', 'true'])
+    buttons[0]!.focus()
+    assert.equal(dom.window.document.activeElement, buttons[0])
+    await act(async () => buttons[0]!.click())
+    assert.equal(buttons[0]!.getAttribute('aria-expanded'), 'true')
     assert.match(container.textContent!, /start_at: b/)
     assert.match(container.textContent!, new RegExp(dictionary.layoutUnsafeStart))
     await act(async () => buttons[0]!.click())
-    assert.deepEqual(buttons.map(item => item.getAttribute('aria-expanded')), ['true', 'true'])
-    assert.match(container.textContent!, /start_at: publish/)
+    assert.equal(buttons[0]!.getAttribute('aria-expanded'), 'false')
+    assert.doesNotMatch(container.textContent!, /start_at: b/)
+    for (const surface of ['template', 'create', 'instance'] as const) {
+      await act(async () => root.render(<LayoutNotices report={{ layers: [report.layers[0]!], issues: [] }} t={t} surface={surface} />))
+      assert.equal(container.innerHTML, '')
+    }
     await act(async () => root.render(<LayoutNotices report={{ layers: [], issues: [] }} t={t} surface="instance" />))
     assert.equal(container.textContent, '')
   } finally {
