@@ -1,5 +1,7 @@
 # 模板与实例共享定义详情验收记录
 
+> 2026-10-14 结构调整：本文涉及的 `examples/review-templates`、`examples/all-nodes`、`examples/echo-node` 和旧全节点浏览器用例属于当时版本，现已撤除。当前开发体验与覆盖迁移见[开发模板验收](./development-templates.zh.md)；下文历史结论及旧复现命令不作为当前入口。
+
 当前结论见末尾“2026-10-14：详情视觉分区调整复验”。此前记录适用于各自当时的展示版本；旧的运行区在前、运行子块和配置标题规则已由本轮取代。
 
 日期：2026-10-03。依据：[共享定义详情规格](../specs/shared-definition-details.zh.md)。

@@ -31,7 +31,16 @@ dsh web
 如果此 profile 之前直接安装的是 `packages/dsh-workflow-studio`，先停止对应宿主，执行 `dsh plugin --profile web remove dsh-workflow-studio` 移除旧插件入口，再按上面的命令添加默认 bundle 并重启。两条命令使用相同 profile。仅安装 Studio 单包会缺少节点登记依赖，Web 页面可能提示 `waiting for service: workflowNodeViews`。这些操作只调整插件装配，不迁移或删除实例文件。
 
 
-本插件不内置 DSH。默认 bundle 装配公共节点登记、Studio、三个节点插件、通用模板加载器和两个中文内置模板：mattpocock（`matt-pocock-wayfinder-workflow.zh`）及 [OpenSpec 需求交付](docs/openspec-workflow.zh.md)（`openspec-delivery.zh`）；第三方节点见[作者指南](docs/node-plugin-authoring.zh.md)及[最小示例](examples/echo-node/README.zh.md)。模板接入见[作者指南](docs/template-plugin-authoring.zh.md)和[纯配置示例](examples/review-templates/README.zh.md)。
+本插件不内置 DSH。默认 bundle 装配公共节点登记、Studio、三个节点插件、通用模板加载器和两个中文内置模板：mattpocock（`matt-pocock-wayfinder-workflow.zh`）及 [OpenSpec 需求交付](docs/openspec-workflow.zh.md)（`openspec-delivery.zh`）；第三方节点见[作者指南](docs/node-plugin-authoring.zh.md)及正式节点实现。模板接入见[作者指南](docs/template-plugin-authoring.zh.md)和[正式模板包](packages/dsh-workflow-template-openspec-delivery/package.json)。
+
+## 本地开发
+
+`npm run dev` 构建后向隔离的 `.local/dsh-dev/` 添加默认 bundle 和[节点功能模板](packages/dsh-workflow-dev-templates/README.zh.md)，再启动已有 dsh，默认端口 3081。可通过 `npm run dev -- --port 3082 --no-open` 覆盖启动参数；`npm run install:dev` 只装配。普通用户继续使用上面的默认 bundle，不会装配开发模板。
+
+节点和模板作者直接参考[正式实现导航](docs/node-plugin-authoring.zh.md#正式实现导航)及[模板作者指南](docs/template-plugin-authoring.zh.md)，不另维护教学示例包。测试故障及第三方接入由独立夹具覆盖。
+
+若旧 profile 曾手动添加已撤除的示例，删除源码不会撤销宿主登记。出现 `cannot resolve profile bundle "@example/workflow-all-nodes"` 时，对原 profile 执行 `dsh plugin --profile web remove @example/workflow-all-nodes`，然后重启宿主；自定义 DSH_HOME 须保持与原安装一致。其他旧示例仅在实际安装过时移除：Echo 包名为 `@example/workflow-echo`，Review 包名为 `@acme/workflows`。无需重新安装这些示例依赖。
+
 
 ## 创建工作流
 

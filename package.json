@@ -15,7 +15,9 @@
     "test": "npm run test --workspace=dsh-workflow-studio",
     "test:e2e": "node scripts/test-e2e.mjs",
     "check": "npm run typecheck && npm run build && npm test",
-    "install:local": "npm run build && dsh plugin --profile web add ./packages/dsh-workflow-bundle"
+    "install:local": "npm run build && dsh plugin --profile web add ./packages/dsh-workflow-bundle --registry=https://registry.npmjs.org",
+    "install:dev": "npm run build && node scripts/dev.mjs --install-only",
+    "dev": "npm run build && node scripts/dev.mjs"
   },
   "devDependencies": {
     "@deepseek-ai/dsh-client-ui-primitives": "0.2.0-rc.1",

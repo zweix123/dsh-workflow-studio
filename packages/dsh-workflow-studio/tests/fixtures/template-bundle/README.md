@@ -1,8 +1,8 @@
 # Template browser acceptance fixture
 
-Add this pure configuration bundle to an isolated web profile after the default bundle and `examples/review-templates`. It deliberately contributes:
+Add this pure configuration bundle to an isolated web profile after the default bundle. It prepares both conflicting declarations itself and deliberately contributes:
 
-- a duplicate `acme-review` (both declarations must become unavailable),
+- an original and duplicate `acme-review` (both declarations must become unavailable),
 - a missing root name and broken YAML (source diagnostics),
 - a missing node kind (kept visible),
 - a nonblocking layout warning (still usable).

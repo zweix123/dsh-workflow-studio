@@ -1,6 +1,15 @@
 # 节点插件作者指南
 
-适用于 dsh `0.2.0-rc.1` 和本仓库的公共节点接口。节点插件使用普通 dsh/Cordis 插件装配，不需要修改 Studio 的节点清单。最小可运行示例见 [`examples/echo-node`](../examples/echo-node/README.zh.md)。模板使用独立通用加载插件，资源声明见[模板作者指南](./template-plugin-authoring.zh.md)。
+适用于 dsh `0.2.0-rc.1` 和本仓库的公共节点接口。节点插件使用普通 dsh/Cordis 插件装配，不需要修改 Studio 的节点清单。本仓库的内置节点使用同一公开契约，可直接作为接入实现参考。模板使用独立通用加载插件，资源声明见[模板作者指南](./template-plugin-authoring.zh.md)。
+
+## 正式实现导航
+
+- [公共契约](../packages/dsh-workflow-node/src/index.ts)：节点上下文、事实、计划与展示类型。
+- [Form 服务端](../packages/dsh-workflow-node-form/src/server.ts)：字段校验、同步提交、结果重交付和普通插件登记。
+- [Bash 服务端](../packages/dsh-workflow-node-bash/src/server.ts)：宿主服务依赖、异步业务、日志/输出及恢复。
+- [Agent 服务端](../packages/dsh-workflow-node-agent/src/server.ts)：台前/台后任务、尝试记录和人工确认。
+- [Form 浏览器入口](../packages/dsh-workflow-node-form/src/client.tsx)及[包声明](../packages/dsh-workflow-node-form/package.json)：可选浏览器贡献、交互和语言登记。
+- [默认装配](../packages/dsh-workflow-bundle/cordis.patch.yml)及[开发体验模板](../packages/dsh-workflow-dev-templates/README.zh.md)：实际插件装配与节点功能体验。
 
 ## 服务端登记
 
@@ -62,4 +71,4 @@ ctx.workflowNodes.register(ctx, name, node, { dispose: releaseNodeResources })
 
 ## 模板联合装配
 
-默认节点装配见 `packages/dsh-workflow-bundle/cordis.patch.yml`，公共登记、Studio 与三个内置节点都是普通宿主插件。模板加载插件可用 `nodeService(kind)` 等待完整模板依赖，或查询/订阅登记变化；不能只依赖 workflowNodes 就宣称具体类型可用。默认六份模板通过通用模板加载插件登记，节点示例 bundle 也声明模板资源。模板只在声明加载或重载时读取 YAML；节点依赖消失或恢复只重新判定已加载定义，不读取新文件。第三方节点与模板的联合验收见[联合验收记录](./acceptance/node-template-joint.zh.md)。
+默认节点装配见 `packages/dsh-workflow-bundle/cordis.patch.yml`，公共登记、Studio 与三个内置节点都是普通宿主插件。模板加载插件可用 `nodeService(kind)` 等待完整模板依赖，或查询/订阅登记变化；不能只依赖 workflowNodes 就宣称具体类型可用。默认两份业务模板通过通用模板加载插件登记；开发功能模板由独立附加包声明资源，不进入默认装配。模板只在声明加载或重载时读取 YAML；节点依赖消失或恢复只重新判定已加载定义，不读取新文件。第三方节点与模板的联合验收见[联合验收记录](./acceptance/node-template-joint.zh.md)。

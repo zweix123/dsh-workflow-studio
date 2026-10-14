@@ -1,5 +1,7 @@
 # 模板插件分发第二阶段验收
 
+> 2026-10-14 结构调整：本文涉及的 `examples/review-templates`、`examples/all-nodes`、`examples/echo-node` 和旧全节点浏览器用例属于当时版本，现已撤除。当前开发体验与覆盖迁移见[开发模板验收](./development-templates.zh.md)；下文历史结论及旧复现命令不作为当前入口。
+
 ## 2026-10-13 全节点类型示例
 
 依据：[模板插件分发规格](../specs/template-plugin-distribution.zh.md)及[模板作者指南](../template-plugin-authoring.zh.md)。新增独立纯配置示例 `examples/all-nodes/`，本轮不改变默认 bundle 的两份模板。流程为 form → bash → 台前 Agent → 嵌套 DAG（内部为台后 Agent），根 DAG 输出 `report`。

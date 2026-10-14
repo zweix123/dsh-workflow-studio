@@ -1,10 +1,10 @@
 {
-  "name": "@example/workflow-all-nodes",
+  "name": "@dsh-workflow/dev-templates",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "dsh": { "bundle": { "patch": "./cordis.patch.yml" } },
-  "exports": { "./workflow.yaml": "./workflow.yaml" },
+  "exports": { "./templates/*/workflow.yaml": "./templates/*/workflow.yaml" },
   "peerDependencies": {
     "dsh-workflow-template": "0.1.0",
     "@dsh-workflow/node-form": "0.1.0",

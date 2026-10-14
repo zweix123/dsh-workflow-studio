@@ -1,4 +1,8 @@
 - insert:
+    - id: template-fixture-original
+      name: dsh-workflow-template
+      config:
+        directory: '@dsh-workflow/template-fixture/templates/original'
     - id: template-fixture-duplicate
       name: dsh-workflow-template
       config:

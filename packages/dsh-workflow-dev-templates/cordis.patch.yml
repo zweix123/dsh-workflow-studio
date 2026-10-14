@@ -1,0 +1,17 @@
+- insert:
+    - id: workflow-dev-form
+      name: dsh-workflow-template
+      config:
+        directory: '@dsh-workflow/dev-templates/templates/form'
+    - id: workflow-dev-bash
+      name: dsh-workflow-template
+      config:
+        directory: '@dsh-workflow/dev-templates/templates/bash'
+    - id: workflow-dev-bash-retry
+      name: dsh-workflow-template
+      config:
+        directory: '@dsh-workflow/dev-templates/templates/bash-retry'
+    - id: workflow-dev-agent
+      name: dsh-workflow-template
+      config:
+        directory: '@dsh-workflow/dev-templates/templates/agent'

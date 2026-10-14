@@ -1,0 +1,125 @@
+id: dev-form.zh
+name: 开发 · 表单节点功能
+type: dag
+description: 填写并提交第一张表单，再查看第二张表单的真实预填；体验默认控件、枚举名称、多选、对象、数组和只读结果。
+output_schema: &fields
+  note: string
+  priority: number
+  approved: boolean
+  settings:
+    type: object
+    properties:
+      owner: string
+      enabled: boolean
+  tasks:
+    type: array
+    items:
+      type: object
+      properties:
+        title: string
+        hours: number
+  tags:
+    type: array
+    items: string
+dag:
+  - id: 填写资料
+    type: node
+    node_kind: form
+    description: 修改说明、优先级和任务，增删数组项并选择标签。提交前可以关闭重开保留当前页面草稿；提交后结果只读。
+    output_schema: *fields
+    schema:
+      properties:
+        note:
+          title: 说明
+          description: 多行文本，允许中文、引号和换行。
+          default: 为新同事安排入门任务。
+        priority:
+          title: 优先级
+          enum: [0, 1, 2]
+          default: 0
+        approved:
+          title: 已确认
+          default: false
+        settings:
+          title: 设置
+          properties:
+            owner:
+              title: 负责人
+              default: 示例用户
+            enabled:
+              title: 启用
+              default: false
+        tasks:
+          title: 任务
+          default: [{ title: 阅读项目文档, hours: 1 }]
+          items:
+            default: { title: 新任务, hours: 0 }
+            properties:
+              title:
+                title: 任务名称
+              hours:
+                title: 工时
+        tags:
+          title: 标签
+          uniqueItems: true
+          default: [docs]
+          items:
+            enum: [docs, code, test]
+    uiSchema: &widgets
+      note:
+        ui:widget: textarea
+      priority:
+        ui:enumNames: [普通, 较高, 紧急]
+      settings:
+        enabled:
+          ui:widget: checkbox
+      tasks:
+        items:
+          hours:
+            ui:widget: updown
+      tags:
+        ui:widget: checkboxes
+        ui:enumNames: [文档, 代码, 测试]
+  - id: 核对预填
+    type: node
+    node_kind: form
+    description: 所有同名字段来自上一张表单；这里的备用默认值不覆盖预填。修改后正式提交，根 DAG 得到最后的结果。
+    input_schema: *fields
+    output_schema: *fields
+    schema:
+      properties:
+        note:
+          title: 说明
+          default: 这条备用默认值不会覆盖上游说明。
+        priority:
+          title: 优先级
+          enum: [0, 1, 2]
+          default: 2
+        approved:
+          title: 已确认
+          default: true
+        settings:
+          title: 设置
+          properties:
+            owner:
+              title: 负责人
+            enabled:
+              title: 启用
+        tasks:
+          title: 任务
+          items:
+            default: { title: 新任务, hours: 0 }
+            properties:
+              title:
+                title: 任务名称
+              hours:
+                title: 工时
+        tags:
+          title: 标签
+          uniqueItems: true
+          items:
+            enum: [docs, code, test]
+    uiSchema: *widgets
+  - type: edge
+    from: 填写资料
+    to: 核对预填

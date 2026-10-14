@@ -1,5 +1,5 @@
 id: acme-review
-name: 团队代码审查
+name: Diagnostic original
 type: dag
 dag:
   - id: inspect

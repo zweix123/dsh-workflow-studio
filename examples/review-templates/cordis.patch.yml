@@ -1,5 +1,0 @@
-- insert:
-    - id: acme-review-loader
-      name: dsh-workflow-template
-      config:
-        directory: '@acme/workflows'

@@ -240,10 +240,10 @@ git diff --stat
 
 ## 节点阶段衔接（2026-10-04）
 
-第一阶段公共节点接口已核实并复用，见[节点作者指南](../node-plugin-authoring.zh.md)和[节点阶段验收](../acceptance/node-plugin-registration.zh.md)。第二阶段完成通用模板加载、登记与内置模板统一分发；默认 bundle 一次装配节点与模板。作者接入见[模板作者指南](../template-plugin-authoring.zh.md)及 `examples/review-templates`。同时贡献第三方节点与模板的 bundle 已完成已列联合场景；结论与未验证项见[联合验收记录](../acceptance/node-template-joint.zh.md)。
+第一阶段公共节点接口已核实并复用，见[节点作者指南](../node-plugin-authoring.zh.md)和[节点阶段验收](../acceptance/node-plugin-registration.zh.md)。第二阶段完成通用模板加载、登记与内置模板统一分发；默认 bundle 一次装配节点与模板。作者接入见[模板作者指南](../template-plugin-authoring.zh.md)及正式模板包实现。同时贡献第三方节点与模板的 bundle 已完成已列联合场景；结论与未验证项见[联合验收记录](../acceptance/node-template-joint.zh.md)。
 
 当前内置模板为 mattpocock 和 OpenSpec 需求交付两个中文版；默认登记、目录及实例创建由自动化验证。OpenSpec 实施及验证状态见[对应规格](./openspec-delivery-template.zh.md)。历史上 2026-10-07 曾仅保留 mattpocock 中文版；此前验收记录中的六份模板与双语结构结论仅适用于当时版本。
 
-独立[全节点示例](../../examples/all-nodes/README.zh.md)通过本地目录按需添加，不纳入默认装配。2026-10-13 完整检查（169 项测试）及示例真实宿主浏览器用例通过；真实模型任务尚未验证，范围见[验收记录](../acceptance/template-plugin-distribution.zh.md#2026-10-13-全节点类型示例)。
+开发体验通过独立纯配置包附加装配，各节点功能模板与默认业务模板分开；根 examples 教学包撤除，第三方接入继续由联合装配测试验证。规则及实施状态见[开发模板规格](./development-templates.zh.md)。2026-10-13 全节点示例的结果仅适用于删除前版本，保留在[历史验收](../acceptance/template-plugin-distribution.zh.md#2026-10-13-全节点类型示例)。
 
 本阶段依用户明确要求以本地 spec 为依据，不配置 tracker、不发布 Issue、不自动 commit。

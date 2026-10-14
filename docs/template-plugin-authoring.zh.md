@@ -2,45 +2,14 @@
 
 模板作者提供 package.json、bundle 补丁和包内 YAML；通用插件 `dsh-workflow-template` 定位文件并向 Studio 登记。先在所需 profile 中添加默认 bundle，再添加自己的模板 bundle。固定适配 dsh `0.2.0-rc.1`，本期只通过本地目录添加。
 
-需要同时查看 form、bash、Agent 台前/台后和嵌套 DAG 时，可使用[全节点类型示例](../examples/all-nodes/README.zh.md)，其包名为 `@example/workflow-all-nodes`，通过本地目录独立添加。
+本仓库的正式模板就是完整接入实现，直接参考：
 
-可直接使用[完整示例](../examples/review-templates/README.zh.md)。其包名为 `@acme/workflows`：
+- [OpenSpec 模板包](../packages/dsh-workflow-template-openspec-delivery/package.json)、[加载声明](../packages/dsh-workflow-template-openspec-delivery/cordis.patch.yml)和[工作流定义](../packages/dsh-workflow-template-openspec-delivery/workflow.yaml)。
+- [默认 bundle](../packages/dsh-workflow-bundle/cordis.patch.yml)：统一装配节点和内置业务模板。
+- [通用加载器](../packages/dsh-workflow-template/src/index.ts)：包资源解析、读取和登记。
+- [开发功能模板包](../packages/dsh-workflow-dev-templates/README.zh.md)：同一个纯配置包提供多份模板，只在开发宿主附加装配。
 
-```json
-{
-  "name": "@acme/workflows",
-  "version": "0.1.0",
-  "private": true,
-  "type": "module",
-  "dsh": { "bundle": { "patch": "./cordis.patch.yml" } },
-  "exports": { "./workflow.yaml": "./workflow.yaml" },
-  "peerDependencies": {
-    "dsh-workflow-template": "0.1.0",
-    "@dsh-workflow/node-bash": "0.1.0"
-  }
-}
-```
-
-```yaml
-# cordis.patch.yml
-- insert:
-    - id: acme-review-loader
-      name: dsh-workflow-template
-      config:
-        directory: '@acme/workflows'
-```
-
-```yaml
-# workflow.yaml（包根目录）
-id: acme-review
-name: 团队代码审查
-type: dag
-dag:
-  - id: inspect
-    type: node
-    node_kind: bash
-    command: git diff --stat
-```
+不另维护最小教学实现；下文解释正式代码所遵循的资源、依赖和生命周期约定。
 
 单模板包将 `workflow.yaml` 放在包根目录，`directory` 直接填写包名。一个包提供多份模板时，可按 `templates/review/workflow.yaml`、`templates/delivery/workflow.yaml` 组织，通过 `"./templates/*/workflow.yaml": "./templates/*/workflow.yaml"` 导出，分别配置 `directory: '<包名>/templates/review'` 等地址。
 

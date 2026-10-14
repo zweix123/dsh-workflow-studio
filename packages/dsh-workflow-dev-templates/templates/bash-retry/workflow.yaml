@@ -1,0 +1,28 @@
+id: dev-bash-retry.zh
+name: 开发 · Bash 失败与重试
+type: dag
+description: 使用独立体验工作区。依次点击执行三次：非零退出、输出类型错误、成功交付；计数文件写入工作区的 .dsh-dev-bash-retry.json。
+output_schema:
+  result: string
+dag:
+  - id: 失败后重试
+    type: node
+    node_kind: bash
+    description: 首次退出码 7；第二次返回错误类型；第三次返回有效字符串。失败不推进下游。重新从首次体验前，删除体验工作区中的计数文件。
+    command: node "$DSH_TEMPLATE_DIR/retry.mjs"
+    output_schema:
+      result: string
+  - id: 核对重试结果
+    type: node
+    node_kind: form
+    input_schema:
+      result: string
+    output_schema:
+      result: string
+    schema:
+      properties:
+        result:
+          title: 重试结果
+  - type: edge
+    from: 失败后重试
+    to: 核对重试结果

@@ -1,5 +1,7 @@
 # 节点插件化第一阶段验收
 
+> 2026-10-14 结构调整：本文涉及的 `examples/review-templates`、`examples/all-nodes`、`examples/echo-node` 和旧全节点浏览器用例属于当时版本，现已撤除。当前开发体验与覆盖迁移见[开发模板验收](./development-templates.zh.md)；下文历史结论及旧复现命令不作为当前入口。
+
 日期：2026-10-04。依据：[节点插件规格](../specs/node-plugin-registration.zh.md)、[ADR 0006](../adrs/0006-independent-node-plugin-registry.md)。回归同时依据[节点输入输出](../specs/node-input-output.zh.md)、[共享定义详情](../specs/shared-definition-details.zh.md)、[会话导航](../specs/session-agent-instance-navigation.zh.md)。[模板分发规格](../specs/template-plugin-distribution.zh.md)仅用于核对第二阶段衔接。
 
 代码范围：开始 HEAD 为 `7a1a82173fd6622a2527cc5d97b31bb468c5f518`，被测为其后的本轮未提交修改和新增文件，包括公共节点包、三个节点插件、Studio、默认 bundle、示例及测试。未自动提交、未配置 tracker 或发布 Issue。
@@ -79,6 +81,6 @@
 
 通用模板加载插件、模板登记与撤销、六份内置模板通过同一分发机制加载、同时提供模板与节点的第三方 bundle 联合验收均待第二阶段。本阶段保留原有本地模板目录/复制入口，示例 YAML 手动置入临时模板目录，不将此行为记作通用分发通过。
 
-接口与资源清理约定见[节点作者指南](../node-plugin-authoring.zh.md)。公共服务端契约 `dsh-workflow-node/contract`、可选 UI 契约 `dsh-workflow-node/ui`、具体类型依赖键 `nodeService(kind)`、只读同类型事实查询 `workflowNodes.records(kind)`、通用导航 `workflowNavigation`，以及[最小示例](../../examples/echo-node/README.zh.md)可交给第二阶段使用。
+接口与资源清理约定见[节点作者指南](../node-plugin-authoring.zh.md)。公共服务端契约 `dsh-workflow-node/contract`、可选 UI 契约 `dsh-workflow-node/ui`、具体类型依赖键 `nodeService(kind)`、只读同类型事实查询 `workflowNodes.records(kind)`、通用导航 `workflowNavigation`，以及`examples/echo-node`（历史）可交给第二阶段使用。
 
 本轮按 code-review 的 Standards 与 Spec 两轴审查实际工作区及新增文件，已修复前端业务数据旁路、登记来源核对、展示不能覆盖宿主来源身份及资源清理顺序问题；同时移除专用导航遗留并复用宿主定义路径读取。审查不包含既有无关文件。

@@ -56,7 +56,7 @@ npm run test:e2e -- e2e/form-handoff.e2e.ts
 - [bash.e2e.ts](./workflows/bash.e2e.ts)：自动启动、非零退出与输出类型错误、原命令重试、真实数据交付、空命令完成、重启不重跑、执行中删除保护、中断后的结果未知与显式重试。
 - [dag.e2e.ts](./workflows/dag.e2e.ts)：条件激活与跳过、分支汇合、for 项独立身份、部分完成后重启、逆序完成但按源顺序聚合、空数组不创建虚构项。
 - [node-details.e2e.ts](./workflows/node-details.e2e.ts)：配置原字段顺序与完整结构、实例创建快照及源模板更新后的宿主重启、末尾平铺运行区、插件来源边框和背景、stdout 日志与已交付结果的区别、等待跳过及空插件不占位；同时覆盖详情宽度调整与实例重启恢复、中英文、浅深主题和窄屏滚动。
-- [all-nodes-template.e2e.ts](./workflows/all-nodes-template.e2e.ts)：独立全节点示例的登记与实例创建、表单和 Bash 的真实数据交付、台前／台后 Agent 定义及嵌套 DAG；不调用模型。
+- [dev-templates.e2e.ts](./workflows/dev-templates.e2e.ts)：默认入口不登记开发模板、按需附加四份节点功能模板、表单枚举/多选/数组及预填、Bash 特殊输入和自动执行、两次失败后重试、真实重启恢复，以及 Agent 台前／台后与嵌套定义；不调用真实模型。
 - [session-agent.e2e.ts](./workflows/session-agent.e2e.ts)：相同节点定义在不同实例中关联不同对话、对话往返、Tab 保留与去重、持久关联恢复、人工完成、完成后返回、删除实例保留对话并移除返回入口。
 
 ```sh

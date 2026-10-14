@@ -31,7 +31,16 @@ dsh web
 If this profile previously installed `packages/dsh-workflow-studio` directly, stop its host, remove the old plugin entry with `dsh plugin --profile web remove dsh-workflow-studio`, add the default bundle above, then restart. Use the same profile for both commands. Installing Studio alone leaves its node registry dependencies missing; the Web page can report `waiting for service: workflowNodeViews`. This changes plugin assembly, not instance files.
 
 
-DSH itself is not bundled with this plugin. The default bundle installs the public node registry, Studio, three node plugins, the template loader, and two Chinese templates: Matt Pocock Wayfinder (`matt-pocock-wayfinder-workflow.zh`) and [OpenSpec delivery](docs/openspec-workflow.zh.md) (`openspec-delivery.zh`). See the [node author guide](docs/node-plugin-authoring.zh.md) and [minimal external example](examples/echo-node/README.zh.md). See the [template author guide](docs/template-plugin-authoring.zh.md) and [pure configuration example](examples/review-templates/README.zh.md).
+DSH itself is not bundled with this plugin. The default bundle installs the public node registry, Studio, three node plugins, the template loader, and two Chinese templates: Matt Pocock Wayfinder (`matt-pocock-wayfinder-workflow.zh`) and [OpenSpec delivery](docs/openspec-workflow.zh.md) (`openspec-delivery.zh`). See the [node author guide](docs/node-plugin-authoring.zh.md) and the built-in node implementations. See the [template author guide](docs/template-plugin-authoring.zh.md) and [production template package](packages/dsh-workflow-template-openspec-delivery/package.json).
+
+## Local development
+
+`npm run dev` builds and installs the default bundle plus [node feature templates](packages/dsh-workflow-dev-templates/README.zh.md) into an isolated `.local/dsh-dev/` home, then starts the user-installed dsh on port 3081. Override launch arguments with `npm run dev -- --port 3082 --no-open`; `npm run install:dev` only installs. The default user bundle does not load development templates.
+
+Author guides point to production implementations. Third-party integration and fault injection use dedicated test fixtures rather than separate teaching examples.
+
+Deleting example sources does not unregister a previously installed bundle. If startup reports `cannot resolve profile bundle "@example/workflow-all-nodes"`, run `dsh plugin --profile web remove @example/workflow-all-nodes` against its original profile/home and restart the host. Remove `@example/workflow-echo` or `@acme/workflows` only if you previously installed those retired examples. Do not reinstall their dependencies.
+
 
 ## Create a workflow
 

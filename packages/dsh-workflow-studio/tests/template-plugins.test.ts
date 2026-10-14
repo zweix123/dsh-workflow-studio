@@ -9,8 +9,8 @@ import * as storageJson from '@deepseek-ai/dsh-storage-json'
 import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { pathToFileURL } from 'node:url'
-import { parse, parseDocument } from 'yaml'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import { parse } from 'yaml'
 import * as nodes from '../../dsh-workflow-node/src/server.js'
 import type { ServerNode } from 'dsh-workflow-node/contract'
 import * as studio from '../lib/index.js'
@@ -201,53 +201,93 @@ async function installBuiltinNodes(h: Awaited<ReturnType<typeof host>>) {
   for (const node of [await import('../../dsh-workflow-node-bash/lib/server.js'), await import('../../dsh-workflow-node-form/lib/server.js'), await import('../../dsh-workflow-node-agent/lib/server.js')]) await h.ctx.plugin(node)
 }
 
-test('the all-node example loads all built-in kinds and passes form, real Bash and nested Agent results through the DAG', async () => {
+test('development declarations load four ordinary templates without extending the default bundle', async () => {
   const h = await host()
   try {
     await installBuiltinNodes(h)
-    const base = new URL('../../../examples/all-nodes/', import.meta.url)
+    const base = new URL('../../dsh-workflow-dev-templates/', import.meta.url)
     const manifest = JSON.parse(await readFile(new URL('package.json', base), 'utf8'))
     const patch = parse(await readFile(new URL(manifest.dsh.bundle.patch, base), 'utf8'))
-    const directory = patch[0].insert[0].config.directory
-    assert.equal(directory, manifest.name)
-    const yaml = await readFile(new URL(manifest.exports['./workflow.yaml'], base), 'utf8')
-    await h.declare(directory, yaml)
-    const catalog = (await (await h.request(TEMPLATES_PATH)).json()).templates
-    assert.equal(catalog[0].error, undefined)
-    const response = await h.request(INSTANCES_PATH, { workspaceId: 'a', name: 'All nodes', templateId: 'all-nodes-example.zh' })
-    assert.equal(response.status, 201)
-    const { definition } = await response.json()
-    const execution = compile(definition, {}).createExecution({})
-    const current = (id: string) => {
-      const frontier = execution.getFrontier()
-      assert.deepEqual(frontier.map(node => node.definition.id), [id])
-      return frontier[0]!
+    const production = JSON.parse(await readFile(new URL('../../dsh-workflow-bundle/package.json', import.meta.url), 'utf8'))
+    assert.equal(production.dependencies[manifest.name], undefined)
+    const defaultPatch = parse(await readFile(new URL('../../dsh-workflow-bundle/cordis.patch.yml', import.meta.url), 'utf8'))
+    assert.ok(defaultPatch[0].insert.every((entry: any) => !entry.config?.directory?.startsWith(manifest.name)))
+    assert.equal(patch[0].insert.length, 4)
+    for (const declaration of patch[0].insert) {
+      assert.equal(declaration.name, 'dsh-workflow-template')
+      const directory = declaration.config.directory
+      const resource = directory.slice(manifest.name.length) + '/workflow.yaml'
+      await h.declare(directory, await readFile(new URL('.' + resource, base), 'utf8'))
     }
-    const request = '入门需求：中文、"引号"、单引号\'与换行\n$HOME、$(printf injected)、`printf injected` 保持原文。'
-    const form = current('填写需求')
-    assert.equal(form.definition.node_kind, 'form')
-    execution.submit(form.instanceId, { request })
-    const bash = current('命令处理')
-    assert.equal(bash.definition.node_kind, 'bash')
-    assert.deepEqual(bash.input, { request })
-    const command = renderTextTemplate(bash.definition.command as string, bash.input, true)
-    const output = JSON.parse(execFileSync('/bin/sh', ['-c', command], { encoding: 'utf8' }))
-    assert.deepEqual(output, { prepared_request: request })
-    execution.submit(bash.instanceId, output)
-    const foreground = current('台前讨论')
-    assert.equal(foreground.definition.node_kind, 'agent')
-    assert.equal(foreground.definition.mode, 'foreground')
-    assert.deepEqual(foreground.input, { prepared_request: request })
-    assert.ok(renderTextTemplate(foreground.definition.prompt as string, foreground.input).includes(request))
-    execution.submit(foreground.instanceId, { summary: '先安装，再熟悉目录，最后完成小任务。' })
-    const background = current('台后整理')
-    assert.equal(background.definition.node_kind, 'agent')
-    assert.equal(background.definition.mode, 'background')
-    assert.deepEqual(background.input, { summary: '先安装，再熟悉目录，最后完成小任务。' })
-    assert.ok(renderTextTemplate(background.definition.prompt as string, background.input).includes(background.input.summary as string))
-    execution.submit(background.instanceId, { report: '1. 安装环境\n2. 熟悉目录\n3. 完成小任务' })
-    assert.deepEqual(execution.getResult(), { status: 'completed', output: { report: '1. 安装环境\n2. 熟悉目录\n3. 完成小任务' } })
+    const catalog = (await (await h.request(TEMPLATES_PATH)).json()).templates
+    assert.deepEqual(catalog.map((row: any) => row.id), ['dev-agent.zh', 'dev-bash-retry.zh', 'dev-bash.zh', 'dev-form.zh'])
+    assert.ok(catalog.every((row: any) => !row.error && row.source.startsWith(manifest.name)))
+    for (const row of catalog) {
+      const created = await h.request(INSTANCES_PATH, { workspaceId: 'a', name: row.id, templateId: row.id })
+      assert.equal(created.status, 201)
+    }
   } finally { await h.close() }
+})
+
+test('the development Bash template preserves form input through real manual and automatic commands', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dev-bash-'))
+  try {
+    const file = new URL('../../dsh-workflow-dev-templates/templates/bash/workflow.yaml', import.meta.url)
+    const definition = parse(await readFile(file, 'utf8'))
+    const execution = compile(definition, {}).createExecution({})
+    const request = '中文、"引号"、单引号\'与换行\n$HOME、$(printf injected)、`printf injected` 保持原文。'
+    const submit = (id: string, output: Record<string, string>) => {
+      const [node] = execution.getFrontier()
+      assert.equal(node!.definition.id, id)
+      execution.submit(node!.instanceId, output)
+    }
+    submit('填写命令输入', { request })
+    for (const id of ['手动命令', '自动命令']) {
+      const [node] = execution.getFrontier()
+      assert.equal(node!.definition.id, id)
+      assert.equal(node!.definition.is_auto_start === true, id === '自动命令')
+      assert.deepEqual(node!.input, id === '手动命令' ? { request } : { prepared_request: request })
+      const command = renderTextTemplate(node!.definition.command as string, node!.input, true)
+      const output = JSON.parse(execFileSync('/bin/sh', ['-c', command], {
+        cwd: root, encoding: 'utf8', env: { ...process.env, DSH_TEMPLATE_DIR: fileURLToPath(new URL('.', file)) },
+      }))
+      assert.deepEqual(output, { prepared_request: request })
+      submit(id, output)
+    }
+    assert.deepEqual(execution.getFrontier()[0]!.input, { prepared_request: request })
+    submit('核对命令结果', { prepared_request: request })
+    const [last] = execution.getFrontier()
+    assert.equal(last!.definition.id, '无输出命令')
+    assert.deepEqual(last!.input, { prepared_request: request })
+    execFileSync('/bin/sh', ['-c', last!.definition.command as string], { cwd: root })
+    submit('无输出命令', {})
+    assert.deepEqual(execution.getResult(), { status: 'completed', output: {} })
+  } finally { await rm(root, { recursive: true, force: true }) }
+})
+
+test('the development Agent template passes real input into prompts and nested confirmed results to the root', async () => {
+  const definition = parse(await readFile(new URL('../../dsh-workflow-dev-templates/templates/agent/workflow.yaml', import.meta.url), 'utf8'))
+  const execution = compile(definition, {}).createExecution({})
+  const submit = (id: string, output: Record<string, string>) => {
+    const [node] = execution.getFrontier()
+    assert.equal(node!.definition.id, id)
+    execution.submit(node!.instanceId, output)
+  }
+  const request = '中文、"引号"和换行\n需要保留。'
+  submit('填写讨论需求', { request })
+  const [foreground] = execution.getFrontier()
+  assert.equal(foreground!.definition.mode, 'foreground')
+  assert.notEqual(foreground!.definition.is_auto_start, true)
+  assert.deepEqual(foreground!.input, { request })
+  assert.ok(renderTextTemplate(foreground!.definition.prompt as string, foreground!.input).includes(request))
+  submit('台前讨论', { summary: request })
+  const [background] = execution.getFrontier()
+  assert.equal(background!.definition.mode, 'background')
+  assert.equal(background!.definition.is_auto_start, true)
+  assert.deepEqual(background!.input, { summary: request })
+  assert.ok(renderTextTemplate(background!.definition.prompt as string, background!.input).includes(request))
+  submit('台后整理', { report: '已确认的报告' })
+  assert.deepEqual(execution.getResult(), { status: 'completed', output: { report: '已确认的报告' } })
 })
 
 test('the default templates use the public loader and registration contract', async () => {
@@ -387,37 +427,6 @@ test('one third-party bundle combines templates and nodes, template removal keep
     assert.deepEqual(detail.snapshot.instances.find((item: any) => item.definitionId === 'echo').output, { message: 'loaded joint message' })
     assert.deepEqual(detail.snapshot.instances.find((item: any) => item.definitionId === 'confirm').output, { message: 'confirmed' })
     assert.equal(detail.definition.name, 'Joint node and template')
-  } finally { await h.close() }
-})
-
-
-test('the documented echo bundle exposes a selectable template and executes its node after ordinary declarations load', async () => {
-  const h = await host()
-  try {
-    await h.ctx.plugin(await import('../../dsh-workflow-node-form/lib/server.js'))
-    const base = new URL('../../../examples/echo-node/', import.meta.url)
-    const manifest = JSON.parse(await readFile(new URL('package.json', base), 'utf8'))
-    const patch = parseDocument(await readFile(new URL(manifest.dsh.bundle.patch, base), 'utf8')).toJS()
-    for (const declaration of patch[0].insert) {
-      if (declaration.name === 'dsh-workflow-template') {
-        const resource = declaration.config.directory.slice(manifest.name.length) + '/workflow.yaml'
-        const file = manifest.exports['.' + resource]
-        await h.declare(declaration.config.directory, await readFile(new URL(file, base), 'utf8'))
-      } else await h.ctx.plugin(await import(new URL(declaration.name, base).href))
-    }
-    await settle()
-    const catalog = await (await h.request(TEMPLATES_PATH)).json()
-    assert.equal(catalog.templates.length, 1)
-    assert.equal(catalog.templates[0].id, 'example-echo')
-    assert.equal(catalog.templates[0].error, undefined)
-    const response = await h.request(INSTANCES_PATH, { workspaceId: 'a', name: 'Author example', templateId: 'example-echo' })
-    assert.equal(response.status, 201)
-    const created = await response.json()
-    const echo = created.snapshot.instances.find((item: any) => item.definitionId === 'echo')
-    const path = `${INSTANCES_PATH}/${created.id}`
-    assert.equal((await h.request(`${path}/nodes/${echo.instanceId}/actions/start`, {})).status, 200)
-    const detail = await (await h.request(path)).json()
-    assert.deepEqual(detail.snapshot.instances.find((item: any) => item.definitionId === 'answer').input, { message: 'Hello from a third-party node' })
   } finally { await h.close() }
 })
 

@@ -1,5 +1,7 @@
 # 节点操作位与输入界面验收
 
+> 2026-10-14 结构调整：本文涉及的 `examples/review-templates`、`examples/all-nodes`、`examples/echo-node` 和旧全节点浏览器用例属于当时版本，现已撤除。当前开发体验与覆盖迁移见[开发模板验收](./development-templates.zh.md)；下文历史结论及旧复现命令不作为当前入口。
+
 日期：2026-10-13。依据：[节点操作位与输入界面](../specs/node-action-positions.zh.md)、[ADR 0007](../adrs/0007-node-actions-and-readonly-details.md)、[结构化表单](../specs/form-structured-fields.zh.md)、[Agent 结果交付](../specs/session-agent-node-result-handoff.zh.md)。被测范围：起始 HEAD `71b4d948f94aafe05b6f5c40c1a6cc1b79261496` 后本次节点操作位实现的未提交变化；工作开始已有修改以文件基线隔离，不纳入本次审查。
 
 环境：macOS，Node `26.7.0`、npm `11.19.0`、pnpm `11.25.0`；用户已安装的 dsh `0.2.0-rc.1`，未安装或升级 CLI。每条浏览器用例使用 `e2e/dsh.ts` 创建独立临时 home、工作区、Web profile 与本地端口，Chromium 中文默认 1440×900，并覆盖英文、浅深主题及 390×844。模型相关场景使用仓库的确定性 Agent adapter，调用真实 rc.1 Agent、子 Agent 与原生记录；未使用用户模型认证。
