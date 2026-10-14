@@ -2,7 +2,7 @@
 
 > 2026-10-14 结构调整：本文涉及的 `examples/review-templates`、`examples/all-nodes`、`examples/echo-node` 和旧全节点浏览器用例属于当时版本，现已撤除。当前开发体验与覆盖迁移见[开发模板验收](./development-templates.zh.md)；下文历史结论及旧复现命令不作为当前入口。
 
-当前结论见末尾“2026-10-14：详情视觉分区调整复验”。此前记录适用于各自当时的展示版本；旧的运行区在前、运行子块和配置标题规则已由本轮取代。
+当前配置格式结论见末尾“2026-10-14：配置 YAML 展示复验”，布局及运行区域继续以“2026-10-14：详情视觉分区调整复验”为准。此前记录适用于各自当时的展示版本；旧的运行区在前、运行子块和配置标题规则已由后续版本取代。
 
 日期：2026-10-03。依据：[共享定义详情规格](../specs/shared-definition-details.zh.md)。
 
@@ -153,3 +153,30 @@ npm run check
 长期复现依据为上述用例、用例内临时快照模板准备、仓库已有夹具及本表实际结果。本机报告保留于忽略提交的 `.e2e/node-details-visual-regression/`（24 项）、`.e2e/node-details-snapshot/`（独立快照复验），完整检查日志为 `.e2e/node-details-check.log`；宿主日志位于 `.e2e/logs/` 且 token 脱敏。人工截图为 `.e2e/node-details-visual-light.png` 与 `.e2e/node-details-visual-dark-en.png`，仅辅助视觉结论，不代替可重复用例。临时目录及登录地址不作为长期证据。
 
 剩余覆盖限制为上述明确标出的异常浏览器场景与真实模型质量；本轮无未修复失败。历史未验证项只在本轮实际覆盖的范围内更新，不视为整套功能全面验收。
+
+
+## 2026-10-14：配置 YAML 展示复验
+
+依据：[共享定义详情规格](../specs/shared-definition-details.zh.md)的配置格式规则。被测范围为 `DefinitionDetails` 的 YAML 序列化、模板与实例共用配置正文，以及对应组件和浏览器回归；运行数据继续使用 JSON。
+
+环境：Node v26.7.0、npm 11.19.0、pnpm 11.25.0、用户已安装的 dsh 0.2.0-rc.1；Playwright 驱动真实 Chromium/dsh，1440×900 和 390×844。每条用例使用独立临时 DSH_HOME、工作区及非默认本地端口，完成后自动停止宿主并清理。本轮为可重复浏览器自动化，未另做 Codex 内置浏览器人工视觉检查；不调用真实模型。
+
+| 场景 | 预期及实际 | 状态 |
+| --- | --- | --- |
+| 四类 schema 与共享正文 | 独立用例查看结构化表单 review 的 input_schema、output_schema、schema、uiSchema；缩进 YAML 可解析回夹具原值，保留原字段顺序；模板与新建实例逐字段一致，不生成共享对象锚点 | 通过 |
+| 完整值与文本 | 组件覆盖嵌套对象、数组、0、false、null、空字符串/对象/数组，形似布尔及数字的字符串、中文、多行文本、长字符串及原文末尾空白；YAML 回读类型和值一致。浏览器快照用例覆盖嵌套契约、0/false/空值和完整长 prompt | 通过 |
+| 主题、语言与窄屏 | 新增用例从中文浅色切换到英文深色及 390×844；配置键与 YAML 内容不变，uiSchema 可滚动查看且正文无横向溢出；既有详情用例继续覆盖浅深主题、英文标签、运行区及插件来源 | 通过 |
+| 运行 JSON 与业务交付 | Bash 已交付输出仍为 JSON，stdout 仍为原日志；结构化表单校验、下游预填、只读和真实宿主重启恢复通过 | 通过 |
+| 快照、宽度及默认模板 | 改写源模板后真正重启宿主，旧实例保留创建时配置；拖拽/键盘宽度、页面偏好与实例重启恢复通过；默认模板加载、创建实例和重启后可用性通过 | 通过 |
+
+相关组件测试 27 项通过；`npm run check` 退出码 0，类型检查、构建及全部 176 项测试通过。新增 YAML 用例先单独通过，再运行详情、默认模板与结构化表单共 6 条真实宿主用例，全部通过。初次沙箱执行因本地监听 EPERM 受阻，取得运行权限后完成验证，无未修复业务失败。
+
+复现命令：
+
+```sh
+npm run test:e2e -- e2e/workflows/node-details.e2e.ts --grep "完整 YAML 展示"
+npm run test:e2e -- e2e/workflows/node-details.e2e.ts e2e/workflows/templates.e2e.ts e2e/form-handoff.e2e.ts
+npm run check
+```
+
+长期证据为仓库内用例、结构化表单夹具、快照用例的独立临时模板准备及本表结果。本机报告保留于忽略提交的 `.e2e/yaml-details/` 与 `.e2e/yaml-details-regression/`，完整检查日志为 `.e2e/yaml-details-check.log`；脱敏宿主日志在 `.e2e/logs/`。YAML 由定义对象或实例快照生成，不还原源文件注释、锚点及排版。本轮没有扩大历史异常场景或真实模型质量的验收范围。

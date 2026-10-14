@@ -1,4 +1,5 @@
 import type { DagDefinition, DefinitionPath, EntityDefinition } from '../../../host/dag/index.js'
+import { stringify } from 'yaml'
 
 export function definitionAt(root: DagDefinition, path: DefinitionPath): EntityDefinition | undefined {
   let current: EntityDefinition = root
@@ -12,10 +13,10 @@ export function definitionAt(root: DagDefinition, path: DefinitionPath): EntityD
   return current
 }
 
-export function DetailFields({ fields }: { fields: Array<[string, unknown]> }) {
-  return <dl>{fields.map(([key, value]) => <div key={key} className="dsh-workflow-detail-field"><dt>{key}</dt><dd><pre>{typeof value === 'string' ? value : JSON.stringify(value, null, 2)}</pre></dd></div>)}</dl>
+export function DetailFields({ fields, format = 'json' }: { fields: Array<[string, unknown]>; format?: 'json' | 'yaml' }) {
+  return <dl>{fields.map(([key, value]) => <div key={key} className="dsh-workflow-detail-field"><dt>{key}</dt><dd><pre>{typeof value === 'string' ? value : format === 'yaml' ? stringify(value, { aliasDuplicateObjects: false, lineWidth: 0 }).replace(/\n$/, '') : JSON.stringify(value, null, 2)}</pre></dd></div>)}</dl>
 }
 
 export function DefinitionDetails({ definition }: { definition: EntityDefinition }) {
-  return <DetailFields fields={Object.entries(definition).filter(([key]) => definition.type !== 'dag' || key !== 'dag')} />
+  return <DetailFields format="yaml" fields={Object.entries(definition).filter(([key]) => definition.type !== 'dag' || key !== 'dag')} />
 }

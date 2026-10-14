@@ -12,6 +12,7 @@ import React, { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Simulate } from 'react-dom/test-utils'
 import { JSDOM } from 'jsdom'
+import { parse } from 'yaml'
 import type { WorkspaceSnapshot } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import { WorkflowStudioPanel } from '../src/client/pages/workflow-studio/WorkflowStudioPanel.js'
 import { InstanceRunPanel } from '../src/client/pages/workflow-studio/instances/InstanceRunPanel.js'
@@ -116,7 +117,7 @@ test('every graph object shows snapshot configuration first and flat runtime fie
     assert.equal(runtime()['状态'], zh.statusRunning)
     assert.deepEqual(Object.keys(definition()), ['id', 'type', 'description', 'custom'])
     assert.equal(definition().description, 'Root snapshot')
-    assert.deepEqual(JSON.parse(definition().custom!), { zero: 0, flag: false })
+    assert.deepEqual(parse(definition().custom!), { zero: 0, flag: false })
     await inspect('same-i')
     assert.deepEqual(Object.keys(runtime()), ['节点实例', '所属 DAG 实例', '状态', '输入', '输出'])
     assert.equal(inspectorSection(container, '运行信息').querySelector(':scope > h4, :scope > h5'), null)
@@ -130,7 +131,8 @@ test('every graph object shows snapshot configuration first and flat runtime fie
     assert.deepEqual(JSON.parse(runtime()['输出']!), { answer: 'accepted' })
     assert.equal(definition().command, snapshotCommand)
     assert.equal(definition().dag, 'ordinary custom field')
-    assert.deepEqual(JSON.parse(definition().output_schema!), { answer: 'string' })
+    assert.equal(definition().output_schema, 'answer: string')
+    assert.deepEqual(parse(definition().output_schema!), { answer: 'string' })
     assert.equal(inspectorSection(container, '定义详情').querySelector('button, input, textarea'), null)
     await inspect('inner-i')
     assert.equal(runtime()['节点实例'], 'same · inner-i')

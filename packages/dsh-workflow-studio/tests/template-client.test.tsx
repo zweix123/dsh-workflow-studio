@@ -1,11 +1,30 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { JSDOM } from 'jsdom'
+import { parse } from 'yaml'
 import React, { act } from 'react'
 import { createRoot } from 'react-dom/client'
+import { renderToStaticMarkup } from 'react-dom/server'
 import type { WorkspaceSnapshot } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import { WorkflowStudioPanel } from '../src/client/pages/workflow-studio/WorkflowStudioPanel.js'
 import { zh } from '../src/client/locales/zh.js'
+import { DefinitionDetails } from '../src/client/pages/workflow-studio/DefinitionDetails.js'
+
+test('definition YAML preserves nested values, multiline strings and scalar-looking strings without aliases', () => {
+  const shared = { zero: 0, flag: false, empty: '', object: {}, array: [], nil: null }
+  const custom = { first: shared, second: shared, values: ['true', '001', 'null', 'a: b', '', '中文'],
+    multiline: '第一行\n第二行\n', long: 'long content '.repeat(50) }
+  const prompt = '原文\n保留末尾空白  \n'
+  const dom = new JSDOM(renderToStaticMarkup(<DefinitionDetails definition={{ id: 'n', type: 'node', prompt, custom }} />))
+  try {
+    const fields = Object.fromEntries([...dom.window.document.querySelectorAll('dl > div')].map(row => [row.querySelector('dt')!.textContent!, row.querySelector('dd pre')!.textContent!]))
+    assert.deepEqual(Object.keys(fields), ['id', 'type', 'prompt', 'custom'])
+    assert.equal(fields.prompt, prompt)
+    assert.match(fields.custom!, /^first:\n  zero: 0\n  flag: false/)
+    assert.doesNotMatch(fields.custom!, /&a\d|\*a\d/)
+    assert.deepEqual(parse(fields.custom!), custom)
+  } finally { dom.window.close() }
+})
 
 test('template tab rescans, shows invalid entries, and reuses and closes read-only detail tabs', async () => {
   const dom = new JSDOM('<!doctype html><div id="root"></div>')
@@ -74,8 +93,9 @@ test('template tab rescans, shows invalid entries, and reuses and closes read-on
     assert.deepEqual(Object.keys(fields), ['id', 'type', 'node_kind', 'prompt', 'dag', 'output_schema', 'custom'])
     assert.equal(fields.prompt, prompt)
     assert.equal(fields.dag, 'custom metadata')
-    assert.deepEqual(JSON.parse(fields.output_schema!), { answer: 'string' })
-    assert.deepEqual(JSON.parse(fields.custom!), { zero: 0, flag: false, empty: '' })
+    assert.equal(fields.output_schema, 'answer: string')
+    assert.deepEqual(parse(fields.output_schema!), { answer: 'string' })
+    assert.deepEqual(parse(fields.custom!), { zero: 0, flag: false, empty: '' })
     assert.equal(writeInspector.querySelector('.dsh-workflow-inspector-body input, .dsh-workflow-inspector-body textarea, .dsh-workflow-inspector-body button'), null)
     await act(async () => tabs()[1]!.click())
     assert.equal(catalogLoads, 2)
