@@ -1,6 +1,85 @@
 import { expect } from 'e2e'
 import { test } from '../dsh.js'
-import { addWorkspace, createInstance, detailField, inspectNode } from '../ui.js'
+import { addWorkspace, createInstance, detailField, inspectNode, openWorkflows } from '../ui.js'
+
+test('模板与实例详情可拖拽和键盘调整宽度，模板保留页面偏好且实例重启后恢复', async ({ app, screen, browser, dsh }) => {
+  await app.open('/')
+  await addWorkspace(screen, dsh.workspace)
+  await screen.getByRole('tab', '模板管理', { exact: true }).tap()
+  await screen.getByRole('button', '打开模板 条件分支回归', { exact: true }).tap()
+  await inspectNode(screen, 'source')
+  const selector = '.dsh-workflow-studio-panel:not([hidden]) .dsh-workflow-inspector-resize'
+  const handle = browser.locator(selector)
+  const width = () => browser.evaluate(selector => Number(document.querySelector(selector)!.getAttribute('aria-valuenow')), selector)
+  const viewport = () => browser.locator('.dsh-workflow-studio-panel:not([hidden]) .react-flow__viewport').getAttribute('style')
+  const drag = async (delta: number) => {
+    const point = await browser.evaluate(selector => {
+      const rect = document.querySelector(selector)!.getBoundingClientRect()
+      return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }
+    }, selector)
+    await browser.mouse.move(point.x, point.y)
+    await browser.mouse.down()
+    await browser.mouse.move(point.x + delta, point.y)
+    await browser.mouse.up()
+  }
+  await expect(handle).toHaveAttribute('aria-valuenow', '320')
+  const originalViewport = await viewport()
+  await drag(-100)
+  await expect(handle).toHaveAttribute('aria-valuenow', '420')
+  expect(await browser.evaluate(() => getComputedStyle(document.querySelector('.dsh-workflow-template-inspector')!).width)).toBe('420px')
+  expect(await viewport()).toBe(originalViewport)
+  await handle.press('ArrowLeft')
+  await expect(handle).toHaveAttribute('aria-valuenow', '430')
+  await handle.press('ArrowRight')
+  await expect(handle).toHaveAttribute('aria-valuenow', '420')
+  await screen.getByRole('button', '关闭详情', { exact: true }).tap()
+  await screen.getByRole('button', '根 DAG 详情', { exact: true }).tap()
+  await expect(handle).toHaveAttribute('aria-valuenow', '420')
+  await inspectNode(screen, 'active')
+  await expect(handle).toHaveAttribute('aria-valuenow', '420')
+  await screen.getByRole('tab', '模板管理', { exact: true }).tap()
+  await screen.getByRole('tab', '条件分支回归', { exact: true }).tap()
+  await expect(handle).toHaveAttribute('aria-valuenow', '420')
+  await drag(1000)
+  await expect(handle).toHaveAttribute('aria-valuenow', '300')
+  await drag(-2000)
+  expect(await width()).toBe(Number(await handle.getAttribute('aria-valuemax')))
+
+  await screen.getByRole('button', '设置', { exact: true }).tap()
+  await screen.getByRole('button', '深色', { exact: true }).tap()
+  await screen.getByRole('button', '中文', { exact: true }).tap()
+  await screen.getByRole('menuitem', 'English', { exact: true }).tap()
+  await screen.getByRole('button', 'Close', { exact: true }).tap()
+  await expect(screen.getByRole('separator', 'Resize details', { exact: true })).toBeVisible()
+  await browser.setViewport({ width: 390, height: 844 })
+  await expect.poll(() => browser.evaluate(() => {
+    const panel = document.querySelector('.dsh-workflow-studio-panel:not([hidden]) .dsh-workflow-run')!
+    const inspector = panel.querySelector<HTMLElement>('.dsh-workflow-inspector')!
+    return inspector.clientWidth <= panel.clientWidth && inspector.scrollWidth <= inspector.clientWidth
+  })).toBe(true)
+  await browser.setViewport({ width: 1440, height: 900 })
+  await screen.getByRole('button', 'Settings', { exact: true }).tap()
+  await screen.getByRole('button', 'Light', { exact: true }).tap()
+  await screen.getByRole('button', 'English', { exact: true }).tap()
+  await screen.getByRole('menuitem', '中文', { exact: true }).tap()
+  await screen.getByRole('button', '关闭', { exact: true }).tap()
+
+  await createInstance(screen, dsh.workspaceName, 'regression-branches', 'resizable-details')
+  await inspectNode(screen, 'source')
+  await drag(-100)
+  await expect(handle).toHaveAttribute('aria-valuenow', '420')
+  await handle.press('ArrowLeft')
+  await expect(handle).toHaveAttribute('aria-valuenow', '430')
+  await screen.getByRole('button', '关闭详情', { exact: true }).tap()
+  await screen.getByRole('button', '根 DAG 详情', { exact: true }).tap()
+  await expect(handle).toHaveAttribute('aria-valuenow', '430')
+  await dsh.restart(browser)
+  await app.open('/')
+  await openWorkflows(screen, browser)
+  await screen.getByRole('button', /^resizable-details/).tap()
+  await inspectNode(screen, 'source')
+  await expect(handle).toHaveAttribute('aria-valuenow', '430')
+})
 
 test('模板只读定义与实例运行分块，等待跳过省略空块并支持主题语言窄屏', async ({ app, screen, browser, dsh }) => {
   await app.open('/')

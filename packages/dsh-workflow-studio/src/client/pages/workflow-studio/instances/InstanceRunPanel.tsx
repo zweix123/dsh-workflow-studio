@@ -8,16 +8,11 @@ import { DefinitionDetails, DetailFields, definitionAt } from '../DefinitionDeta
 import { inspectLayout } from '../../../../shared/layout.js'
 import { LayoutNotices } from '../LayoutNotices.js'
 import { DagCanvas } from './DagCanvas.js'
+import { useInspectorResize } from '../useInspectorResize.js'
 import { canvasStatusLabel } from '../canvas/CanvasElements.js'
 import { emptyNodeViews, NodeBoundary, visibleActions, type NodeViews } from '../../../nodes.js'
 import type { NodeViewProps } from 'dsh-workflow-node/ui'
 import type { NodeData, NodeDefinition } from 'dsh-workflow-node/contract'
-
-function visibleWidth(preference: number, available: number): number {
-  if (!available) return preference
-  if (available < 300) return available
-  return Math.min(Math.max(300, preference), Math.max(300, Math.floor(available * 0.7)))
-}
 
 export function InstanceRunPanel({ nodes = emptyNodeViews, detail, t, onUpdate, onWidthUpdate, active = true, selection, reading }: { nodes?: NodeViews; reading?: CanvasReadingState; selection?: InstanceNavigationTarget & { request: number }; detail: InstanceDetail; t: WorkflowTranslate; onUpdate: (detail: InstanceDetail) => void; onWidthUpdate: (width: number) => void; active?: boolean }) {
   const registryRevision = useSyncExternalStore(nodes.subscribe, nodes.snapshot)
@@ -44,10 +39,7 @@ export function InstanceRunPanel({ nodes = emptyNodeViews, detail, t, onUpdate, 
     })
   }, [nodes, registryRevision, detail])
   const busy = useRef(new Set<string>())
-  const runArea = useRef<HTMLDivElement>(null)
-  const dragCleanup = useRef<() => void>(() => {})
-  const [areaWidth, setAreaWidth] = useState(0)
-  const [dragWidth, setDragWidth] = useState<number>()
+  const { runArea, width, clearWidth, resizeHandle } = useInspectorResize(detail.drawerWidth, width => void saveWidth(width))
   const item = detail.snapshot.instances.find(row => row.instanceId === selected)
   const position = [...detail.snapshot.waitingPositions.map(row => ({ ...row, status: 'waiting' as const })),
     ...detail.snapshot.skippedPositions.map(row => ({ ...row, status: 'skipped' as const }))]
@@ -59,15 +51,6 @@ export function InstanceRunPanel({ nodes = emptyNodeViews, detail, t, onUpdate, 
   const output = item?.status === 'completed' ? item.output : execution?.status === 'succeeded' ? execution.output : undefined
 
   useEffect(() => { if (selected && !inspection) setSelected(null) }, [selected, inspection])
-  useEffect(() => {
-    const element = runArea.current
-    if (!element) return
-    const observer = new ResizeObserver(() => setAreaWidth(element.clientWidth))
-    observer.observe(element)
-    setAreaWidth(element.clientWidth)
-    return () => observer.disconnect()
-  }, [])
-  useEffect(() => () => dragCleanup.current(), [])
   useEffect(() => {
     if (!active) return
     let current = true
@@ -86,54 +69,12 @@ export function InstanceRunPanel({ nodes = emptyNodeViews, detail, t, onUpdate, 
     try {
       await setDrawerWidth(detail.id, width)
       onWidthUpdate(width)
-      setDragWidth(undefined)
+      clearWidth()
       setError(undefined)
     } catch {
-      setDragWidth(undefined)
+      clearWidth()
       setError({ key: 'requestFailed' })
     }
-  }
-
-  function startResize(event: React.PointerEvent<HTMLDivElement>) {
-    event.preventDefault()
-    event.stopPropagation()
-    dragCleanup.current()
-    const startX = event.clientX
-    const startWidth = visibleWidth(dragWidth ?? detail.drawerWidth ?? 320, areaWidth)
-    const next = (x: number) => visibleWidth(startWidth + startX - x, areaWidth)
-    const move = (pointer: PointerEvent) => setDragWidth(next(pointer.clientX))
-    const up = (pointer: PointerEvent) => {
-      dragCleanup.current()
-      const width = next(pointer.clientX)
-      if (width === startWidth) setDragWidth(undefined)
-      else {
-        setDragWidth(width)
-        void saveWidth(width)
-      }
-    }
-    const cancel = () => {
-      dragCleanup.current()
-      setDragWidth(undefined)
-    }
-    window.addEventListener('pointermove', move)
-    window.addEventListener('pointerup', up)
-    window.addEventListener('pointercancel', cancel)
-    dragCleanup.current = () => {
-      window.removeEventListener('pointermove', move)
-      window.removeEventListener('pointerup', up)
-      window.removeEventListener('pointercancel', cancel)
-      dragCleanup.current = () => {}
-    }
-  }
-
-  function resizeByKeyboard(event: React.KeyboardEvent<HTMLDivElement>) {
-    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
-    event.preventDefault()
-    const currentWidth = visibleWidth(dragWidth ?? detail.drawerWidth ?? 320, areaWidth)
-    const width = visibleWidth(currentWidth + (event.key === 'ArrowLeft' ? 10 : -10), areaWidth)
-    if (width === currentWidth) return
-    setDragWidth(width)
-    void saveWidth(width)
   }
 
   async function run(nodeId: string, action: string, payload: unknown) {
@@ -202,9 +143,9 @@ export function InstanceRunPanel({ nodes = emptyNodeViews, detail, t, onUpdate, 
       return entry && props ? Object.entries(entry.node.interactions ?? {}).map(([handler, Interaction]) => <NodeBoundary key={`${item.instanceId}:${entry.generation}:${handler}`} message={t('nodeViewFailed')}><Interaction {...props} request={props.request?.handler === handler ? props.request : undefined} /></NodeBoundary>) : null
     })}
     <div ref={runArea} className="dsh-workflow-run">
-      <DagCanvas nodes={nodes} reading={reading} detail={detail} t={t} onAction={(id, name) => void invoke(id, name)} onInspect={setSelected} pending={pending} active={active} inspectorWidth={inspection ? visibleWidth(dragWidth ?? detail.drawerWidth ?? 320, areaWidth) : 0} />
-      {inspection && <aside className="dsh-workflow-inspector" aria-label={`${t('nodeDetails')} ${inspection.definitionId}`} style={{ width: `${visibleWidth(dragWidth ?? detail.drawerWidth ?? 320, areaWidth)}px` }}>
-        <div className="dsh-workflow-inspector-resize" role="separator" tabIndex={0} aria-label={t('resizeNodeDetails')} aria-orientation="vertical" aria-valuemin={areaWidth ? Math.min(300, areaWidth) : undefined} aria-valuemax={areaWidth ? Math.max(Math.min(300, areaWidth), Math.floor(areaWidth * 0.7)) : undefined} aria-valuenow={visibleWidth(dragWidth ?? detail.drawerWidth ?? 320, areaWidth)} onPointerDown={startResize} onKeyDown={resizeByKeyboard} />
+      <DagCanvas nodes={nodes} reading={reading} detail={detail} t={t} onAction={(id, name) => void invoke(id, name)} onInspect={setSelected} pending={pending} active={active} inspectorWidth={inspection ? width : 0} />
+      {inspection && <aside className="dsh-workflow-inspector" aria-label={`${t('nodeDetails')} ${inspection.definitionId}`} style={{ width: `${width}px` }}>
+        <div className="dsh-workflow-inspector-resize" aria-label={t('resizeNodeDetails')} {...resizeHandle} />
         <header><div><h3>{inspection.definitionId}</h3><p>{inspectionStatus}</p></div><button type="button" aria-label={t('closeNodeDetails')} onClick={() => setSelected(null)}>×</button></header>
         <div className="dsh-workflow-inspector-body">
           <section aria-label={t('runningInformation')}>

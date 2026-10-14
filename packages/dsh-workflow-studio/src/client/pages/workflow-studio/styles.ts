@@ -127,7 +127,6 @@ ${reactFlowCss}
 .dsh-workflow-template-detail .dsh-workflow-detail-header { justify-content: space-between; gap: 12px; }
 .dsh-workflow-template-detail .dsh-workflow-detail-header button { align-self: center; }
 .dsh-workflow-template-graph .dsh-workflow-node { grid-template-rows: 16px minmax(0, 1fr) auto; }
-.dsh-workflow-template-inspector { width: min(320px, 100%); }
 .dsh-workflow-inspector { display: flex; flex-direction: column; }
 .dsh-workflow-inspector > header { flex: none; }
 .dsh-workflow-inspector-body { flex: 1; min-height: 0; }

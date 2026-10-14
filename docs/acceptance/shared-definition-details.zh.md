@@ -81,3 +81,34 @@ npm run test:e2e -- e2e/form-handoff.e2e.ts e2e/workflows/bash.e2e.ts e2e/workfl
 ```
 
 新增场景 1 条及受影响回归 15 条全部通过。测试代码和模板夹具随仓库保留；本机完整报告分别保存于忽略提交的 `.e2e/node-details-blocks/` 与 `.e2e/node-details-regression/`，宿主日志在 `.e2e/logs/` 且登录 token 已脱敏。上述命令、夹具与场景结果为长期复现依据，不依赖临时宿主目录。历史验收的未验证项不会因本次部分场景通过而整体转为已验证。
+
+## 2026-10-14：模板详情宽度调整复验
+
+依据：[共享定义详情规格](../specs/shared-definition-details.zh.md)的宽度调整规则。被测范围为模板与实例共用的拖拽及键盘调整逻辑、模板侧栏宽度和画布导航可用宽度。
+
+环境：Node v26.7.0、npm 11.19.0、pnpm 11.25.0、dsh 0.2.0-rc.1；Chromium，1440×900 与 390×844。每条用例复用隔离宿主夹具，新建临时 DSH_HOME、工作区和非默认端口，结束后自动停止并清理；不使用用户模型凭据。本轮为可重复浏览器自动化，未另做人工视觉验收。
+
+自动化：`npm run check` 通过，类型检查、构建及 171 项测试全部通过。首次 E2E 因沙箱禁止本地监听而受阻，获准运行后通过；一次并行构建期间的类型检查遇到临时缺失的生成声明，构建完成后完整检查通过。
+
+| 场景 | 预期与实际 | 状态 |
+| --- | --- | --- |
+| 模板拖拽与视口 | source 侧栏从 320px 拖到 420px，实际 CSS 宽度同步，画布 transform 保持不变 | 通过 |
+| 键盘调整 | 聚焦边界后 ArrowLeft 扩大到 430px，ArrowRight 缩回 420px | 通过 |
+| 页面内记忆 | 关闭重开、查看根 DAG、切换至 active 卡片及切换管理/详情 Tab 后仍为 420px | 通过 |
+| 宽度边界 | 向右大幅拖动限制为 300px，向左大幅拖动限制为可用区域的 70% | 通过 |
+| 语言、主题、窄屏 | 深色英文下调整边界可见；390×844 下侧栏及内容无横向溢出；恢复宽屏、浅色与中文后继续实例操作 | 通过 |
+| 实例持久化回归 | 拖拽到 420px，键盘调整到 430px；关闭重开及真实宿主重启后仍为 430px | 通过 |
+
+独立复现：
+
+```sh
+npm run test:e2e -- e2e/workflows/node-details.e2e.ts --grep "模板与实例详情可拖拽"
+```
+
+新增用例通过，报告保存于忽略提交的 `.e2e/inspector-resize/`，脱敏宿主日志在 `.e2e/logs/`。模板偏好仅保留于当前详情 Tab；刷新或关闭整个 Tab 后不持久化。包含新增用例在内的详情、默认模板、结构化表单、Bash 与 Agent 浏览器回归共 13 条全部通过，报告保留于 `.e2e/inspector-resize-regression/`。复现命令：
+
+```sh
+npm run test:e2e -- e2e/workflows/node-details.e2e.ts e2e/workflows/templates.e2e.ts e2e/form-handoff.e2e.ts e2e/workflows/bash.e2e.ts e2e/workflows/agent-handoff.e2e.ts
+```
+
+本轮所有临时宿主、home 与工作区由夹具清理；历轮未验证项继续保留。
