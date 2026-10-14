@@ -71,7 +71,7 @@ function inspectorSection(container: Element, name: string): HTMLElement {
   return section
 }
 
-test('every graph object exposes its snapshot definition below the correct running information', async () => {
+test('every graph object shows snapshot configuration first and flat runtime fields last', async () => {
   const { dom, cleanup } = testDom()
   const snapshotCommand = 'printf "snapshot command\\nsecond line"'
   const detail: any = { id: 'run', workspaceId: 'w', name: 'Definitions', templateId: 'source-template', createdAt: '2026-10-03T00:00:00Z', input: {},
@@ -109,7 +109,7 @@ test('every graph object exposes its snapshot definition below the correct runni
     const rootButton = [...container.querySelectorAll<HTMLButtonElement>('.dsh-workflow-detail-header button')].find(button => button.textContent === zh.rootDagDetails)!
     assert.ok(rootButton)
     await act(async () => rootButton.click())
-    assert.deepEqual([...container.querySelectorAll('.dsh-workflow-inspector section')].map(section => section.getAttribute('aria-label')), ['运行信息', '运行概况', '输入与输出', '定义详情'])
+    assert.deepEqual([...container.querySelectorAll('.dsh-workflow-inspector section')].map(section => section.getAttribute('aria-label')), ['定义详情', '运行信息'])
     assert.equal(runtime()['DAG 实例'], 'root · root-i')
     assert.equal(runtime()['所属 DAG 实例'], undefined)
     assert.equal(runtime()['定义 ID'], undefined)
@@ -118,10 +118,10 @@ test('every graph object exposes its snapshot definition below the correct runni
     assert.equal(definition().description, 'Root snapshot')
     assert.deepEqual(JSON.parse(definition().custom!), { zero: 0, flag: false })
     await inspect('same-i')
-    assert.deepEqual([...inspectorSection(container, '运行信息').children].filter(element => element.tagName === 'SECTION').map(section => section.getAttribute('aria-label')), ['运行概况', '输入与输出', '节点操作与进展'])
-    assert.deepEqual(Object.keys(fields(inspectorSection(container, '运行概况'))), ['节点实例', '所属 DAG 实例', '状态'])
-    assert.deepEqual(Object.keys(fields(inspectorSection(container, '输入与输出'))), ['输入', '输出'])
-    assert.match(inspectorSection(container, '节点操作与进展').textContent!, /snapshot command/)
+    assert.deepEqual(Object.keys(runtime()), ['节点实例', '所属 DAG 实例', '状态', '输入', '输出'])
+    assert.equal(inspectorSection(container, '运行信息').querySelector(':scope > h4, :scope > h5'), null)
+    assert.deepEqual(Object.keys(definition()), ['id', 'type', 'node_kind', 'command', 'dag', 'output_schema'])
+    assert.equal(inspectorSection(container, '定义详情').querySelector('h4, h5'), null)
     assert.equal(runtime()['节点实例'], 'same · same-i')
     assert.equal(runtime()['定义 ID'], undefined)
     assert.equal(runtime()['所属 DAG 实例'], 'root · root-i')
@@ -148,13 +148,13 @@ test('every graph object exposes its snapshot definition below the correct runni
     for (const [id, command] of [['later', 'waiting command'], ['closed', 'skipped command']]) {
       await act(async () => container.querySelector<HTMLButtonElement>(`[aria-label="详情 ${id}"]`)!.click())
       assert.equal(runtime()['所属 DAG 实例'], 'root · root-i')
-      assert.equal(runtime()['定义 ID'], id)
+      assert.equal(runtime()['定义 ID'], undefined)
       assert.equal(runtime()['节点实例'], undefined)
       assert.equal(runtime()['DAG 实例'], undefined)
       assert.equal(runtime()['逐项身份'], undefined)
       assert.equal(runtime()['输入'], undefined)
       assert.equal(runtime()['输出'], undefined)
-      assert.deepEqual(Object.keys(runtime()).sort(), ['所属 DAG 实例', '定义 ID', '状态'].sort())
+      assert.deepEqual(Object.keys(runtime()).sort(), ['所属 DAG 实例', '状态'].sort())
       assert.equal(runtime()['状态'], id === 'later' ? zh.statusWaiting : zh.statusSkipped)
       assert.equal(definition().command, command)
       assert.equal(inspectorSection(container, '运行信息').querySelector('button'), null)
@@ -168,9 +168,7 @@ test('every graph object exposes its snapshot definition below the correct runni
     assert.equal(definition().command, snapshotCommand)
     assert.deepEqual(requests, [], 'Inspecting snapshot definitions must not load the current source template')
     await render(detail, en)
-    assert.ok(inspectorSection(container, 'Run overview').querySelector('h5'))
-    assert.ok(inspectorSection(container, 'Input and output').querySelector('h5'))
-    assert.ok(inspectorSection(container, 'Node actions and progress').querySelector('h5'))
+    assert.deepEqual([...container.querySelectorAll('.dsh-workflow-inspector-body > section')].map(section => section.getAttribute('aria-label')), ['Definition details', 'Running information'])
     assert.equal(fields(inspectorSection(container, 'Running information'))['Node instance'], 'same · same-i')
     assert.equal(fields(inspectorSection(container, 'Running information'))['Containing DAG instance'], 'root · root-i')
     assert.equal(fields(inspectorSection(container, 'Definition details')).command, snapshotCommand)
@@ -445,7 +443,14 @@ test('workflow node inspector opens the existing agent, completes it, and shows 
     assert.equal(completed, 1)
     assert.equal(latest.snapshot.instances.find((item: any) => item.instanceId === 'agent-i').status, 'completed')
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="详情 bash"]')!.click())
-    assert.match(inspectorSection(container, '运行信息').textContent!, /printf done.*done.*warning.*Command exited with code 2/s)
+    const plugin = inspectorSection(container, '节点插件详情 · bash')
+    assert.equal(plugin.parentElement, inspectorSection(container, '运行信息'))
+    assert.equal(plugin.querySelector('h4')!.textContent, '节点插件详情 · bash')
+    assert.match(plugin.textContent!, /以下内容由节点插件提供/)
+    assert.deepEqual([...plugin.querySelectorAll('strong')].map(item => item.textContent), ['命令日志 · stdout', '命令日志 · stderr'])
+    assert.deepEqual([...plugin.querySelectorAll('pre')].map(item => item.textContent), ['done', 'warning'])
+    assert.doesNotMatch(plugin.textContent!, /printf done|Command exited/)
+    assert.deepEqual([...inspectorSection(container, '运行信息').querySelectorAll('[role="alert"]')].map(item => item.textContent), ['Command exited with code 2'])
     assert.equal(fields(inspectorSection(container, '定义详情')).command, 'printf done')
     assertStatus(zh.executionError)
     assert.equal(container.querySelector<HTMLButtonElement>('[aria-label="执行 bash"]')!.disabled, false)
@@ -455,7 +460,7 @@ test('workflow node inspector opens the existing agent, completes it, and shows 
     await render({ ...base, executions: { ...base.executions, 'bash-i': { kind: 'bash', status: 'running' } } })
     assert.equal(container.querySelector<HTMLButtonElement>('[aria-label="执行 bash"]')!.disabled, true)
     assertStatus(zh.statusRunning)
-    assert.match(inspectorSection(container, '运行信息').textContent!, /正在执行/)
+    assert.equal(inspectorSection(container, '节点插件详情 · bash').querySelector('.dsh-workflow-plugin-content')!.textContent, '')
     await render({ ...base, executions: { ...base.executions, 'bash-i': { kind: 'bash', status: 'unknown' } } })
     assertStatus(zh.statusUnknown)
     assert.equal(container.querySelector<HTMLButtonElement>('[aria-label="执行 bash"]')!.disabled, false)
@@ -564,7 +569,7 @@ test('form keeps a page draft, submits through the node action, then becomes rea
     assert.equal(requests, 2)
     assert.equal(container.querySelector('[role="dialog"]'), null)
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Details answer"]')!.click())
-    assert.deepEqual(JSON.parse(fields(inspectorSection(container, 'Input and output'))['Output']!), { name: 'Grace', count: 0, yes: false })
+    assert.deepEqual(JSON.parse(fields(inspectorSection(container, 'Running information'))['Output']!), { name: 'Grace', count: 0, yes: false })
     assert.equal(container.querySelector<HTMLButtonElement>('button[type="submit"]'), null)
   } finally { await act(async () => root.unmount()); cleanup() }
 })
@@ -1126,10 +1131,10 @@ test('frontend unload clears its drafts with feedback, and a new frontend keeps 
     await render()
     assert.equal(container.querySelector('[role="dialog"]'), null)
     await act(async () => container.querySelector<HTMLElement>('[aria-label="详情 answer"]')!.click())
-    assert.deepEqual(JSON.parse(fields(inspectorSection(container, '输入与输出'))['输出']!), { message: 'accepted' })
+    assert.deepEqual(JSON.parse(fields(inspectorSection(container, '运行信息'))['输出']!), { message: 'accepted' })
     await act(async () => fresh.fiber.dispose())
     await act(async () => testNodes.register(new Context(), '@dsh-workflow/node-form', formClient))
-    assert.deepEqual(JSON.parse(fields(inspectorSection(container, '输入与输出'))['输出']!), { message: 'accepted' })
+    assert.deepEqual(JSON.parse(fields(inspectorSection(container, '运行信息'))['输出']!), { message: 'accepted' })
   } finally { await act(async () => root.unmount()); cleanup() }
 })
 
@@ -1151,6 +1156,10 @@ test('browser contributions match their source and isolate component and synchro
     testNodes.register(wrong, 'wrong-package', { kind: 'custom', Panel: () => <p>Wrong business</p>, handlers: { sync: () => {} } })
     await render()
     assert.doesNotMatch(container.textContent!, /Sync navigation|Wrong business/)
+    detail.nodeViews.c.data = { diagnostic: 'original plugin data' }
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="详情 custom"]')!.click())
+    assert.deepEqual(JSON.parse(inspectorSection(container, '节点插件详情 · custom').querySelector('pre')!.textContent!), { diagnostic: 'original plugin data' })
+    assert.deepEqual(Object.keys(fields(inspectorSection(container, '运行信息'))), ['节点实例', '所属 DAG 实例', '状态', '输入', '输出'])
     await act(async () => testNodes.register(correct, 'correct-package', { kind: 'custom',
       Panel: () => { throw new Error('render failure') },
       handlers: { sync: () => { throw new Error('sync failure') }, async: async () => { throw new Error('async failure') } },
@@ -1211,4 +1220,33 @@ test('Agent record navigation reports host failures and remains retryable, with 
     assert.equal(opened[1].childSessionId, 'new')
     assert.equal(container.querySelector('[role="dialog"]'), null)
   } finally { console.error = previousError; await act(async () => root.unmount()); await ctx.fiber.dispose(); cleanup() }
+})
+
+test('Agent plugin labels pending results separately from delivered output and retains attempt history', async () => {
+  const { dom, cleanup } = testDom()
+  const detail: any = { id: 'pending', name: 'Pending', definition: { id: 'root', type: 'dag', dag: [{ id: 'task', type: 'node', node_kind: 'agent', prompt: 'original' }] },
+    snapshot: { rootInstanceId: 'r', instances: [{ instanceId: 'r', definitionId: 'root', definitionPath: [], parentInstanceId: null, type: 'dag', status: 'running', input: {} }, { instanceId: 'n', definitionId: 'task', definitionPath: ['dag', 0], parentInstanceId: 'r', type: 'node', status: 'ready', input: { zero: 0 } }], waitingPositions: [], skippedPositions: [], edges: [] },
+    executions: { n: { kind: 'agent', status: 'waiting', pendingOutput: { answer: 'candidate' }, attempts: [{ id: 'old', status: 'failed', error: 'old failure' }, { id: 'new', status: 'succeeded', output: { answer: 'candidate' } }] } } }
+  const container = dom.window.document.getElementById('root')!
+  const root = createRoot(container)
+  const render = () => act(async () => root.render(<InstanceRunPanel nodes={testNodes} detail={withNodeViews(detail)} t={key => zh[key]} onUpdate={() => {}} onWidthUpdate={() => {}} />))
+  try {
+    await render()
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="详情 task"]')!.click())
+    const plugin = inspectorSection(container, '节点插件详情 · agent')
+    assert.equal(plugin.parentElement, inspectorSection(container, '运行信息'))
+    const pending = plugin.querySelector('section[aria-label="待确认结果"]')!
+    assert.equal(pending.querySelector('h4')!.textContent, '待确认结果')
+    assert.deepEqual(JSON.parse(pending.querySelector('pre')!.textContent!), { answer: 'candidate' })
+    assert.equal(fields(inspectorSection(container, '运行信息'))['输出'], undefined)
+    assert.equal(plugin.querySelectorAll('ol > li').length, 2)
+    assert.match(plugin.textContent!, /old failure/)
+    detail.snapshot.instances[1].status = 'completed'
+    detail.snapshot.instances[1].output = { answer: 'candidate' }
+    delete detail.executions.n.pendingOutput
+    await render()
+    assert.equal(plugin.querySelector('section[aria-label="待确认结果"]'), null)
+    assert.deepEqual(JSON.parse(fields(inspectorSection(container, '运行信息'))['输出']!), { answer: 'candidate' })
+    assert.equal(plugin.querySelectorAll('ol > li').length, 2)
+  } finally { await act(async () => root.unmount()); cleanup() }
 })

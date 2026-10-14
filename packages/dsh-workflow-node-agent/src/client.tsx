@@ -14,12 +14,12 @@ import type { AgentState } from './types.js'
 
 function AgentPanel({ execution, t }: NodeDetailsProps) {
   const business = execution as (NodeViewProps['execution'] & AgentState)
+  if (!business?.attempts?.length && business?.pendingOutput === undefined) return null
   return <section aria-label={t('agentProgress')}>
-    {execution?.error && <p role="alert">{execution.error}</p>}
-    {business?.pendingOutput !== undefined && <section aria-label={t('pendingResult')}><p role="status">{t('awaitingConfirmation')}</p><pre>{JSON.stringify(business.pendingOutput, null, 2)}</pre></section>}
+    {business?.pendingOutput !== undefined && <section aria-label={t('pendingResult')}><h4>{t('pendingResult')}</h4><p role="status">{t('awaitingConfirmation')}</p><pre>{JSON.stringify(business.pendingOutput, null, 2)}</pre></section>}
     {business?.attempts?.length ? <section aria-label={t('attempts')}><h4>{t('attempts')}</h4><ol>{business.attempts.map((attempt, index) => <li key={attempt.id}>
       <p>{t(`attempt${attempt.status[0]!.toUpperCase()}${attempt.status.slice(1)}`)} {index + 1}</p>
-      {attempt.error && <p role="alert">{attempt.error}</p>}
+      {attempt.error && attempt.error !== execution?.error && <p role="alert">{attempt.error}</p>}
       {attempt.output !== undefined && <pre>{JSON.stringify(attempt.output, null, 2)}</pre>}
     </li>)}</ol></section> : null}
   </section>

@@ -41,5 +41,5 @@ test('独立全节点示例可加载创建，表单与 Bash 原样交付并展�
   await expect(screen.getByRole('button', '执行 台前讨论', { exact: true })).toBeEnabled()
   await inspectNode(screen, '台后整理组')
   await expect(detailField(browser, '台后整理组', '状态')).toHaveText('等待')
-  await expect(browser.locator('.dsh-workflow-studio-panel:not([hidden]) section[aria-label="节点操作与进展"]')).toHaveCount(0)
+  await expect(browser.locator('.dsh-workflow-studio-panel:not([hidden]) .dsh-workflow-plugin-details')).toHaveCount(0)
 })

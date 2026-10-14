@@ -26,7 +26,7 @@ test('Bash 自动启动一次、手动失败重试、严格输出校验与重启
 
   await inspectNode(screen, 'retry')
   await screen.getByRole('button', '执行 retry', { exact: true }).tap()
-  await expect(browser.locator('aside[aria-label="详情 retry"] section[aria-label="运行信息"] strong:text-is("输出") + pre')).toHaveText('{"result":42}')
+  await expect(browser.locator('aside[aria-label="详情 retry"] section[aria-label="运行信息"] strong:text-is("命令日志 · stdout") + pre')).toHaveText('{"result":42}')
   await expect(detailField(browser, 'retry', '状态')).toHaveText('执行异常')
   await expect(retry.getByRole('alert').first()).toHaveText('INVALID_FIELD_TYPE')
   await expect(detailField(browser, 'retry', '输出')).toHaveCount(0)

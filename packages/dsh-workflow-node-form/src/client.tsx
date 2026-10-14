@@ -125,7 +125,6 @@ function FormInteraction(props: NodeViewProps) {
 
 export const formClient: ClientNode = {
   kind: 'form',
-  Panel: ({ output, execution, t }) => <>{output && <p role="status">{t('formSubmitted')}</p>}{execution?.error && <p role="alert">{execution.error}</p>}</>,
   interactions: { fill: FormInteraction },
 }
 

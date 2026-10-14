@@ -1,7 +1,7 @@
 export const en = {
   command: 'Command',
-  commandOutput: 'Output',
-  commandError: 'Error',
+  commandOutput: 'Command log · stdout',
+  commandError: 'Command log · stderr',
   executing: 'Executing…',
   resultUnknown: 'The previous result is unknown. Check before running again.',
   executeNode: 'Execute',
@@ -9,8 +9,8 @@ export const en = {
 
 export const zh = {
   command: '命令',
-  commandOutput: '输出',
-  commandError: '错误',
+  commandOutput: '命令日志 · stdout',
+  commandError: '命令日志 · stderr',
   executing: '正在执行…',
   resultUnknown: '上次执行结果未知，请确认后决定是否再次执行。',
   executeNode: '执行',

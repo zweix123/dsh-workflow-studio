@@ -58,7 +58,7 @@ test('template tab rescans, shows invalid entries, and reuses and closes read-on
     assert.equal(tabs()[2]!.textContent, 'Team review')
     await act(async () => container.querySelector<HTMLButtonElement>('.dsh-workflow-template-detail .dsh-workflow-detail-header button')!.click())
     const inspector = container.querySelector('.dsh-workflow-template-inspector')!
-    assert.equal(inspector.querySelector('section[aria-label="定义详情"] > h4')!.textContent, '定义详情')
+    assert.equal(inspector.querySelector('.dsh-workflow-inspector-body h4'), null)
     assert.equal(inspector.querySelector('section[aria-label="运行信息"]'), null)
     assert.match(inspector.textContent!, /description原始描述/)
     assert.deepEqual([...inspector.querySelectorAll('dt')].map(node => node.textContent), ['id', 'type', 'description'])

@@ -38,7 +38,6 @@ export function TemplateDetailPanel({ template, t, active, reading, onUpdate }: 
         <header><div><h3>{definition.id ?? template.definition.id}</h3></div><button type="button" aria-label={t('closeNodeDetails')} onClick={() => setSelected(null)}>×</button></header>
         <div className="dsh-workflow-inspector-body">
           <section aria-label={t('definitionDetails')}>
-            <h4>{t('definitionDetails')}</h4>
             <DefinitionDetails definition={definition} />
           </section>
         </div>

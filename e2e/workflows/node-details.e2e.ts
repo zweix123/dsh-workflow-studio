@@ -1,4 +1,7 @@
 import { expect } from 'e2e'
+import { mkdir, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { stringify } from 'yaml'
 import { test } from '../dsh.js'
 import { addWorkspace, createInstance, detailField, inspectNode, openWorkflows } from '../ui.js'
 
@@ -81,61 +84,133 @@ test('模板与实例详情可拖拽和键盘调整宽度，模板保留页面�
   await expect(handle).toHaveAttribute('aria-valuenow', '430')
 })
 
-test('模板只读定义与实例运行分块，等待跳过省略空块并支持主题语言窄屏', async ({ app, screen, browser, dsh }) => {
+test('配置原顺序在前、运行字段在末尾，插件日志来源明确，等待跳过和空插件不占位', async ({ app, screen, browser, dsh }) => {
   await app.open('/')
   await addWorkspace(screen, dsh.workspace)
   await screen.getByRole('tab', '模板管理', { exact: true }).tap()
   await screen.getByRole('button', '打开模板 条件分支回归', { exact: true }).tap()
   await inspectNode(screen, 'source')
   const bodySelector = '.dsh-workflow-studio-panel:not([hidden]) .dsh-workflow-inspector-body'
-  const body = (selector: string) => browser.locator(`${bodySelector} ${selector}`)
-  await expect(body('h4')).toHaveText('定义详情')
+  const body = (selector: string) => browser.locator(`${bodySelector} :is(${selector})`)
+  const config = (selector: string) => body(`section[aria-label="定义详情"] ${selector}`)
+  const runtime = (selector: string) => body(`section[aria-label="运行信息"] ${selector}`)
+  const plugin = (selector: string) => body(`section[aria-label="节点插件详情 · bash"] ${selector}`)
+  const configuration = [
+    'source', 'node', 'bash', 'printf \'{"enabled":true}\'', '{\n  "enabled": "boolean"\n}',
+  ]
+  await expect(body('h4, h5')).toHaveCount(0)
   await expect(body('section')).toHaveCount(1)
   await expect(body(':is(button, input, textarea)')).toHaveCount(0)
-  await expect(body('dt:text-is("command") + dd pre')).toHaveText('printf \'{"enabled":true}\'')
+  await expect(config('dt')).toHaveText(['id', 'type', 'node_kind', 'command', 'output_schema'])
+  await expect(config('dd pre')).toHaveText(configuration)
 
   await createInstance(screen, dsh.workspaceName, 'regression-branches', 'details-blocks')
   await inspectNode(screen, 'active')
-  await expect(body(':is(h4, h5)')).toHaveText(['运行信息', '运行概况', '定义详情'])
+  await expect(body('h4:visible, h5:visible')).toHaveCount(0)
+  await expect(runtime('dt')).toHaveText(['所属 DAG 实例', '状态'])
   await expect(detailField(browser, 'active', '状态')).toHaveText('等待')
 
   await inspectNode(screen, 'source')
-  const overview = (selector: string) => body(`section[aria-label="运行概况"] ${selector}`)
-  const data = (selector: string) => body(`section[aria-label="输入与输出"] ${selector}`)
-  const business = (selector: string) => body(`section[aria-label="节点操作与进展"] ${selector}`)
-  await expect(body(':is(h4, h5)')).toHaveText(['运行信息', '运行概况', '输入与输出', '节点操作与进展', '定义详情'])
-  await expect(overview('dt')).toHaveText(['节点实例', '所属 DAG 实例', '状态'])
-  await expect(data('dt')).toHaveText(['输入'])
-  await expect(business(':is(button, input, textarea, select)')).toHaveCount(0)
+  expect(await browser.evaluate(selector => [...document.querySelector(selector)!.children].map(element => element.getAttribute('aria-label')), bodySelector)).toEqual(['定义详情', '运行信息'])
+  await expect(config('dd pre')).toHaveText(configuration)
+  await expect(runtime('dt')).toHaveText(['节点实例', '所属 DAG 实例', '状态', '输入'])
+  await expect(body('.dsh-workflow-plugin-details')).not.toBeVisible()
+  await expect(body('section[aria-label="运行信息"] > :is(h4, h5)')).toHaveCount(0)
   await screen.getByRole('button', '执行 source', { exact: true }).tap()
   await expect(detailField(browser, 'source', '状态')).toHaveText('已完成')
-  await expect(data('dt')).toHaveText(['输入', '输出'])
-  await expect(data('dt:text-is("输出") + dd pre')).toHaveText('{\n  "enabled": true\n}')
-  await expect(business('strong:text-is("输出") + pre')).toHaveText('{"enabled":true}')
+  await expect(runtime('dt')).toHaveText(['节点实例', '所属 DAG 实例', '状态', '输入', '输出'])
+  await expect(runtime('dt:text-is("输出") + dd pre')).toHaveText('{\n  "enabled": true\n}')
+  await expect(plugin('strong')).toHaveText('命令日志 · stdout')
+  await expect(plugin('pre')).toHaveText('{"enabled":true}')
+  await expect(plugin('h4')).toHaveText('节点插件详情 · bash')
+  await expect(plugin('p')).toHaveText('以下内容由节点插件提供')
+  await expect(plugin(':is(button, input, textarea, select)')).toHaveCount(0)
+  expect(await browser.evaluate(selector => {
+    const element = document.querySelector(`${selector} .dsh-workflow-plugin-details`)!
+    const runtime = element.parentElement!
+    const style = getComputedStyle(element)
+    return { inside: runtime.getAttribute('aria-label'), border: parseFloat(style.borderTopWidth) > 0,
+      background: style.backgroundColor !== getComputedStyle(runtime).backgroundColor }
+  }, bodySelector)).toEqual({ inside: '运行信息', border: true, background: true })
 
   await inspectNode(screen, 'closed')
-  await expect(body(':is(h4, h5)')).toHaveText(['运行信息', '运行概况', '定义详情'])
+  await expect(body('h4:visible, h5:visible')).toHaveCount(0)
+  await expect(runtime('dt')).toHaveText(['所属 DAG 实例', '状态'])
   await expect(detailField(browser, 'closed', '状态')).toHaveText('已跳过')
   await screen.getByRole('button', '根 DAG 详情', { exact: true }).tap()
-  await expect(body(':is(h4, h5)')).toHaveText(['运行信息', '运行概况', '输入与输出', '定义详情'])
-  await expect(overview('dt')).toHaveText(['DAG 实例', '状态'])
+  await expect(body('h4, h5')).toHaveCount(0)
+  await expect(runtime('dt')).toHaveText(['DAG 实例', '状态', '输入'])
+  await expect(config('dt')).toHaveText(['id', 'name', 'type'])
+  await expect(body('.dsh-workflow-plugin-details')).toHaveCount(0)
 
   await inspectNode(screen, 'source')
   await screen.getByRole('button', '设置', { exact: true }).tap()
   await screen.getByRole('button', '深色', { exact: true }).tap()
   await screen.getByRole('button', '关闭', { exact: true }).tap()
-  await expect(body('h5:text-is("运行概况")')).toBeVisible()
+  await expect(plugin('h4')).toBeVisible()
+  expect(await browser.evaluate(selector => {
+    const element = document.querySelector(`${selector} .dsh-workflow-plugin-details`)!
+    return getComputedStyle(element).backgroundColor !== getComputedStyle(element.parentElement!).backgroundColor
+  }, bodySelector)).toBe(true)
   await screen.getByRole('button', '设置', { exact: true }).tap()
   await screen.getByRole('button', '浅色', { exact: true }).tap()
   await screen.getByRole('button', '中文', { exact: true }).tap()
   await screen.getByRole('menuitem', 'English', { exact: true }).tap()
   await screen.getByRole('button', 'Close', { exact: true }).tap()
   await browser.setViewport({ width: 390, height: 844 })
-  await expect(body(':is(h4, h5)')).toHaveText(['Running information', 'Run overview', 'Input and output', 'Node actions and progress', 'Definition details'])
+  await expect(body('h4')).toHaveText('Node plugin details · bash')
+  await expect(body('.dsh-workflow-plugin-details > p')).toHaveText('The following content is provided by the node plugin')
+  await expect(body('section[aria-label="Definition details"] dd pre')).toHaveText(configuration)
+  await expect(body('section[aria-label="Running information"] dt')).toHaveText(['Node instance', 'Containing DAG instance', 'Status', 'Input', 'Output'])
   await expect.poll(() => browser.evaluate(() => {
     const element = document.querySelector('.dsh-workflow-studio-panel:not([hidden]) .dsh-workflow-inspector-body')!
     return element.scrollWidth <= element.clientWidth
   })).toBe(true)
-  await body('h4:text-is("Definition details")').scrollIntoView()
-  await expect(body('h4:text-is("Definition details")')).toBeVisible()
+  await body('.dsh-workflow-plugin-details h4').scrollIntoView()
+  await expect(body('.dsh-workflow-plugin-details h4')).toBeVisible()
+})
+
+
+test('配置保留原字段顺序和完整结构，源模板更新后实例仍展示创建快照', async ({ app, screen, browser, dsh }) => {
+  const bundle = join(dsh.root, 'details-fixture')
+  await mkdir(join(bundle, 'templates', 'snapshot'), { recursive: true })
+  await writeFile(join(bundle, 'package.json'), JSON.stringify({ name: '@dsh-workflow/details-fixture', version: '0.1.0', private: true,
+    dsh: { bundle: { patch: './cordis.patch.yml' } }, exports: { './templates/*/workflow.yaml': './templates/*/workflow.yaml' } }))
+  await writeFile(join(bundle, 'cordis.patch.yml'), stringify([{ insert: [{ id: 'details-snapshot', name: 'dsh-workflow-template', config: { directory: '@dsh-workflow/details-fixture/templates/snapshot' } }] }]))
+  const prompt = '原语言 Original content\n' + '完整长文本不截断 — keep original text. '.repeat(60) + '\nFINAL_MARKER_731'
+  const node = { prompt, node_kind: 'agent', id: 'task', type: 'node', output_schema: { answer: { type: 'object', properties: { done: 'boolean' } } },
+    custom: { zero: 0, flag: false, empty: '', object: {}, array: [] }, dag: 'ordinary extension' }
+  const definition = { id: 'details-snapshot', name: '详情快照回归', type: 'dag', dag: [node] }
+  const file = join(bundle, 'templates', 'snapshot', 'workflow.yaml')
+  await writeFile(file, stringify(definition))
+  await dsh.stop(); await dsh.addBundle(bundle); await dsh.start(); await dsh.authenticate(browser)
+  await app.open('/')
+  await addWorkspace(screen, dsh.workspace)
+  await screen.getByRole('tab', '模板管理', { exact: true }).tap()
+  await screen.getByRole('button', '打开模板 详情快照回归', { exact: true }).tap()
+  await inspectNode(screen, 'task')
+  const configSelector = '.dsh-workflow-studio-panel:not([hidden]) .dsh-workflow-inspector-body > section[aria-label="定义详情"]'
+  const keys = browser.locator(`${configSelector} dt`)
+  const content = browser.locator(`${configSelector} dd pre`)
+  await expect(keys).toHaveText(['prompt', 'node_kind', 'id', 'type', 'output_schema', 'custom', 'dag'])
+  await expect(content).toHaveText([prompt, 'agent', 'task', 'node', '{\n  "answer": {\n    "type": "object",\n    "properties": {\n      "done": "boolean"\n    }\n  }\n}', '{\n  "zero": 0,\n  "flag": false,\n  "empty": "",\n  "object": {},\n  "array": []\n}', 'ordinary extension'])
+  const templateContent = await browser.evaluate(selector => [...document.querySelectorAll(`${selector} dd pre`)].map(element => element.textContent), configSelector)
+  await createInstance(screen, dsh.workspaceName, 'details-snapshot', 'snapshot-details')
+  await inspectNode(screen, 'task')
+  expect(await browser.evaluate(selector => [...document.querySelectorAll(`${selector} dd pre`)].map(element => element.textContent), configSelector)).toEqual(templateContent)
+  await expect(browser.locator('.dsh-workflow-studio-panel:not([hidden]) .dsh-workflow-plugin-details')).not.toBeVisible()
+  await writeFile(file, stringify({ ...definition, dag: [{ ...node, prompt: 'UPDATED SOURCE' }] }))
+  await dsh.restart(browser)
+  await app.open('/')
+  await openWorkflows(screen, browser)
+  await screen.getByRole('tab', '模板管理', { exact: true }).tap()
+  await screen.getByRole('button', '打开模板 详情快照回归', { exact: true }).tap()
+  await inspectNode(screen, 'task')
+  await expect(browser.locator(`${configSelector} dt:text-is("prompt") + dd pre`)).toHaveText('UPDATED SOURCE')
+  await screen.getByRole('tab', '实例管理', { exact: true }).tap()
+  await screen.getByRole('button', /^snapshot-details/).tap()
+  await inspectNode(screen, 'task')
+  await expect(browser.locator(`${configSelector} dt:text-is("prompt") + dd pre`)).toHaveText(prompt)
+  await browser.locator(`${configSelector} dt:text-is("dag")`).scrollIntoView()
+  await expect(browser.locator(`${configSelector} dt:text-is("dag") + dd pre`)).toHaveText('ordinary extension')
 })
