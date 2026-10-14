@@ -1473,7 +1473,7 @@ test('a missing type anywhere in the snapshot pauses new calls while an in-fligh
   let started = 0
   const external: ServerNode = {
     kind: 'external', requires: [], validate() {}, ready() { return undefined },
-    describe() { return { actions: [{ id: 'start', label: { text: 'Run external' }, primary: true, target: { type: 'server' } }] } },
+    describe() { return { actions: [{ id: 'start', label: { text: 'Run external' }, position: 1, icon: 'execute', target: { type: 'server' } }] } },
     action() { started++; return { fact: { kind: 'external', status: 'running' }, run: async () => { await new Promise<void>(resolve => { finish = resolve }); return { kind: 'external', status: 'succeeded', output: {} } } } },
     recover(fact) { return fact.status === 'running' ? { ...fact, status: 'unknown' } : fact }, project() { return {} },
   }

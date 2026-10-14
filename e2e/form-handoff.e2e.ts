@@ -34,7 +34,8 @@ test('结构化表单校验、下游预填、只读与宿主重启恢复', async
   await expect(screen.getByRole('heading', 'form-handoff-regression', { exact: true })).toBeVisible()
 
   await screen.getByRole('button', '详情 collect', { exact: true }).tap()
-  const collect = screen.getByRole('complementary', '详情 collect', { exact: true })
+  await screen.getByRole('button', '填写 collect', { exact: true }).tap()
+  const collect = screen.getByRole('dialog', '填写 collect', { exact: true })
   await collect.getByLabel('备注 / Note', { exact: true }).fill('persisted E2E value')
   await collect.getByRole('group', '任务列表 / Rows 1', { exact: true }).getByLabel('名称 / Name').fill('changed first')
   await collect.getByRole('group', '任务列表 / Rows 1', { exact: true }).getByLabel('数值 / Amount').fill('0')
@@ -46,8 +47,7 @@ test('结构化表单校验、下游预填、只读与宿主重启恢复', async
   await flag.press('Space')
   await flag.press('Space')
   await collect.getByRole('button', '提交表单', { exact: true }).tap()
-  await expect(collect.getByRole('status')).toHaveText('已提交，结果只读。')
-  await expect(collect.getByLabel('备注 / Note', { exact: true })).toBeDisabled()
+  await expect(collect).not.toBeVisible()
 
   const output = {
     rows: [
@@ -61,14 +61,15 @@ test('结构化表单校验、下游预填、只读与宿主重启恢复', async
   await screen.getByRole('button', '关闭详情', { exact: true }).tap()
   await screen.getByRole('button', '查看全图', { exact: true }).tap()
   await screen.getByRole('button', '详情 review', { exact: true }).tap()
-  const review = screen.getByRole('complementary', '详情 review', { exact: true })
+  await screen.getByRole('button', '填写 review', { exact: true }).tap()
+  const review = screen.getByRole('dialog', '填写 review', { exact: true })
   await expect(review.getByLabel('备注 / Note', { exact: true })).toHaveValue('persisted E2E value')
   await expect(review.getByLabel('选择 / Choice', { exact: true })).toHaveValue('0')
   await expect(review.getByLabel('批准 / Approved', { exact: true })).not.toBeChecked()
   await expect(review.getByLabel('额外备注 / Extra note')).toHaveValue('added default')
   await expectDetail(browser, 'review', '输入', output)
   await review.getByRole('button', '提交表单', { exact: true }).tap()
-  await expect(review.getByRole('status')).toHaveText('已提交，结果只读。')
+  await expect(review).not.toBeVisible()
   const reviewed = { ...output, extraNote: 'added default' }
   await expectDetail(browser, 'review', '输出', reviewed)
 
@@ -84,9 +85,6 @@ test('结构化表单校验、下游预填、只读与宿主重启恢复', async
   await screen.getByRole('button', /^form-handoff-regression/).tap()
   await screen.getByRole('button', '查看全图', { exact: true }).tap()
   await screen.getByRole('button', '详情 review', { exact: true }).tap()
-  await expect(review.getByRole('status')).toHaveText('已提交，结果只读。')
-  await expect(review.getByLabel('备注 / Note', { exact: true })).toHaveValue('persisted E2E value')
-  await expect(review.getByLabel('备注 / Note', { exact: true })).toBeDisabled()
-  await expect(review.getByLabel('额外备注 / Extra note')).toBeDisabled()
+  await expect(browser.locator('aside :is(input, textarea, select)')).toHaveCount(0)
   await expectDetail(browser, 'review', '输出', reviewed)
 })

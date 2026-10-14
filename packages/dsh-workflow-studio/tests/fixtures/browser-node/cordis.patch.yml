@@ -1,3 +1,7 @@
 - insert:
     - id: browser-probe
       name: ./server.js
+    - id: browser-probe-template
+      name: dsh-workflow-template
+      config:
+        directory: '@example/workflow-browser-probe'

@@ -1,10 +1,9 @@
 # Browser acceptance fixture
 
-Only install in the temporary rc.1 profile used by `dsh-browser-e2e`.
-Add this directory as an ordinary dsh bundle and copy `workflow.yaml` to that temporary Studio template directory. This is a diagnostic fixture, not a default node or template distributor.
+Only install in the temporary rc.1 profile used by `dsh-browser-e2e`. This ordinary bundle registers its own public node and template from `workflow.yaml`; it is not a default distributor.
 
-Create a workflow instance. The two client actions deliberately throw (one synchronously and one asynchronously). `Crash probe panel` deliberately throws during rendering. Reload the page to reset that local error boundary.
+`Run probe` occupies position 1 and saves a successful result through the server contract. Position 2 stays empty. `Fail synchronously` occupies position 3 and checks the public client action error feedback. Details show read-only facts. `e2e/workflows/node-actions.e2e.ts` verifies the empty position, host icon and text, keyboard actions and independent inspection.
 
-Enter `Probe draft`, then click `Unload optional UI`. It disposes a Cordis child plugin that owns only the optional browser registration. The server contribution remains installed: the draft must be cleared with a notice, client actions disappear, common details remain, and `Run probe` can still save and complete. Reload to register the optional browser capability again; saved output must remain and the draft must be empty.
+Rendering errors, asynchronous handler errors, frontend unload and draft lifetime are covered separately through the existing component/registry test entry. The previous diagnostic draft editor and self-unload controls in the detail panel were removed when details became read-only.
 
-`builtins.workflow.yaml` is the companion form → bash → form fixture, with separate draft and session nodes. Copy it as another temporary template to reproduce the built-in scenarios in the acceptance record.
+`builtins.workflow.yaml` remains a companion manual fixture; Form input now opens from the card in the plugin-owned Modal.

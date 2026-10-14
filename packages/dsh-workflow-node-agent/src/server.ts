@@ -136,10 +136,14 @@ export function createAgentNode(host?: Context): ServerNode & { dispose(): Promi
       const live = business?.sessionId && host?.agents.get(SessionId(business.sessionId))
       const generating = live && (live.status !== 'idle' || live.inbox.nextTurn.length > 0 || live.inbox.nextStep.length > 0)
       const canComplete = isBackground ? business?.pendingOutput !== undefined || fact?.status === 'succeeded' : business?.sessionCreated
+      const records = business?.attempts?.some(attempt => Boolean(attempt.address?.parentSessionId && attempt.address.childSessionId))
+      const retry = isBackground && (fact?.status === 'failed' || fact?.status === 'unknown')
       return { actions: [
-        ...(ready && fact?.status !== 'running' && fact?.status !== 'succeeded' && (isBackground ? !business?.pendingOutput : !business?.promptStarted) ? [{ id: 'start', label: { namespace: name, key: 'executeNode' }, target: { type: 'server' as const }, primary: true }] : []),
-        ...(!isBackground && business?.sessionCreated ? [{ id: 'open', label: { namespace: name, key: 'openSession' }, target: { type: 'client' as const, handler: 'openSession' } }] : []),
-        ...(ready && canComplete ? [{ id: 'complete', label: { namespace: name, key: 'completeSessionAgent' }, target: { type: 'server' as const }, disabled: fact?.status === 'running' || Boolean(generating) }] : []),
+        ...(ready && !business?.sessionCreated && !records && !retry && business?.pendingOutput === undefined && fact?.status !== 'succeeded' ? [{ id: 'start', position: 1 as const, icon: 'execute' as const, label: { namespace: name, key: 'executeNode' }, target: { type: 'server' as const }, disabled: fact?.status === 'running' }] : []),
+        ...(!isBackground && business?.sessionCreated ? [{ id: 'open', position: 1 as const, icon: 'conversation' as const, label: { namespace: name, key: 'openSession' }, target: { type: 'client' as const, handler: 'openSession' } }] : []),
+        ...(records ? [{ id: 'records', position: (isBackground ? 1 : 3) as 1 | 3, icon: 'record' as const, label: { namespace: name, key: 'openRecord' }, target: { type: 'client' as const, handler: 'records' } }] : []),
+        ...(ready ? [{ id: 'complete', position: 2 as const, icon: 'complete' as const, label: { namespace: name, key: 'completeSessionAgent' }, target: { type: 'server' as const }, disabled: !canComplete || fact?.status === 'running' || Boolean(generating) }] : []),
+        ...(ready && retry ? [{ id: 'start', position: 3 as const, icon: 'retry' as const, label: { namespace: name, key: 'retryNavigation' }, target: { type: 'server' as const } }] : []),
       ] }
     },
     validateFact(fact) {

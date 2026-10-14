@@ -1,4 +1,5 @@
 import type {} from '@deepseek-ai/dsh-client-locale/client'
+import { Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import React, { type FormEvent } from 'react'
 import type { Context } from '@deepseek-ai/cordis'
 import { en, zh } from './locales.js'
@@ -78,13 +79,16 @@ function FieldControl({ field, name, value, disabled, t, onChange }: {
 }
 
 const groupStyles = `
+.dsh-workflow-form-modal { width: min(600px, 100%); max-height: 100%; }
+.dsh-workflow-form-modal-content { min-height: 0; overflow: auto; }
+
 .dsh-workflow-form-group { display: grid; gap: 12px; min-width: 0; margin: 0; padding: 12px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 6px; }
 .dsh-workflow-form-group legend { font-weight: 600; padding: 0 4px; overflow-wrap: anywhere; }
 .dsh-workflow-form-group small { color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
 .dsh-workflow-form-item { display: grid; gap: 8px; min-width: 0; padding-bottom: 10px; border-bottom: 1px solid var(--dsw-alias-border-l3); }
 .dsh-workflow-form-group button { justify-self: start; }
 `
-function FormPanel(props: NodeViewProps) {
+function FormPanel(props: NodeViewProps & { draft?: NodeData; setDraft: (draft: NodeData) => void }) {
   const fields = React.useMemo(() => formFields(props.definition), [props.definition])
   const resolved = React.useMemo(() => initial(props, fields), [props.input, fields])
   const values: DraftObject = props.output ?? props.draft ?? resolved.values
@@ -106,14 +110,23 @@ function FormPanel(props: NodeViewProps) {
     <style>{groupStyles}</style>
     {resolved.errors.length > 0 && !props.draft && !completed && <p role="alert">{props.t('formPrefillInvalid')}: {resolved.errors.join(', ')}</p>}
     {Object.entries(fields).map(([key, field]) => <FieldControl key={key} field={field} name={key} value={Object.hasOwn(values, key) ? values[key] : undefined} disabled={completed || props.pending} t={props.t} onChange={value => set(key, value)} />)}
-    {completed ? <p role="status">{props.t('formSubmitted')}</p> : <button type="submit" disabled={props.pending || !props.ready}>{props.t('formSubmit')}</button>}
-    {(error || props.execution?.error) && <p role="alert">{error ?? props.execution?.error}</p>}
+    {completed ? <><p role="status">{props.t('formSubmitted')}</p><button type="button" disabled={props.pending || !props.ready} onClick={() => void props.action('retry', {})}>{props.t('formRetry')}</button></> : <button type="submit" disabled={props.pending || !props.ready}>{props.t('formSubmit')}</button>}
+    {(error || props.error || props.execution?.error) && <p role="alert">{error ?? props.error ?? props.execution?.error}</p>}
   </form>
+}
+
+function FormInteraction(props: NodeViewProps) {
+  const [draft, setDraft] = React.useState<NodeData>()
+  const [open, setOpen] = React.useState(false)
+  React.useEffect(() => { if (props.request) setOpen(true) }, [props.request])
+  React.useEffect(() => { if (!props.ready && props.output) setOpen(false) }, [props.ready, props.output])
+  return <><style>{groupStyles}</style><Modal className="dsh-workflow-form-modal" contentClassName="dsh-workflow-form-modal-content" open={open && props.active} title={`${props.t('formOpen')} ${props.label}`} closeLabel={props.t('formClose')} onClose={() => setOpen(false)}><FormPanel {...props} draft={draft} setDraft={setDraft} /></Modal></>
 }
 
 export const formClient: ClientNode = {
   kind: 'form',
-  Panel: FormPanel,
+  Panel: ({ output, execution, t }) => <>{output && <p role="status">{t('formSubmitted')}</p>}{execution?.error && <p role="alert">{execution.error}</p>}</>,
+  interactions: { fill: FormInteraction },
 }
 
 export const name = '@dsh-workflow/node-form'

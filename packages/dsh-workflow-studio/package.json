@@ -43,7 +43,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit && tsc -p tests/tsconfig.dag-engine.json",
     "build": "node scripts/build.mjs && tsc --emitDeclarationOnly",
-    "test": "node --import tsx --test tests/*.test.ts tests/*.test.tsx tests/*.test.mjs"
+    "test": "node --import ./tests/host-ui-register.mjs --import tsx --test tests/*.test.ts tests/*.test.tsx tests/*.test.mjs"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "~4.0.4",
@@ -69,7 +69,8 @@
     "@deepseek-ai/dsh-storage": "0.2.0-rc.1",
     "@deepseek-ai/dsh-storage-domain": "0.2.0-rc.1",
     "@deepseek-ai/dsh-storage-json": "0.2.0-rc.1",
-    "@deepseek-ai/dsh-workspace": "0.2.0-rc.1"
+    "@deepseek-ai/dsh-workspace": "0.2.0-rc.1",
+    "@deepseek-ai/dsh-client-ui-primitives": "0.2.0-rc.1"
   },
   "dependencies": {
     "@dagrejs/dagre": "^3.1.1",

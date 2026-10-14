@@ -58,7 +58,7 @@ function start(context: NodeContext): { fact: NodeFact; run?: () => Promise<Node
 
 export const bashNode: ServerNode = {
   kind: 'bash',
-  describe({ ready, fact }) { return { actions: ready && fact?.status !== 'running' ? [{ id: 'start', label: { namespace: name, key: 'executeNode' }, target: { type: 'server' }, primary: true }] : [] } },
+  describe({ ready, fact }) { return { actions: ready ? [{ id: 'start', label: { namespace: name, key: 'executeNode' }, target: { type: 'server' }, position: 1, icon: 'execute', disabled: fact?.status === 'running' }] : [] } },
   validateFact(fact) { if (fact.business !== undefined && (fact.business === null || typeof fact.business !== 'object' || Array.isArray(fact.business))) throw new Error('Invalid bash business state') },
 
   requires: ['workspaceRegistry', 'shell', 'sandboxPolicy'],

@@ -34,15 +34,18 @@ export function DagCanvas({ nodes: nodeViews = emptyNodeViews, detail, t, onActi
         const view = detail.nodeViews?.[node.id]
         const entry = nodeViews.get(String(definition?.node_kind), view?.source)
         const Summary = entry?.node.Summary
-        return Summary && entry && item && definition?.type === 'node' ? <NodeBoundary key={entry.generation} message={t('nodeViewFailed')}><Summary definition={definition as NodeDefinition} input={item.input as NodeData} output={item.status === 'completed' ? item.output as NodeData : undefined} execution={execution as NodeCardProps['execution']} data={view?.data} t={entry.t} /></NodeBoundary> : null
+        return Summary && entry && item && definition?.type === 'node' ? <NodeBoundary key={entry.generation} message={t('nodeViewFailed')}><Summary label={item.definitionId} definition={definition as NodeDefinition} input={item.input as NodeData} output={item.status === 'completed' ? item.output as NodeData : undefined} execution={execution as NodeCardProps['execution']} data={view?.data} t={entry.t} /></NodeBoundary> : null
       })(),
       control: (() => {
         const item = detail.snapshot.instances.find(row => row.instanceId === node.id)
         const definition = item?.type === 'node' ? definitionAt(detail.definition, item.definitionPath) : undefined
         if (definition?.type !== 'node' || item?.type !== 'node') return null
         const view = detail.nodeViews?.[item.instanceId]
-        const primary = visibleActions(view?.actions ?? [], nodeViews, String(definition.node_kind), view?.source).find(action => action.primary)
-        return primary ? <NodeButton action={primary} nodes={nodeViews} label={`${node.data.label}${item.forItem ? ` ${item.forItem.key}` : ''}`} pending={Boolean(pending?.includes(node.id))} blocked={Boolean(detail.incompatible)} onClick={() => onAction(node.id, primary.id, {})} /> : null
+        const actions = visibleActions(view?.actions ?? [], nodeViews, String(definition.node_kind), view?.source)
+        return [1, 2, 3].map(position => {
+          const action = actions.find(action => action.position === position)
+          return <span key={position} data-action-position={position}>{action && <NodeButton action={action} nodes={nodeViews} label={`${node.data.label}${item.forItem ? ` ${item.forItem.key}` : ''}`} pending={Boolean(pending?.includes(node.id))} blocked={Boolean(detail.incompatible)} onClick={() => onAction(node.id, action.id, {})} />}</span>
+        })
       })(),
     } } }
   })

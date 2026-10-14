@@ -18,6 +18,7 @@
     "install:local": "npm run build && dsh plugin --profile web add ./packages/dsh-workflow-bundle"
   },
   "devDependencies": {
+    "@deepseek-ai/dsh-client-ui-primitives": "0.2.0-rc.1",
     "@e2e-dev/web": "0.13.0",
     "@types/jsdom": "^21.1.7",
     "@types/node": "^22.20.0",

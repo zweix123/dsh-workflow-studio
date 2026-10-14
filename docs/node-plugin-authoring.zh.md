@@ -37,17 +37,26 @@ ctx.workflowNodes.register(ctx, name, node, { dispose: releaseNodeResources })
 
 ## 展示与可选浏览器入口
 
-`describe({ definition, input, fact?, ready })` 是纯只读入口，返回可序列化 `NodePresentation`。其中 `actions` 每项有稳定 id、`NodeText` 文案、目标、可选 disabled 和 primary；最多声明一个 primary。目标为 `{ type: 'server' }`、`{ type: 'details' }` 或 `{ type: 'client', handler }`。首次无事实也可列出操作，禁止为了枚举按钮调用 ready/action。`project(fact)` 决定提供给前端的业务数据；持久化的原始 business 不自动公开。
+`describe({ definition, input, fact?, ready })` 是纯只读入口，返回可序列化 `NodePresentation`。其中 `actions` 每项有稳定 id、`NodeText` 文案、目标、`position: 1 | 2 | 3`、公共 `icon` 标识和可选 disabled。同位置最多一个动作；缺位留空，不补位。目标为 `{ type: 'server' }` 或 `{ type: 'client', handler }`。首次无事实也可列出操作，禁止为了枚举按钮调用 ready/action。`project(fact)` 决定提供给前端的业务数据；持久化的原始 business 不自动公开。
+
+公共图标标识为 `execute`、`complete`、`conversation`、`record`、`retry`、`edit`，分别使用宿主 rc.1 的 TriangleRightFill、CheckOutline、NewChatOutline、ClockOutline、RefreshOutline、EditOutline Regular 图标。Studio 统一渲染图标和文字；节点不能传入任意 SVG 或额外按钮。Studio 保留编排状态和卡片外壳，插件的业务表达不能改变 DAG 完成事实。
+
+```ts
+{ id: 'fill', position: 1, icon: 'edit', label: { namespace: name, key: 'fill' }, target: { type: 'client', handler: 'fill' } }
+// clientNode.interactions = { fill: FormInteraction }
+```
 
 固定文本用 `{ text: 'Run' }`。多语言用 `{ namespace: name, key: 'run' }`，节点自行通过宿主 locale 注册词表，Studio 只解析文本引用。
 
 可选客户端导出普通 dsh browser 插件，在 manifest 的 `dsh.client` 声明 web 入口及宿主依赖。导出与 manifest 一致的 `name`，`inject` 包含 `workflowNodeViews`，调用 `ctx.workflowNodeViews.register(ctx, name, clientNode)`。类型从 `dsh-workflow-node/ui` 导入：
 
-- `Summary` 只能填充公共卡片的业务摘要区域，不能替换整张卡片或身份、状态、连接点和固定详情入口。
-- `Panel` 在公共详情的业务区域实现交互；通过 props 的 action 提交业务参数，draft/setDraft 管理同页临时草稿。
+- `Summary` 只能填充公共卡片的业务摘要区域，不能替换整张卡片或身份、状态、连接点和三个固定操作位。
+- `Panel` 在公共详情的业务区域展示只读内容，接收 `NodeDetailsProps`，没有 action、草稿或编辑回调；不能提供执行、完成、填写或宿主导航入口。
+- `interactions` 按 handler 名称登记 `NodeViewProps` 模块，处理插件自管浮窗。Studio 按真实节点实例和贡献代次挂载，传入 `request: { handler, sequence }`；只有匹配的模块收到请求。同一动作多次点击时 sequence 增加。模块使用 `action(name, payload)` 请求业务，读取 ready、pending、output、execution、error 更新界面，交互回调的异常通过 `reportError(error)` 交给公共反馈通道；action 的 Promise 结束表示请求完成，交付成功以 ready 与 output 为准。
+- 浮窗与临时草稿由插件自己的 React 状态管理。模块在同一实例页面驻留，关闭浮窗或切换 Tab 不销毁草稿；`active: false` 时隐藏浮窗，页面销毁或插件卸载会销毁模块。已保存结果从公共 props 恢复。不能用定义 id 代替节点实例 id 缓存草稿。Form 复用 rc.1 的 Modal，校验失败保留输入，成功交付后关闭；服务端已接受的结果仅可重交。
 - `handlers` 以名称提供同步或异步前端动作。Studio 处理防重、等待与错误反馈。查看和导航可以在历史节点上使用，与业务执行权限分开。
 
-同 kind 不同来源不会混用组件或 handler。没有组件时保留通用详情及有效服务端按钮；没有 handler 时隐藏对应操作。组件渲染错误在局部隔离，动作异常由公共通道反馈。前端卸载/重载会清除临时草稿并提示，已保存数据保留。
+同 kind 不同来源不会混用组件或 handler。没有组件时保留通用详情及有效服务端按钮；没有匹配 handler 或 interaction 时隐藏对应操作。同一 handler 同时存在时优先调用 handlers；不要重复声明。组件渲染错误在局部隔离，动作异常由公共通道反馈。前端卸载/重载会清除临时草稿并提示，已保存数据保留。
 
 需要从宿主其他页面打开指定节点时，可注入 `workflowNavigation`，调用 `open({ instanceId, nodeInstanceId }, abortSignal)`；用真实身份定位，遵守取消信号，结果为 false 时不继续导航。agent 的会话头动作及关联 API 已由节点包自己装配。
 

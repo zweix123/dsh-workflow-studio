@@ -15,7 +15,7 @@ const WorkflowNode = memo(function WorkflowNode({ data }: NodeProps<CanvasNode>)
   if (data.source === 'aggregate' || !data.view) return null
   const view = data.view
   const forItem = data.source === 'instance' ? data.forItem : undefined
-  return <div className="dsh-workflow-node" data-graph-node data-definition-id={data.label} data-status={view.displayStatus ?? (data.source === 'template' ? undefined : data.status)}>
+  return <div className="dsh-workflow-node" role="button" tabIndex={0} aria-label={`${view.detailsLabel} ${data.label}${forItem ? ` ${forItem.key}` : ''}`} onClick={event => { event.stopPropagation(); view.onInspect() }} onKeyDown={event => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); event.stopPropagation(); view.onInspect() } }} data-graph-node data-definition-id={data.label} data-status={view.displayStatus ?? (data.source === 'template' ? undefined : data.status)}>
     <Handle id="left" type="target" position={Position.Left} /><Handle id="top" type="target" position={Position.Top} />
     <div className="dsh-workflow-node-top"><span className="dsh-workflow-node-kind">{view.kindLabel}</span>{data.source !== 'template' && <span className="dsh-workflow-node-status"><i aria-hidden="true" />{view.statusLabel}</span>}</div>
     <strong title={data.label}>{data.label}</strong>
@@ -23,7 +23,6 @@ const WorkflowNode = memo(function WorkflowNode({ data }: NodeProps<CanvasNode>)
     {view.summary}
     <div className="dsh-workflow-node-actions">
       {view.control}
-      <button type="button" className="nodrag nopan" aria-label={`${view.detailsLabel} ${data.label}${forItem ? ` ${forItem.key}` : ''}`} onClick={event => { event.stopPropagation(); view.onInspect() }}>ⓘ {view.detailsLabel}</button>
     </div>
     <Handle id="top" type="source" position={Position.Top} /><Handle id="left" type="source" position={Position.Left} />
     <Handle id="right" type="source" position={Position.Right} /><Handle id="bottom" type="source" position={Position.Bottom} />
@@ -35,10 +34,9 @@ const DagGroupNode = memo(function DagGroupNode({ data }: NodeProps<CanvasNode>)
   const view = data.view
   return <div className="dsh-workflow-dag-group" data-graph-node data-definition-id={data.label} data-status={data.source === 'template' ? undefined : data.status}>
     <Handle id="left" type="target" position={Position.Left} /><Handle id="top" type="target" position={Position.Top} />
-    <div className="dsh-workflow-dag-heading">
+    <div className="dsh-workflow-dag-heading" role="button" tabIndex={0} aria-label={`${view.detailsLabel} ${data.label}`} onClick={event => { event.stopPropagation(); view.onInspect() }} onKeyDown={event => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); event.stopPropagation(); view.onInspect() } }}>
       <strong title={data.label}>{data.label}</strong>
       {data.source !== 'template' && <span className="dsh-workflow-node-status"><i aria-hidden="true" />{view.statusLabel}</span>}
-      <button type="button" className="nodrag nopan" aria-label={`${view.detailsLabel} ${data.label}`} onClick={event => { event.stopPropagation(); view.onInspect() }}>ⓘ {view.detailsLabel}</button>
     </div>
     <Handle id="top" type="source" position={Position.Top} /><Handle id="left" type="source" position={Position.Left} />
     <Handle id="right" type="source" position={Position.Right} /><Handle id="bottom" type="source" position={Position.Bottom} />

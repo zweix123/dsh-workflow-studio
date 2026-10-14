@@ -51,7 +51,7 @@ export function apply(ctx) {
   ctx.llm.registerAdapter(['workflow-fixture'], new FixtureAdapter())
   ctx.workflowNodes.register(ctx, name, {
     kind: 'host_probe', requires: inject.filter(key => key !== 'workflowNodes'), validate() {}, ready() {}, recover: fact => fact, project: fact => fact.business ?? {},
-    describe: ({ ready }) => ({ actions: ready ? [{ id: 'start', label: { text: '验证宿主' }, target: { type: 'server' } }] : [] }),
+    describe: ({ ready, fact }) => ({ actions: [ ...(ready ? [{ id: 'start', position: 1, icon: 'execute', label: { text: '验证宿主' }, target: { type: 'server' } }] : []), ...(fact?.business?.address ? [{ id: 'record', position: 3, icon: 'record', label: { text: '打开子记录' }, target: { type: 'client', handler: 'record' } }] : []) ] }),
     action(context) {
       return { fact: { kind: 'host_probe', status: 'running' }, run: async () => {
         const workspace = ctx.workspaceRegistry.get(context.workspaceId)

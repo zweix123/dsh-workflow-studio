@@ -8,7 +8,7 @@ const echo: ServerNode = {
   kind: 'echo', requires: [], validate() {}, ready() { return undefined },
   action() { return { fact: { kind: 'echo', status: 'succeeded', output: {} } } },
   recover(fact) { return fact }, project() { return {} },
-  describe() { return { actions: [{ id: 'start', label: { text: 'Echo' }, target: { type: 'server' }, primary: true }] } },
+  describe() { return { actions: [{ id: 'start', label: { text: 'Echo' }, target: { type: 'server' }, position: 1, icon: 'execute' }] } },
 }
 
 test('host waits for a concrete type, rejects every conflict and restores the remaining contribution', async () => {
@@ -57,4 +57,20 @@ test('node availability belongs to each host profile context', async () => {
     assert.equal(first.workflowNodes.identify('echo')?.source, 'first-profile-node')
     assert.equal(second.workflowNodes.identify('echo')?.source, 'second-profile-node')
   } finally { await Promise.all([first.fiber.dispose(), second.fiber.dispose()]) }
+})
+
+test('built-in actions declare stable positions through failures and accepted result delivery', async () => {
+  const { bashNode } = await import('../../dsh-workflow-node-bash/src/server.js')
+  const { formNode } = await import('../../dsh-workflow-node-form/src/server.js')
+  const { agentNode } = await import('../../dsh-workflow-node-agent/src/server.js')
+  const context = { definition: { id: 'n', type: 'node' as const }, input: {}, ready: true }
+  const actions = (node: ServerNode, fact?: any, definition = context.definition) => node.describe!({ ...context, definition, fact }).actions
+  assert.deepEqual(actions(bashNode, { kind: 'bash', status: 'running' }).map(a => [a.id, a.position, a.disabled]), [['start', 1, true]])
+  assert.deepEqual(actions(formNode, { kind: 'form', status: 'succeeded' }).map(a => [a.id, a.position]), [['retry', 1]])
+  assert.deepEqual(actions(agentNode).map(a => [a.id, a.position, Boolean(a.disabled)]), [['start', 1, false], ['complete', 2, true]])
+  const background: any = { ...context.definition, mode: 'background' }
+  assert.deepEqual(actions(agentNode, { kind: 'agent', status: 'waiting', business: { mode: 'background', pendingOutput: {} } }, background).map(a => [a.id, a.position]), [['complete', 2]])
+  const failure = { kind: 'agent', status: 'failed', business: { mode: 'background', attempts: [{ id: 'a', status: 'failed', address: { parentSessionId: 'p', childSessionId: 'c', mode: 'one-shot' } }] } }
+  assert.deepEqual(actions(agentNode, failure, background).map(a => [a.id, a.position, Boolean(a.disabled)]), [['records', 1, false], ['complete', 2, true], ['start', 3, false]])
+  assert.deepEqual(actions(agentNode, { ...failure, status: 'succeeded', output: {} }, background).map(a => [a.id, a.position, Boolean(a.disabled)]), [['records', 1, false], ['complete', 2, false]])
 })

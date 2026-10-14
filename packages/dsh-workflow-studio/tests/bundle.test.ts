@@ -4,6 +4,7 @@ import { createRequire } from 'node:module'
 import { runInNewContext } from 'node:vm'
 import { test } from 'node:test'
 import { Context } from '@deepseek-ai/cordis'
+import * as hostUi from './host-ui-mock.mjs'
 import { BrowserNodeRegistry } from '../../dsh-workflow-node/src/browser.js'
 
 test('browser artifact uses dsh factory and host React, registers panel and sidebar', async () => {
@@ -17,6 +18,7 @@ test('browser artifact uses dsh factory and host React, registers panel and side
       assert.equal(id, 'dsh-workflow-studio')
       plugin = factory(name => {
         modules.push(name)
+        if (name === '@deepseek-ai/dsh-client-ui-primitives') return hostUi
         assert.ok(['react', 'react/jsx-runtime', 'react-dom', 'react-dom/client'].includes(name), `unexpected browser import: ${name}`)
         return require(name)
       })
@@ -81,6 +83,7 @@ for (const [directory, kind] of [['dsh-workflow-node-bash', 'bash'], ['dsh-workf
     let plugin: any
     runInNewContext(source, { window: { __ModuleLoader__: { load({ id, factory }: any) {
       plugin = factory((name: string) => {
+        if (name === '@deepseek-ai/dsh-client-ui-primitives') return hostUi
         assert.ok(['react', 'react/jsx-runtime', 'react-dom', 'react-dom/client'].includes(name), `unexpected import: ${name}`)
         return require(name)
       })

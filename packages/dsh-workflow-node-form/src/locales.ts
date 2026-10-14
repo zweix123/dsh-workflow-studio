@@ -1,5 +1,6 @@
 export const en = {
   formOpen: 'Fill in',
+  formClose: 'Close form',
   formAdd: 'Add',
   formRemove: 'Remove',
   formSubmit: 'Submit form',
@@ -11,6 +12,7 @@ export const en = {
 
 export const zh = {
   formOpen: '填写',
+  formClose: '关闭表单',
   formAdd: '添加',
   formRemove: '删除',
   formSubmit: '提交表单',

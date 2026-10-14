@@ -9,7 +9,7 @@ import { inspectLayout } from '../../../../shared/layout.js'
 import { LayoutNotices } from '../LayoutNotices.js'
 import { DagCanvas } from './DagCanvas.js'
 import { canvasStatusLabel } from '../canvas/CanvasElements.js'
-import { emptyNodeViews, NodeButton, NodeBoundary, visibleActions, type NodeViews } from '../../../nodes.js'
+import { emptyNodeViews, NodeBoundary, visibleActions, type NodeViews } from '../../../nodes.js'
 import type { NodeViewProps } from 'dsh-workflow-node/ui'
 import type { NodeData, NodeDefinition } from 'dsh-workflow-node/contract'
 
@@ -21,24 +21,26 @@ function visibleWidth(preference: number, available: number): number {
 
 export function InstanceRunPanel({ nodes = emptyNodeViews, detail, t, onUpdate, onWidthUpdate, active = true, selection, reading }: { nodes?: NodeViews; reading?: CanvasReadingState; selection?: InstanceNavigationTarget & { request: number }; detail: InstanceDetail; t: WorkflowTranslate; onUpdate: (detail: InstanceDetail) => void; onWidthUpdate: (width: number) => void; active?: boolean }) {
   const registryRevision = useSyncExternalStore(nodes.subscribe, nodes.snapshot)
-  const draftOwners = useRef(new Map<string, number>())
-  const [draftDiscarded, setDraftDiscarded] = useState(false)
   const [selected, setSelected] = useState<string | null>(null)
   useEffect(() => { if (selection) setSelected(selection.nodeInstanceId) }, [selection])
   const [pending, setPending] = useState<string[]>([])
-  const [error, setError] = useState<{ key: WorkflowKey; message?: string }>()
-  const [drafts, setDrafts] = useState<Record<string, NodeData>>({})
+  const [error, setError] = useState<{ key: WorkflowKey; message?: string; nodeId?: string }>()
+  const requestOwners = useRef(new Map<string, number>())
+  const [draftDiscarded, setDraftDiscarded] = useState(false)
+  const [requests, setRequests] = useState<Record<string, { handler: string; sequence: number }>>({})
   useEffect(() => {
-    setDrafts(current => {
+    setRequests(current => {
       const next = { ...current }
-      let discarded = false
+      let changed = false
       for (const id of Object.keys(current)) {
         const item = detail.snapshot.instances.find(item => item.instanceId === id)
         const definition = item && definitionAt(detail.definition, item.definitionPath)
-        if (nodes.get(String(definition?.node_kind), detail.nodeViews?.[id]?.source)?.generation !== draftOwners.current.get(id)) { delete next[id]; draftOwners.current.delete(id); discarded = true }
+        if (nodes.get(String(definition?.node_kind), detail.nodeViews?.[id]?.source)?.generation !== requestOwners.current.get(id)) {
+          delete next[id]; requestOwners.current.delete(id); changed = true
+        }
       }
-      if (discarded) setDraftDiscarded(true)
-      return discarded ? next : current
+      if (changed) setDraftDiscarded(true)
+      return changed ? next : current
     })
   }, [nodes, registryRevision, detail])
   const busy = useRef(new Set<string>())
@@ -145,8 +147,8 @@ export function InstanceRunPanel({ nodes = emptyNodeViews, detail, t, onUpdate, 
       if (failure instanceof WorkflowInstanceApiError) {
         if (failure.latest) onUpdate(failure.latest)
         const key = failure.code === 'node-not-ready' ? 'nodeNotReady' : failure.code === 'submission-failed' ? 'submissionFailed' : failure.code === 'node-input-invalid' ? 'nodeInputInvalid' : 'requestFailed'
-        setError({ key, message: failure.message })
-      } else setError({ key: 'requestFailed' })
+        setError({ key, message: failure.message, nodeId })
+      } else setError({ key: 'requestFailed', nodeId })
     } finally {
       busy.current.delete(nodeId)
       setPending(current => current.filter(id => id !== nodeId))
@@ -162,8 +164,7 @@ export function InstanceRunPanel({ nodes = emptyNodeViews, detail, t, onUpdate, 
     return { data: detail.nodeViews?.[id]?.data, instanceId: detail.id, nodeInstanceId: id, label: item.definitionId, definition: definition as NodeDefinition, input: item.input as NodeData,
       output: (item.status === 'completed' ? item.output : execution?.status === 'succeeded' ? execution.output : undefined) as NodeData | undefined,
       execution: execution as NodeViewProps['execution'], ready: item.status === 'ready', pending: Boolean(detail.incompatible) || pending.includes(id),
-      t: entry?.t ?? (key => key), action: (name, payload) => void run(id, name, payload), draft: drafts[id],
-      setDraft: value => { if (entry) draftOwners.current.set(id, entry.generation); setDrafts(current => ({ ...current, [id]: value })) },
+      t: entry?.t ?? (key => key), action: (name, payload) => run(id, name, payload), active, request: requestOwners.current.get(id) === entry?.generation ? requests[id] : undefined, reportError: failure => setError({ key: 'requestFailed', message: failure instanceof Error ? failure.message : String(failure), nodeId: id }), error: error?.nodeId === id ? `${t(error.key)} ${error.message ?? ''}` : undefined,
     }
   }
   async function invoke(id: string, name: string): Promise<void> {
@@ -172,11 +173,18 @@ export function InstanceRunPanel({ nodes = emptyNodeViews, detail, t, onUpdate, 
     const view = detail.nodeViews?.[id]
     const action = visibleActions(view?.actions ?? [], nodes, String(props.definition.node_kind), view?.source).find(action => action.id === name)
     if (!action || action.disabled) return
-    if (action.target.type === 'details') { setSelected(id); return }
     if (action.target.type === 'server') { await run(id, name, {}); return }
     if (busy.current.has(id)) return
     busy.current.add(id); setPending(current => [...current, id]); setError(undefined)
-    try { await nodes.get(String(props.definition.node_kind), view?.source)?.node.handlers?.[action.target.handler]?.(props) }
+    try {
+      const handler = nodes.get(String(props.definition.node_kind), view?.source)?.node.handlers?.[action.target.handler]
+      if (handler) await handler(props)
+      else {
+        const entry = nodes.get(String(props.definition.node_kind), view?.source)
+        if (entry) requestOwners.current.set(id, entry.generation)
+        setRequests(current => ({ ...current, [id]: { handler: action.target.type === 'client' ? action.target.handler : '', sequence: (current[id]?.sequence ?? 0) + 1 } }))
+      }
+    }
     catch (error) { setError({ key: 'requestFailed', message: error instanceof Error ? error.message : String(error) }) }
     finally { busy.current.delete(id); setPending(current => current.filter(value => value !== id)) }
   }
@@ -188,6 +196,11 @@ export function InstanceRunPanel({ nodes = emptyNodeViews, detail, t, onUpdate, 
     {draftDiscarded && <p role="alert">{t('draftDiscarded')}</p>}
     {detail.incompatible && <p className="dsh-workflow-run-error" role="alert">{t('instanceIncompatible')} {detail.incompatible}</p>}
     <LayoutNotices report={layoutReport} t={t} surface="instance" />
+    {detail.snapshot.instances.filter(item => item.type === 'node').map(item => {
+      const props = propsFor(item.instanceId)
+      const entry = props && nodes.get(String(props.definition.node_kind), detail.nodeViews?.[item.instanceId]?.source)
+      return entry && props ? Object.entries(entry.node.interactions ?? {}).map(([handler, Interaction]) => <NodeBoundary key={`${item.instanceId}:${entry.generation}:${handler}`} message={t('nodeViewFailed')}><Interaction {...props} request={props.request?.handler === handler ? props.request : undefined} /></NodeBoundary>) : null
+    })}
     <div ref={runArea} className="dsh-workflow-run">
       <DagCanvas nodes={nodes} reading={reading} detail={detail} t={t} onAction={(id, name) => void invoke(id, name)} onInspect={setSelected} pending={pending} active={active} inspectorWidth={inspection ? visibleWidth(dragWidth ?? detail.drawerWidth ?? 320, areaWidth) : 0} />
       {inspection && <aside className="dsh-workflow-inspector" aria-label={`${t('nodeDetails')} ${inspection.definitionId}`} style={{ width: `${visibleWidth(dragWidth ?? detail.drawerWidth ?? 320, areaWidth)}px` }}>
@@ -221,8 +234,7 @@ export function InstanceRunPanel({ nodes = emptyNodeViews, detail, t, onUpdate, 
             if (!actions.length && !Panel && !view?.data && !execution) return null
             return <section className="dsh-workflow-runtime-block" aria-label={t('nodeProgress')}>
               <h5>{t('nodeProgress')}</h5>
-              {actions.length > 0 && <div className="dsh-workflow-business-actions">{actions.map(action => <NodeButton key={action.id} action={action} nodes={nodes} pending={pending.includes(item.instanceId)} blocked={Boolean(detail.incompatible)} onClick={() => void invoke(item.instanceId, action.id)} />)}</div>}
-              {Panel && entry ? <NodeBoundary key={`${item.instanceId}:${entry.generation}`} message={t('nodeViewFailed')}><Panel {...props} /></NodeBoundary> : null}
+              {Panel && entry ? <NodeBoundary key={`${item.instanceId}:${entry.generation}`} message={t('nodeViewFailed')}><Panel data={props.data} label={props.label} definition={props.definition} input={props.input} output={props.output} execution={props.execution} t={props.t} /></NodeBoundary> : null}
               {!Panel && (view?.data || execution) ? <pre>{JSON.stringify(view?.data ?? execution, null, 2)}</pre> : null}
               {execution?.error ? <p role="alert">{execution.error}</p> : null}
             </section>

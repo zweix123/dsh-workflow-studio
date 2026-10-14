@@ -33,11 +33,13 @@ export interface NodePlan {
 }
 
 export type NodeText = { text: string } | { key: string; namespace: string }
+export type NodeIcon = 'execute' | 'complete' | 'conversation' | 'record' | 'retry' | 'edit'
 export interface NodeAction {
   id: string
   label: NodeText
-  target: { type: 'server' } | { type: 'details' } | { type: 'client'; handler: string }
-  primary?: boolean
+  target: { type: 'server' } | { type: 'client'; handler: string }
+  position: 1 | 2 | 3
+  icon: NodeIcon
   disabled?: boolean
 }
 export interface NodePresentation { actions: NodeAction[]; data?: NodeData }

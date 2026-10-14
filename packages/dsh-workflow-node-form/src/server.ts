@@ -12,8 +12,8 @@ function validateSubmission(node: NodeDefinition, payload: unknown): NodeData {
 export const formNode: ServerNode = {
   kind: 'form',
   describe({ ready, fact }) { return { actions: [
-    ...(ready ? [{ id: 'fill', label: { namespace: name, key: 'formOpen' }, target: { type: 'details' as const }, primary: true }] : []),
-    ...(ready && fact?.status === 'succeeded' ? [{ id: 'retry', label: { namespace: name, key: 'formRetry' }, target: { type: 'server' as const } }] : []),
+    ...(ready && fact?.status !== 'succeeded' ? [{ id: 'fill', label: { namespace: name, key: 'formOpen' }, target: { type: 'client' as const, handler: 'fill' }, position: 1 as const, icon: 'edit' as const }] : []),
+    ...(ready && fact?.status === 'succeeded' ? [{ id: 'retry', position: 1 as const, icon: 'retry' as const, label: { namespace: name, key: 'formRetry' }, target: { type: 'server' as const } }] : []),
   ] } },
   validateFact(fact) { if (fact.status === 'succeeded' && (fact.business === null || typeof fact.business !== 'object' || Array.isArray(fact.business) || fact.business?.submitted !== true)) throw new Error('Invalid form business state') },
 

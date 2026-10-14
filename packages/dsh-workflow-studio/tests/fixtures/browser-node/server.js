@@ -6,9 +6,8 @@ export function apply(ctx) {
     kind: 'browser_probe', requires: [], validate() {}, ready() {},
     describe({ ready }) {
       return { actions: [
-        ...(ready ? [{ id: 'run', label: { text: 'Run probe' }, primary: true, target: { type: 'server' } }] : []),
-        { id: 'sync', label: { text: 'Fail synchronously' }, target: { type: 'client', handler: 'sync' } },
-        { id: 'async', label: { text: 'Fail asynchronously' }, target: { type: 'client', handler: 'async' } },
+        ...(ready ? [{ id: 'run', label: { text: 'Run probe' }, position: 1, icon: 'execute', target: { type: 'server' } }] : []),
+        { id: 'sync', position: 3, icon: 'conversation', label: { text: 'Fail synchronously' }, target: { type: 'client', handler: 'sync' } },
       ] }
     },
     action(context, action) {

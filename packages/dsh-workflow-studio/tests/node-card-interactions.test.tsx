@@ -2,7 +2,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { BrowserNodeRegistry } from '../../dsh-workflow-node/src/browser.js'
 import { bashClient } from '../../dsh-workflow-node-bash/src/client.js'
 import { formClient } from '../../dsh-workflow-node-form/src/client.js'
-import { agentClient } from '../../dsh-workflow-node-agent/src/client.js'
+import { agentClient, apply as applyAgent } from '../../dsh-workflow-node-agent/src/client.js'
 import { bashNode } from '../../dsh-workflow-node-bash/src/server.js'
 import { formNode } from '../../dsh-workflow-node-form/src/server.js'
 import { agentNode } from '../../dsh-workflow-node-agent/src/server.js'
@@ -288,15 +288,15 @@ test('cards execute independently and the inspector follows the selected graph o
     const transform = viewport?.getAttribute('transform')
     assert.match(card('first').textContent!, /就绪/)
     assert.notEqual(card('first').closest<HTMLElement>('.react-flow__node')?.style.pointerEvents, 'none')
-    assert.equal(card('first').querySelectorAll('button').length, 2)
-    assert.equal(card('later').querySelectorAll('button').length, 1)
-    assert.equal(card('closed').querySelectorAll('button').length, 1)
+    assert.equal(card('first').querySelectorAll('button').length, 1)
+    assert.equal(card('later').querySelectorAll('button').length, 0)
+    assert.equal(card('closed').querySelectorAll('button').length, 0)
     const group = container.querySelector<HTMLElement>('.dsh-workflow-dag-group[data-definition-id="nested"]')!
     assert.match(group.textContent!, /运行中/)
     assert.equal(group.querySelector('button[aria-label^="执行"]'), null)
     await act(async () => group.querySelector<HTMLElement>('.dsh-workflow-dag-heading strong')!.click())
-    assert.equal(container.querySelector('.dsh-workflow-inspector'), null)
-    await act(async () => group.querySelector<HTMLButtonElement>('[aria-label="详情 nested"]')!.click())
+    assert.ok(container.querySelector('.dsh-workflow-inspector'))
+    await act(async () => group.click())
     assert.match(container.querySelector('.dsh-workflow-inspector')!.textContent!, /nested.*运行中/)
     assert.equal(container.querySelector<HTMLElement>('.dsh-workflow-inspector')!.style.width, '320px')
     await act(async () => container.querySelector<HTMLElement>('.react-flow__pane')!.click())
@@ -365,11 +365,12 @@ test('cards execute independently and the inspector follows the selected graph o
     assert.equal(container.querySelector<HTMLElement>('.dsh-workflow-inspector')!.style.width, '430px')
     assert.equal(container.querySelector('.react-flow__viewport'), viewport)
     assert.equal(viewport?.getAttribute('transform'), transform)
-    await act(async () => card('inner').querySelector<HTMLButtonElement>('[aria-label="详情 inner"]')!.click())
+    await act(async () => card('inner').click())
     assert.match(container.querySelector('.dsh-workflow-inspector')!.textContent!, /inner.*就绪/)
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="关闭详情"]')!.click())
     await act(async () => card('first').click())
-    assert.equal(container.querySelector('.dsh-workflow-inspector'), null)
+    assert.ok(container.querySelector('.dsh-workflow-inspector'))
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="关闭详情"]')!.click())
     const execute = card('first').querySelector<HTMLButtonElement>('button[aria-label^="执行"]')!
     execute.focus()
     assert.equal(dom.window.document.activeElement, execute)
@@ -378,26 +379,26 @@ test('cards execute independently and the inspector follows the selected graph o
     assert.equal(container.querySelector('.dsh-workflow-inspector'), null)
     assert.equal(card('first').dataset.status, 'completed')
     container.style.width = '480px'
-    await act(async () => card('first').querySelector<HTMLButtonElement>('[aria-label="详情 first"]')!.click())
+    await act(async () => card('first').click())
     const narrowInspector = container.querySelector<HTMLElement>('.dsh-workflow-inspector')!
     assert.equal(narrowInspector.closest('.dsh-workflow-detail')?.getAttribute('aria-label'), 'Run')
     assert.match(narrowInspector.textContent!, /first.*已完成/)
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="关闭详情"]')!.click())
     assert.equal(container.querySelector('.dsh-workflow-inspector'), null)
     container.style.width = ''
-    await act(async () => card('later').querySelector<HTMLButtonElement>('button')!.click())
+    await act(async () => card('later').click())
     assert.match(container.querySelector('.dsh-workflow-inspector')!.textContent!, /later.*等待/)
     await act(async () => card('other').querySelector<HTMLButtonElement>('button[aria-label^="执行"]')!.click())
     assert.deepEqual(calls, ['i2', 'i3'])
     assert.equal(container.querySelector('.dsh-workflow-inspector'), null)
     assert.equal(card('later').dataset.status, 'ready')
-    await act(async () => card('later').querySelector<HTMLButtonElement>('[aria-label="详情 later"]')!.click())
+    await act(async () => card('later').click())
     assert.match(container.querySelector('.dsh-workflow-inspector')!.textContent!, /later.*就绪/)
     await act(async () => card('later').querySelector<HTMLButtonElement>('button[aria-label^="执行"]')!.click())
     assert.match(container.querySelector('.dsh-workflow-inspector')!.textContent!, /later.*已完成/)
     await act(async () => root.render(<WorkflowStudioPanel nodes={testNodes} t={key => { testLanguage = en; return en[key] }} useWorkspaces={useWorkspaces} />))
     assert.match(card('first').textContent!, /Completed/)
-    assert.equal(card('inner').querySelector<HTMLButtonElement>('[aria-label="Details inner"]')?.textContent?.trim(), 'ⓘ Details')
+    assert.equal(card('inner').getAttribute('aria-label'), 'Details inner')
     assert.match(container.querySelector('.dsh-workflow-inspector')!.textContent!, /later.*Completed/)
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Close details"]')!.click())
     assert.equal(container.querySelector('.dsh-workflow-inspector'), null)
@@ -438,9 +439,9 @@ test('workflow node inspector opens the existing agent, completes it, and shows 
   try {
     await render(base)
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="详情 agent"]')!.click())
-    await act(async () => [...container.querySelectorAll<HTMLButtonElement>('.dsh-workflow-inspector button')].find(button => button.textContent === zh.openSession)!.click())
+    await act(async () => [...container.querySelectorAll<HTMLButtonElement>('.dsh-workflow-node-actions button')].find(button => button.textContent === zh.openSession)!.click())
     assert.deepEqual(opened, ['session-one'])
-    await act(async () => [...container.querySelectorAll<HTMLButtonElement>('.dsh-workflow-inspector button')].find(button => button.textContent === zh.completeSessionAgent)!.click())
+    await act(async () => [...container.querySelectorAll<HTMLButtonElement>('.dsh-workflow-node-actions button')].find(button => button.textContent === zh.completeSessionAgent)!.click())
     assert.equal(completed, 1)
     assert.equal(latest.snapshot.instances.find((item: any) => item.instanceId === 'agent-i').status, 'completed')
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="详情 bash"]')!.click())
@@ -452,7 +453,7 @@ test('workflow node inspector opens the existing agent, completes it, and shows 
     assertStatus(zh.statusReady)
     assert.equal(container.querySelector<HTMLButtonElement>('[aria-label="执行 bash"]')!.disabled, false)
     await render({ ...base, executions: { ...base.executions, 'bash-i': { kind: 'bash', status: 'running' } } })
-    assert.equal(container.querySelector<HTMLButtonElement>('[aria-label="执行 bash"]'), null)
+    assert.equal(container.querySelector<HTMLButtonElement>('[aria-label="执行 bash"]')!.disabled, true)
     assertStatus(zh.statusRunning)
     assert.match(inspectorSection(container, '运行信息').textContent!, /正在执行/)
     await render({ ...base, executions: { ...base.executions, 'bash-i': { kind: 'bash', status: 'unknown' } } })
@@ -537,20 +538,22 @@ test('form keeps a page draft, submits through the node action, then becomes rea
   const render = async () => act(async () => root.render(<InstanceRunPanel nodes={testNodes} detail={withNodeViews(latest)} t={key => { testLanguage = en; return en[key] }} onUpdate={value => { latest = value }} onWidthUpdate={() => {}} />))
   try {
     await render()
-    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Details answer"]')!.click())
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Fill in answer"]')!.click())
     const textarea = container.querySelector<HTMLTextAreaElement>('textarea')!
     assert.equal(textarea.value, 'Ada')
     assert.equal(container.querySelector<HTMLInputElement>('input[type="number"]')!.value, '0')
     assert.equal(container.querySelector<HTMLInputElement>('input[type="checkbox"]')!.checked, false)
     await act(async () => { Object.getOwnPropertyDescriptor(dom.window.HTMLTextAreaElement.prototype, 'value')!.set!.call(textarea, 'Grace'); Simulate.change(textarea) })
+    assert.equal(container.querySelector('.dsh-workflow-inspector'), null)
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Details answer"]')!.click())
     assert.equal(fields(inspectorSection(container, 'Definition details')).id, 'answer')
     assert.equal(inspectorSection(container, 'Definition details').querySelector('textarea, input, button'), null)
     await act(async () => [...container.querySelectorAll<HTMLButtonElement>('.dsh-workflow-detail-header button')].find(button => button.textContent === en.rootDagDetails)!.click())
     assert.equal(fields(inspectorSection(container, 'Definition details')).id, 'root')
-    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Details answer"]')!.click())
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Fill in answer"]')!.click())
     assert.equal(container.querySelector<HTMLTextAreaElement>('textarea')!.value, 'Grace')
-    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Close details"]')!.click())
-    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Details answer"]')!.click())
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Close form"]')!.click())
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Fill in answer"]')!.click())
     assert.equal(container.querySelector<HTMLTextAreaElement>('textarea')!.value, 'Grace')
     assert.equal(requests, 0)
     await act(async () => container.querySelector<HTMLButtonElement>('button[type="submit"]')!.click())
@@ -559,7 +562,9 @@ test('form keeps a page draft, submits through the node action, then becomes rea
     await act(async () => container.querySelector<HTMLButtonElement>('button[type="submit"]')!.click())
     await render()
     assert.equal(requests, 2)
-    assert.equal(container.querySelector<HTMLTextAreaElement>('textarea')!.disabled, true)
+    assert.equal(container.querySelector('[role="dialog"]'), null)
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Details answer"]')!.click())
+    assert.deepEqual(JSON.parse(fields(inspectorSection(container, 'Input and output'))['Output']!), { name: 'Grace', count: 0, yes: false })
     assert.equal(container.querySelector<HTMLButtonElement>('button[type="submit"]'), null)
   } finally { await act(async () => root.unmount()); cleanup() }
 })
@@ -590,7 +595,7 @@ test('structured form edits independent rows, deletes without reinitializing its
   const change = async (input: HTMLInputElement | HTMLTextAreaElement, value: string) => act(async () => { Object.getOwnPropertyDescriptor(input instanceof dom.window.HTMLTextAreaElement ? dom.window.HTMLTextAreaElement.prototype : dom.window.HTMLInputElement.prototype, 'value')!.set!.call(input, value); Simulate.change(input) })
   try {
     await render()
-    await act(async () => button('Details answer').click())
+    await act(async () => button('Fill in answer').click())
     assert.equal(row(1).querySelector('textarea')!.value, 'first')
     await change(row(1).querySelector('textarea')!, 'changed')
     await act(async () => button('Remove Rows 2').click())
@@ -599,18 +604,18 @@ test('structured form edits independent rows, deletes without reinitializing its
     assert.equal(row(3).querySelector('textarea')!.value, '')
     assert.equal(row(3).querySelector('input')!.value, '0')
     await change(row(3).querySelector('textarea')!, 'new')
-    await act(async () => button('Close details').click())
-    await act(async () => button('Details answer').click())
+    await act(async () => button('Close form').click())
+    await act(async () => button('Fill in answer').click())
     assert.deepEqual([...container.querySelectorAll('textarea')].map(input => input.value), ['changed', 'last', 'new'])
     assert.deepEqual(defaultRows, [{ name: 'first', amount: 1 }, { name: 'middle', amount: 2 }, { name: 'last', amount: 3 }])
     for (let index = 3; index > 0; index--) await act(async () => button(`Remove Rows ${index}`).click())
-    await act(async () => button('Close details').click())
-    await act(async () => button('Details answer').click())
+    await act(async () => button('Close form').click())
+    await act(async () => button('Fill in answer').click())
     assert.equal(container.querySelector('textarea'), null)
     await act(async () => container.querySelector<HTMLButtonElement>('button[type="submit"]')!.click())
     await render()
     assert.deepEqual(submitted, { rows: [] })
-    assert.equal(button('Add Rows').disabled, true)
+    assert.equal(container.querySelector('[role="dialog"]'), null)
   } finally { await act(async () => root.unmount()); cleanup() }
 })
 
@@ -642,7 +647,7 @@ test('structured prefill excludes unknown fields without merging defaults and ne
   const change = async (element: HTMLInputElement | HTMLSelectElement, value: string) => act(async () => { Object.getOwnPropertyDescriptor(element instanceof dom.window.HTMLSelectElement ? dom.window.HTMLSelectElement.prototype : dom.window.HTMLInputElement.prototype, 'value')!.set!.call(element, value); Simulate.change(element) })
   const submit = () => act(async () => container.querySelector<HTMLButtonElement>('button[type="submit"]')!.click())
   try {
-    await render(); await act(async () => button('Details answer').click())
+    await render(); await act(async () => button('Fill in answer').click())
     assert.equal(control('title').value, '')
     assert.equal(control('score').value, '')
     assert.equal((control('checked') as HTMLInputElement).checked, false)
@@ -673,7 +678,7 @@ test('structured prefill excludes unknown fields without merging defaults and ne
     await submit(); await render()
     assert.deepEqual(requests[1], { record: { title: '', score: 0, checked: false, tags: ['b'], nested: [[6]], empty: {} }, picks: [false], numbers: [0], texts: [''] })
     assert.deepEqual(input, { record: { title: '', checked: false, tags: [], nested: [[]], empty: { unrelated: 1 }, unrelated: 'secret' } })
-    assert.ok([...container.querySelectorAll<HTMLInputElement | HTMLButtonElement | HTMLSelectElement>('.dsh-workflow-form input, .dsh-workflow-form select, .dsh-workflow-form button')].every(element => element.disabled))
+    assert.ok([...container.querySelectorAll<HTMLInputElement | HTMLButtonElement | HTMLSelectElement>('.dsh-workflow-form input, .dsh-workflow-form select, .dsh-workflow-form button[type="submit"]')].every(element => element.disabled))
   } finally { await act(async () => root.unmount()); cleanup() }
 })
 
@@ -694,7 +699,7 @@ test('prototype-sensitive form fields stay unfilled at every object level and su
   const button = (label: string) => container.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!
   try {
     await act(async () => root.render(<InstanceRunPanel nodes={testNodes} detail={withNodeViews(detail)} t={key => { testLanguage = en; return en[key] }} onUpdate={() => {}} onWidthUpdate={() => {}} />))
-    await act(async () => button('Details answer').click())
+    await act(async () => button('Fill in answer').click())
     assert.deepEqual([...container.querySelectorAll<HTMLInputElement>('.dsh-workflow-form input')].map(input => input.value), ['', '', '', ''])
     await act(async () => button('Add rows').click())
     const inputs = [...container.querySelectorAll<HTMLInputElement>('.dsh-workflow-form input')]
@@ -725,18 +730,20 @@ test('new structured item defaults are independent across rows and node instance
   const button = (label: string) => container.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!
   try {
     await act(async () => root.render(<InstanceRunPanel nodes={testNodes} detail={withNodeViews(detail)} t={key => { testLanguage = en; return en[key] }} onUpdate={() => {}} onWidthUpdate={() => {}} />))
-    await act(async () => button('Details a').click())
+    await act(async () => button('Fill in a').click())
     assert.equal(container.querySelector('.dsh-workflow-form input'), null)
     await act(async () => button('Add rows').click())
     await act(async () => button('Add rows').click())
     const first = container.querySelector<HTMLInputElement>('[aria-label="rows 1"] input[type="text"]')!
     await act(async () => { Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value')!.set!.call(first, 'Grace'); Simulate.change(first) })
     assert.equal(container.querySelector<HTMLInputElement>('[aria-label="rows 2"] input[type="text"]')!.value, 'Ada')
-    await act(async () => button('Details b').click())
+    await act(async () => button('Close form').click())
+    await act(async () => button('Fill in b').click())
     assert.equal(container.querySelector('.dsh-workflow-form input'), null)
     await act(async () => button('Add rows').click())
     assert.equal(container.querySelector<HTMLInputElement>('input[type="text"]')!.value, 'Ada')
-    await act(async () => button('Details a').click())
+    await act(async () => button('Close form').click())
+    await act(async () => button('Fill in a').click())
     assert.equal(container.querySelector<HTMLInputElement>('[aria-label="rows 1"] input[type="text"]')!.value, 'Grace')
     assert.deepEqual(itemDefault, { names: ['Ada'], count: 0, enabled: false })
   } finally { await act(async () => root.unmount()); cleanup() }
@@ -1017,7 +1024,7 @@ test('return uses the newest revision when an older detail response arrives afte
   try {
     await page.header('session')
     await act(async () => page.container.querySelector<HTMLButtonElement>('button')!.click())
-    const complete = [...page.container.querySelectorAll<HTMLButtonElement>('.dsh-workflow-inspector button')].find(button => button.textContent === zh.completeSessionAgent)!
+    const complete = [...page.container.querySelectorAll<HTMLButtonElement>('.dsh-workflow-node-actions button')].find(button => button.textContent === zh.completeSessionAgent)!
     assert.ok(complete)
     await act(async () => complete.click())
     await page.header('session')
@@ -1056,14 +1063,14 @@ test('an older return detail cannot overwrite a drawer width saved while navigat
 })
 
 
-test('third-party server actions get one public card button and missing client handlers are hidden', async () => {
+test('third-party actions retain explicit positions and details stay read-only', async () => {
   const { dom, cleanup } = testDom()
   const detail: any = { id: 'third-party', workspaceId: 'w', name: 'Third party', templateId: 't', createdAt: '2026-10-04T00:00:00Z', input: {},
     definition: { id: 'root', type: 'dag', dag: [{ id: 'external', type: 'node', node_kind: 'external' }] },
     snapshot: { rootInstanceId: 'root-i', instances: [{ instanceId: 'root-i', definitionId: 'root', definitionPath: [], type: 'dag', status: 'running', input: {}, parentInstanceId: null }, { instanceId: 'external-i', definitionId: 'external', definitionPath: ['dag', 0], type: 'node', status: 'ready', input: {}, parentInstanceId: 'root-i' }], waitingPositions: [], skippedPositions: [], edges: [] },
     nodeViews: { 'external-i': { source: 'external-package', token: 'current', actions: [
-      { id: 'start', label: { text: 'Run external' }, target: { type: 'server' }, primary: true },
-      { id: 'inspect', label: { text: 'Inspect external' }, target: { type: 'details' } },
+      { id: 'start', position: 1, icon: 'execute', label: { text: 'Run external' }, target: { type: 'server' } },
+      { id: 'again', position: 3, icon: 'retry', label: { text: 'Again external' }, target: { type: 'server' } },
       { id: 'open', label: { text: 'Missing handler' }, target: { type: 'client', handler: 'open' } },
     ] } },
   }
@@ -1074,13 +1081,15 @@ test('third-party server actions get one public card button and missing client h
   try {
     await act(async () => root.render(<InstanceRunPanel nodes={testNodes} detail={withNodeViews(detail)} t={key => { testLanguage = zh; return zh[key] }} onUpdate={() => {}} onWidthUpdate={() => {}} />))
     const card = container.querySelector('.react-flow__node[data-id="external-i"]')!
-    assert.deepEqual([...card.querySelectorAll('button')].map(button => button.textContent?.trim()), ['Run external', 'ⓘ 详情'])
+    assert.deepEqual([...card.querySelectorAll('button')].map(button => button.textContent?.trim()), ['Run external', 'Again external'])
+    assert.equal(card.querySelectorAll('[data-action-position]').length, 3)
+    assert.equal(card.querySelector('[data-action-position="2"]')!.textContent, '')
     await act(async () => card.querySelector<HTMLButtonElement>('button')!.click())
     assert.equal(calls.length, 1)
     assert.equal(container.querySelector('.dsh-workflow-inspector'), null)
     await act(async () => card.querySelector<HTMLButtonElement>('[aria-label="详情 external"]')!.click())
     const runtime = inspectorSection(container, '运行信息')
-    assert.match(runtime.textContent!, /Run external.*Inspect external/s)
+    assert.equal(runtime.querySelector('button, input, textarea'), null)
     assert.doesNotMatch(runtime.textContent!, /Missing handler/)
     assert.equal(fields(inspectorSection(container, '定义详情')).node_kind, 'external')
   } finally { await act(async () => root.unmount()); cleanup() }
@@ -1098,26 +1107,29 @@ test('frontend unload clears its drafts with feedback, and a new frontend keeps 
   const render = () => act(async () => root.render(<InstanceRunPanel nodes={testNodes} detail={withNodeViews(detail)} t={key => zh[key]} onUpdate={() => {}} onWidthUpdate={() => {}} />))
   try {
     await render()
-    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="详情 answer"]')!.click())
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="填写 answer"]')!.click())
     const input = container.querySelector<HTMLInputElement>('.dsh-workflow-form input')!
     await act(async () => { input.value = 'temporary'; Simulate.change(input) })
-    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="关闭详情"]')!.click())
-    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="详情 answer"]')!.click())
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="关闭表单"]')!.click())
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="填写 answer"]')!.click())
     assert.equal(container.querySelector<HTMLInputElement>('.dsh-workflow-form input')!.value, 'temporary')
     await act(async () => context.fiber.dispose())
-    assert.match(container.textContent!, /未提交草稿已清除/)
+    assert.equal(container.querySelector('[role="dialog"]'), null)
     assert.equal(container.querySelector('.dsh-workflow-form'), null)
     const fresh = new Context()
     await act(async () => testNodes.register(fresh, '@dsh-workflow/node-form', formClient))
+    assert.equal(Boolean(container.querySelector('[role="dialog"]')), false)
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="填写 answer"]')!.click())
     assert.equal(container.querySelector<HTMLInputElement>('.dsh-workflow-form input')!.value, '')
     detail.snapshot.instances[1].status = 'completed'
     detail.snapshot.instances[1].output = { message: 'accepted' }
     await render()
-    assert.equal(container.querySelector<HTMLInputElement>('.dsh-workflow-form input')!.value, 'accepted')
-    assert.equal(container.querySelector<HTMLInputElement>('.dsh-workflow-form input')!.disabled, true)
+    assert.equal(container.querySelector('[role="dialog"]'), null)
+    await act(async () => container.querySelector<HTMLElement>('[aria-label="详情 answer"]')!.click())
+    assert.deepEqual(JSON.parse(fields(inspectorSection(container, '输入与输出'))['输出']!), { message: 'accepted' })
     await act(async () => fresh.fiber.dispose())
     await act(async () => testNodes.register(new Context(), '@dsh-workflow/node-form', formClient))
-    assert.equal(container.querySelector<HTMLInputElement>('.dsh-workflow-form input')!.value, 'accepted')
+    assert.deepEqual(JSON.parse(fields(inspectorSection(container, '输入与输出'))['输出']!), { message: 'accepted' })
   } finally { await act(async () => root.unmount()); cleanup() }
 })
 
@@ -1127,7 +1139,7 @@ test('browser contributions match their source and isolate component and synchro
     definition: { id: 'root', type: 'dag', dag: [{ id: 'custom', type: 'node', node_kind: 'custom' }] },
     snapshot: { rootInstanceId: 'r', instances: [{ instanceId: 'r', type: 'dag', status: 'running', definitionId: 'root', definitionPath: [], parentInstanceId: null, input: {} }, { instanceId: 'c', type: 'node', status: 'completed', definitionId: 'custom', definitionPath: ['dag', 0], parentInstanceId: 'r', input: {}, output: {} }], waitingPositions: [], skippedPositions: [], edges: [] },
     incompatible: 'missing another required type',
-    nodeViews: { c: { source: 'correct-package', token: 'now', actions: [{ id: 'sync', label: { text: 'Sync navigation' }, target: { type: 'client', handler: 'sync' }, primary: true }, { id: 'async', label: { text: 'Async navigation' }, target: { type: 'client', handler: 'async' } }] } },
+    nodeViews: { c: { source: 'correct-package', token: 'now', actions: [{ id: 'sync', position: 1, icon: 'conversation', label: { text: 'Sync navigation' }, target: { type: 'client', handler: 'sync' }, primary: true }, { id: 'async', position: 3, icon: 'record', label: { text: 'Async navigation' }, target: { type: 'client', handler: 'async' } }] } },
   }
   const container = dom.window.document.getElementById('root')!
   const root = createRoot(container)
@@ -1150,10 +1162,53 @@ test('browser contributions match their source and isolate component and synchro
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="详情 custom"]')!.click())
     assert.match(inspectorSection(container, '运行信息').textContent!, /节点业务界面发生错误/)
     assert.equal(fields(inspectorSection(container, '定义详情')).node_kind, 'custom')
-    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Async navigation"]')!.click())
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Async navigation custom"]')!.click())
     assert.match(container.textContent!, /async failure/)
     await act(async () => correct.fiber.dispose())
     assert.doesNotMatch(inspectorSection(container, '运行信息').textContent!, /Sync navigation|Wrong business/)
     assert.ok(container.querySelector('[aria-label="关闭详情"]'))
   } finally { console.error = oldError; await act(async () => root.unmount()); await wrong.fiber.dispose(); cleanup() }
+})
+
+
+test('Agent record navigation reports host failures and remains retryable, with newest available attempt first', async () => {
+  const { dom, cleanup } = testDom()
+  const ctx = new Context()
+  const registry = new BrowserNodeRegistry((_namespace, key) => zh[key as keyof typeof zh] ?? key)
+  let fail = true
+  const opened: any[] = []
+  ctx.provide('workflowNodeViews', registry)
+  ctx.provide('locale', { register: () => () => {} } as never)
+  ctx.provide('slots', { inject() {} } as never)
+  ctx.provide('uiWorkspace', { openSession(address: unknown) { if (fail) throw new Error('host record unavailable'); opened.push(address) } } as never)
+  applyAgent(ctx)
+  const address = (id: string) => ({ kind: 'subagent', parentSessionId: 'parent', childSessionId: id, mode: 'one-shot' })
+  const detail: any = { id: 'records', name: 'Records', definition: { id: 'root', type: 'dag', dag: [{ id: 'task', type: 'node', node_kind: 'agent', mode: 'background', prompt: '' }] }, snapshot: { rootInstanceId: 'r', instances: [{ instanceId: 'r', type: 'dag', status: 'running', definitionId: 'root', definitionPath: [], parentInstanceId: null, input: {} }, { instanceId: 'n', type: 'node', status: 'ready', definitionId: 'task', definitionPath: ['dag', 0], parentInstanceId: 'r', input: {} }], waitingPositions: [], skippedPositions: [], edges: [] }, executions: { n: { kind: 'agent', status: 'waiting', mode: 'background', pendingOutput: {}, attempts: [{ id: 'old', status: 'succeeded', address: address('old') }] } } }
+  const container = dom.window.document.getElementById('root')!
+  const root = createRoot(container)
+  const render = () => act(async () => root.render(<InstanceRunPanel nodes={registry} detail={withNodeViews(detail)} t={key => zh[key]} onUpdate={() => {}} onWidthUpdate={() => {}} />))
+  const records = () => container.querySelector<HTMLButtonElement>('[aria-label="记录 task"]')!
+  const previousError = console.error; console.error = () => {}
+  try {
+    await render()
+    await act(async () => records().click())
+    assert.match(container.textContent!, /host record unavailable/)
+    fail = false
+    await act(async () => records().click())
+    assert.equal(opened[0].childSessionId, 'old')
+    assert.equal(container.querySelector('[role="dialog"]'), null)
+    detail.executions.n.attempts.push({ id: 'missing', status: 'failed' }, { id: 'new', status: 'succeeded', address: address('new') })
+    await render()
+    await act(async () => records().click())
+    const dialog = container.querySelector('[role="dialog"]')!
+    assert.deepEqual([...dialog.querySelectorAll('li button')].map(button => button.textContent), ['记录 3 · 成功', '记录 1 · 成功'])
+    fail = true
+    await act(async () => dialog.querySelector<HTMLButtonElement>('li button')!.click())
+    assert.ok(container.querySelector('[role="dialog"]'))
+    assert.match(container.textContent!, /host record unavailable/)
+    fail = false
+    await act(async () => dialog.querySelector<HTMLButtonElement>('li button')!.click())
+    assert.equal(opened[1].childSessionId, 'new')
+    assert.equal(container.querySelector('[role="dialog"]'), null)
+  } finally { console.error = previousError; await act(async () => root.unmount()); await ctx.fiber.dispose(); cleanup() }
 })
