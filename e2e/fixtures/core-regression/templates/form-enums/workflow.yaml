@@ -1,0 +1,96 @@
+id: regression-form-enums
+name: 枚举名称与多选验收
+type: dag
+dag:
+  - id: collect
+    type: node
+    node_kind: form
+    output_schema: &fields
+      priority: string
+      level: number
+      approved: boolean
+      settings:
+        type: object
+        properties:
+          state: string
+      tags:
+        type: array
+        items: string
+      levels:
+        type: array
+        items: number
+      flags:
+        type: array
+        items: boolean
+      empty:
+        type: array
+        items: string
+      repeat:
+        type: array
+        items: string
+    schema: &annotations
+      properties:
+        priority: {title: 优先级 / Priority, enum: [high, medium, low], default: medium}
+        level: {title: 级别 / Level, enum: [0, 1], default: 0}
+        approved: {title: 批准 / Approved, enum: [false, true], default: false}
+        settings:
+          properties:
+            state: {title: 状态 / State, enum: [draft, ready], default: draft}
+        tags:
+          title: 标签 / Tags
+          uniqueItems: true
+          default: [frontend]
+          items: {enum: [frontend, backend, test]}
+        levels:
+          title: 多选级别 / Levels
+          uniqueItems: true
+          default: [0]
+          items: {enum: [0, 1, 2]}
+        flags:
+          title: 布尔多选 / Flags
+          uniqueItems: true
+          default: [false]
+          items: {enum: [false, true]}
+        empty:
+          title: 可空多选 / Empty
+          uniqueItems: true
+          items: {enum: [x]}
+        repeat:
+          title: 普通枚举列表 / Repeat
+          default: [a, a]
+          items: {enum: [a, b]}
+    uiSchema: &controls
+      priority:
+        ui:enumNames: [高优先级 / High, 中优先级 / Medium, 低优先级 / Low]
+      level:
+        ui:enumNames: {'0': 零 / Zero, '1': 一 / One}
+      approved:
+        ui:enumNames: {'false': 否 / No, 'true': 是 / Yes}
+      settings:
+        state:
+          ui:enumNames: {draft: 草稿 / Draft}
+      tags:
+        ui:widget: checkboxes
+        ui:enumNames: {frontend: 前端 / Frontend, backend: 后端 / Backend, test: 测试 / Test}
+      levels:
+        items:
+          ui:enumNames: [零级 / Zero level, 一级 / First level, 二级 / Second level]
+      flags:
+        ui:widget: checkboxes
+        items:
+          ui:enumNames: [布尔否 / Boolean no, 布尔是 / Boolean yes]
+      empty:
+        ui:widget: checkboxes
+      repeat:
+        items:
+          ui:enumNames: [选项 A / Option A, 选项 B / Option B]
+  - id: review
+    type: node
+    node_kind: form
+    input_schema: *fields
+    output_schema: *fields
+    schema: *annotations
+    uiSchema: *controls
+  - type: edge
+    from: collect
+    to: review

@@ -58,6 +58,22 @@ function FieldControl({ field, name, value, disabled, t, onChange }: {
   }
   if (field.type === 'array') {
     const items = Array.isArray(value) ? value : []
+    if (field.uniqueItems && field.items!.enum) {
+      const options = field.items!.enum
+      return <fieldset className="dsh-workflow-form-group"><legend id={id}>{label}</legend>
+        {field.description && <small>{field.description}</small>}
+        {field.widget === 'checkboxes' ? <div className="dsh-workflow-form-options">
+          {options.map((option, index) => <label key={index}>
+            <input type="checkbox" disabled={disabled} checked={items.includes(option)} onChange={event => onChange(event.target.checked ? items.includes(option) ? items : [...items, option] : items.filter(item => item !== option))} />
+            <span>{field.items!.enumNames?.[index] ?? String(option)}</span>
+          </label>)}
+        </div> : <div className="dsh-workflow-form-field"><select aria-labelledby={id} multiple disabled={disabled}
+          value={items.map(item => String(options.indexOf(item as NodeValue)))}
+          onChange={event => onChange(Array.from(event.target.selectedOptions, option => options[Number(option.value)]!))}>
+          {options.map((option, index) => <option key={index} value={index}>{field.items!.enumNames?.[index] ?? String(option)}</option>)}
+        </select></div>}
+      </fieldset>
+    }
     return <fieldset className="dsh-workflow-form-group"><legend>{label}</legend>
       {field.description && <small>{field.description}</small>}
       {items.map((item, index) => <div className="dsh-workflow-form-item" role="group" aria-label={`${label} ${index + 1}`} key={index}>
@@ -71,7 +87,7 @@ function FieldControl({ field, name, value, disabled, t, onChange }: {
     <label htmlFor={id}>{label}</label>
     {field.description && <small>{field.description}</small>}
     {field.enum ? <select id={id} disabled={disabled} value={value === undefined ? '' : String(field.enum.findIndex(option => option === value))} onChange={event => onChange(field.enum![Number(event.target.value)])}>
-      <option value="" disabled>{t('formChoose')}</option>{field.enum.map((option, index) => <option key={index} value={index}>{String(option)}</option>)}
+      <option value="" disabled>{t('formChoose')}</option>{field.enum.map((option, index) => <option key={index} value={index}>{field.enumNames?.[index] ?? String(option)}</option>)}
     </select> : field.type === 'boolean' ? <input id={id} type="checkbox" role="switch" disabled={disabled} checked={value === true} onChange={event => onChange(event.target.checked)} />
       : field.widget === 'textarea' ? <textarea id={id} disabled={disabled} value={typeof value === 'string' ? value : ''} onChange={event => onChange(event.target.value)} />
         : <input id={id} type={field.type === 'number' ? 'number' : 'text'} disabled={disabled} value={value === undefined ? '' : String(value)} onChange={event => onChange(field.type === 'number' ? (event.target.value === '' ? undefined : Number(event.target.value)) : event.target.value)} />}
@@ -87,6 +103,10 @@ const groupStyles = `
 .dsh-workflow-form-group small { color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
 .dsh-workflow-form-item { display: grid; gap: 8px; min-width: 0; padding-bottom: 10px; border-bottom: 1px solid var(--dsw-alias-border-l3); }
 .dsh-workflow-form-group button { justify-self: start; }
+.dsh-workflow-form-options { display: grid; gap: 8px; min-width: 0; }
+.dsh-workflow-form-options label { display: flex; align-items: flex-start; gap: 8px; overflow-wrap: anywhere; }
+.dsh-workflow-form-options input { flex: none; accent-color: var(--dsw-alias-state-business-primary); }
+.dsh-workflow-form-options input:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 2px; }
 `
 function FormPanel(props: NodeViewProps & { draft?: NodeData; setDraft: (draft: NodeData) => void }) {
   const fields = React.useMemo(() => formFields(props.definition), [props.definition])

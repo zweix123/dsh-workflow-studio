@@ -1,0 +1,34 @@
+id: regression-form-enum-duplicates
+name: 重复预填枚举验收
+type: dag
+dag:
+  - id: source
+    type: node
+    node_kind: form
+    output_schema: &fields
+      tags:
+        type: array
+        items: string
+    schema:
+      properties:
+        tags:
+          default: [a, a]
+          items: {enum: [a, b]}
+  - id: review
+    type: node
+    node_kind: form
+    input_schema: *fields
+    output_schema: *fields
+    schema:
+      properties:
+        tags:
+          title: 标签
+          uniqueItems: true
+          items: {enum: [a, b]}
+    uiSchema:
+      tags:
+        ui:widget: checkboxes
+        ui:enumNames: [选项 A, 选项 B]
+  - type: edge
+    from: source
+    to: review

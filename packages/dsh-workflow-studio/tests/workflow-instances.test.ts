@@ -290,6 +290,68 @@ test('form compares prefill structure independently of key order and validates e
   assert.match(catalog.templates.find((item: any) => item.id === 'mismatched-form').error, /prefill input/)
 })
 
+test('form enum labels never become values, uniqueness is recursive and rejected submissions do not advance the workflow', async () => {
+  const f = await fixture()
+  const output = { priority: 'string', amount: 'number', approved: 'boolean', tags: { type: 'array', items: 'string' }, numbers: { type: 'array', items: 'number' }, flags: { type: 'array', items: 'boolean' },
+    records: { type: 'array', items: { type: 'object', properties: { a: 'string', b: 'number' } } }, nested: { type: 'object', properties: { tags: { type: 'array', items: 'string' } } }, repeat: { type: 'array', items: 'string' } }
+  await putTemplate(f.templateRoot, 'enum-controls', stringify({ id: 'root', type: 'dag', dag: [
+    { id: 'answer', type: 'node', node_kind: 'form', output_schema: output,
+      schema: { properties: { priority: { enum: ['high', 'low'] }, amount: { enum: [0, 1] }, approved: { enum: [false, true] },
+        tags: { uniqueItems: true, items: { enum: ['a', 'b'] } }, numbers: { uniqueItems: true, items: { enum: [0, 1] } }, flags: { uniqueItems: true, items: { enum: [false, true] } }, records: { uniqueItems: true }, nested: { properties: { tags: { uniqueItems: true, items: { enum: ['a', 'b'] } } } } } },
+      uiSchema: { priority: { 'ui:enumNames': ['高', '低'] }, amount: { 'ui:enumNames': { 0: '零' } }, approved: { 'ui:enumNames': { false: '否', true: '是' } }, tags: { 'ui:widget': 'checkboxes', 'ui:enumNames': ['A', 'B'] }, flags: { items: { 'ui:enumNames': ['否', '是'] } }, nested: { tags: { 'ui:widget': 'select' } } } },
+    { id: 'next', type: 'node', node_kind: 'form', input_schema: output, output_schema: output }, { type: 'edge', from: 'answer', to: 'next' },
+  ] }))
+  const response = await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Enums', templateId: 'enum-controls' })
+  assert.equal(response.status, 201)
+  const created = await response.json() as any
+  const nodeId = created.snapshot.instances.find((item: any) => item.definitionId === 'answer').instanceId
+  const path = `${INSTANCES_PATH}/${created.id}`
+  const value = { priority: 'high', amount: 0, approved: false, tags: ['a'], numbers: [0, 1], flags: [false, true], records: [{ a: 'x', b: 0 }], nested: { tags: [] }, repeat: ['a', 'a'] }
+  for (const [changes, location] of [
+    [{ priority: '高' }, 'priority'], [{ amount: '0' }, 'amount'], [{ approved: 'false' }, 'approved'],
+    [{ tags: ['a', 'a'] }, 'tags[1]'], [{ tags: ['other'] }, 'tags[0]'], [{ numbers: [0, 0] }, 'numbers[1]'], [{ flags: [false, false] }, 'flags[1]'],
+    [{ records: [{ a: 'x', b: 0 }, { b: 0, a: 'x' }] }, 'records[1]'], [{ nested: { tags: ['b', 'b'] } }, 'nested.tags[1]'],
+  ] as const) {
+    const invalid = await postJson(f.url(`${path}/nodes/${nodeId}/actions/submit`), { ...value, ...changes })
+    assert.equal(invalid.status, 422)
+    assert.ok((await invalid.json() as any).error.message.includes(location))
+    const unchanged = await (await fetch(f.url(path))).json() as any
+    assert.equal(unchanged.snapshot.instances.find((item: any) => item.instanceId === nodeId).status, 'ready')
+    assert.equal(unchanged.executions?.[nodeId]?.status === 'succeeded', false)
+    assert.equal(unchanged.snapshot.instances.find((item: any) => item.definitionId === 'next'), undefined)
+  }
+  const done = await postJson(f.url(`${path}/nodes/${nodeId}/actions/submit`), value)
+  assert.equal(done.status, 200)
+  assert.deepEqual((await done.json() as any).snapshot.instances.find((item: any) => item.definitionId === 'next').input, value)
+  await f.close()
+  const restored = await openHost(f.storageRoot, f.templateRoot, f.root)
+  cleanups.push(restored.close)
+  assert.deepEqual((await (await fetch(restored.url(path))).json() as any).executions[nodeId].output, value)
+})
+
+test('form rejects malformed enum labels, multi-select controls and duplicate defaults in the template catalog', async () => {
+  const f = await fixture()
+  const output = { choice: 'string', tags: { type: 'array', items: 'number' } }
+  const schema = { properties: { choice: { enum: ['a', 'b'] }, tags: { uniqueItems: true, items: { enum: [0, 1] } } } }
+  const invalid = [
+    { uiSchema: { choice: { 'ui:enumNames': 'A' } } }, { uiSchema: { choice: { 'ui:enumNames': ['A', 1] } } },
+    { uiSchema: { choice: { 'ui:enumNames': ['A', 'B', 'C'] } } }, { uiSchema: { choice: { 'ui:enumNames': { c: 'C' } } } },
+    { uiSchema: { choice: { 'ui:enumNames': { a: 1 } } } }, { uiSchema: { choice: { 'ui:widget': 'checkboxes' } } },
+    { schema: { properties: { choice: {}, tags: schema.properties.tags } }, uiSchema: { choice: { 'ui:enumNames': ['A'] } } },
+    { schema: { properties: { tags: { uniqueItems: 'true', items: { enum: [0, 1] } } } } },
+    { schema: { properties: { tags: { default: [0, 0], ...schema.properties.tags } } } },
+    { schema: { properties: { tags: { uniqueItems: true } } }, uiSchema: { tags: { 'ui:widget': 'checkboxes' } } },
+    { schema: { properties: { tags: { items: { enum: [0, 1] } } } }, uiSchema: { tags: { 'ui:widget': 'checkboxes' } } },
+    { uiSchema: { tags: { 'ui:enumNames': ['Zero', 'One', 'Two'] } } }, { uiSchema: { tags: { 'ui:widget': 'textarea' } } },
+  ]
+  for (const [index, config] of invalid.entries()) {
+    const id = `bad-enum-${index}`
+    await putTemplate(f.templateRoot, id, stringify({ id: 'root', type: 'dag', dag: [{ id: 'answer', type: 'node', node_kind: 'form', output_schema: output, schema, ...config }] }))
+    const catalog = await (await fetch(f.url(TEMPLATES_PATH))).json() as any
+    assert.ok(catalog.templates.find((item: any) => item.id === id).error, `Invalid configuration ${index} must be rejected`)
+  }
+})
+
 test('form rejects invalid nested annotations, controls and incomplete structured defaults in the template catalog', async () => {
   const f = await fixture()
   const output = { rows: { type: 'array', items: { type: 'object', properties: { name: 'string', amount: 'number' } } } }

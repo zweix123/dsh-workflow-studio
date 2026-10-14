@@ -1,4 +1,12 @@
 - insert:
+    - id: regression-form-enums
+      name: dsh-workflow-template
+      config:
+        directory: "@dsh-workflow/core-regression-fixture/templates/form-enums"
+    - id: regression-form-enum-duplicates
+      name: dsh-workflow-template
+      config:
+        directory: "@dsh-workflow/core-regression-fixture/templates/form-enum-duplicates"
     - id: regression-lifecycle
       name: dsh-workflow-template
       config:

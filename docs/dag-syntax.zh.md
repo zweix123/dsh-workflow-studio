@@ -134,7 +134,7 @@ bash 声明非空输出时，成功命令的 stdout 必须整体是一个 JSON �
 
 form 已支持五种类型、组合嵌套和数组增删。实施规格见[对象与数组字段扩展](./specs/form-structured-fields.zh.md)，验证范围见[验收记录](./acceptance/form-structured-fields.zh.md)。
 
-form 的字段名与类型直接来自 `output_schema`，支持 `string`、`number`、`boolean`，以及带属性声明的 `object` 和带元素声明的 `array`。用户填写的字段不必出现在 `input_schema`；用于同名预填的字段可写入输入契约，且必须存在于输出契约中、递归结构类型一致。可选的 `schema.properties` 为字段补充 `title`、`description`、`default`、标量 `enum`，也可声明与输出契约一致的 `type`；`uiSchema` 可为标量指定 `ui:widget`。标量支持的控件如下：
+form 的字段名与类型直接来自 `output_schema`，支持 `string`、`number`、`boolean`，以及带属性声明的 `object` 和带元素声明的 `array`。用户填写的字段不必出现在 `input_schema`；用于同名预填的字段可写入输入契约，且必须存在于输出契约中、递归结构类型一致。可选的 `schema.properties` 为字段补充 `title`、`description`、`default`、标量 `enum`，也可声明与输出契约一致的 `type`；`uiSchema` 可配置 `ui:widget` 和枚举显示名称，唯一枚举数组支持下文的多选控件。标量支持的控件如下：
 
 | 类型 | 默认控件 | 可选 `ui:widget` |
 | --- | --- | --- |
@@ -214,7 +214,60 @@ uiSchema:
 
 `enum` 继续仅用于标量字段或标量元素，对象和数组本身不支持枚举。预填递归只取声明字段；正式提交则在每一层要求全部声明字段存在，拒绝额外字段，并校验类型与标量枚举。空字符串和空数组合法；无默认值且未填写的标量不能因控件显示为空或未选中而被视为已填写。错误须能指出具体字段或数组下标。服务端接受结果后所有嵌套编辑和增删操作只读，结果交付失败仅重试已接受结果。
 
-该扩展只增加结构化填写与数组增删，不增加排序、复制、联动、上传、远程选项、额外校验关键字或持久化草稿。其逐层字段范围限制只属于 form，不改变公共 DAG 对额外字段的规则。
+结构化填写支持数组增删及下文的枚举多选，不增加排序、复制、联动、上传、远程选项或持久化草稿。其逐层字段范围与唯一性限制只属于 form，不改变公共 DAG 对额外字段的规则。
+
+#### 枚举显示名称与多选
+
+枚举值仍在 `schema` 的 `enum` 中声明，`uiSchema` 可通过 RJSF 的 `ui:enumNames` 配置显示名称。支持按位置对应的字符串数组，或按枚举值的字符串形式对应的对象。允许部分覆盖，未配置的名称使用原值；名称数组不能多于枚举项，对象不能包含未知选项键，名称必须是字符串。没有 `enum` 时不能配置名称。
+
+```yaml
+output_schema:
+  priority: string
+  approved: boolean
+schema:
+  properties:
+    priority:
+      enum: [high, medium, low]
+      default: medium
+    approved:
+      enum: [false, true]
+      default: false
+uiSchema:
+  priority:
+    ui:enumNames: [高优先级, 中优先级, 低优先级]
+  approved:
+    ui:enumNames: {'false': 否, 'true': 是}
+```
+
+界面显示“高优先级”或“否”，提交仍是 `"high"` 或 `false`，名称不改变类型、默认值、预填值或枚举约束。对象子字段及普通数组的标量元素同样支持名称配置；当前不支持 `oneOf`、`const` 或在 `schema` 中配置 `enumNames`。
+
+数组可在 `schema` 注解中声明布尔 `uniqueItems`。省略或为 `false` 时保留原有逐项增删；为 `true` 时提交拒绝重复值。若 `items` 同时声明标量 `enum`，自动显示多选框；数组级 `ui:widget` 可显式选择 `select` 或 `checkboxes`。不满足唯一标量枚举条件的数组不能指定这些控件。
+
+```yaml
+output_schema:
+  tags:
+    type: array
+    items: string
+schema:
+  properties:
+    tags:
+      title: 标签
+      uniqueItems: true
+      default: [frontend]
+      items:
+        enum: [frontend, backend, test]
+uiSchema:
+  tags:
+    ui:widget: checkboxes
+    items:
+      ui:enumNames: [前端, 后端, 测试]
+```
+
+此例显示复选框组，提交例如 `{"tags": ["frontend", "test"]}`。省略 `ui:widget` 使用原生多选 select。数字与布尔枚举数组也支持多选，保持 `0`、`false` 等真实类型。名称优先按 `items` 定位；未提供 `items` 时，多选数组也可直接在数组级配置 `ui:enumNames`。普通枚举数组的名称配置在 `items` 下。
+
+多选没有逐项添加／删除按钮；取消全部选项提交空数组，不重新应用默认值。复选框新选项追加到当前值末尾，取消保持剩余顺序；原生多选 select 编辑后按选项声明顺序输出。未编辑的上游值保持原顺序。
+
+唯一性也可用于非枚举数组，包括对象和嵌套数组：对象按内容比较、不受键顺序影响，数组按顺序比较。默认值同样校验，重复默认值使模板不可用；重复上游预填不静默去重，提交时指出重复项下标，用户修改后再提交。前后端均校验唯一性，提交后只读及恢复规则保持不变。规格与实际验证范围见[枚举名称与多选规格](./specs/form-enum-controls.zh.md)。
 
 ### 3.3 prompt / command 输入引用
 

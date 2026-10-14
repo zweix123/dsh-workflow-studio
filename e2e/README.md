@@ -66,6 +66,8 @@ npm run test:e2e -- e2e/workflows/bash.e2e.ts --grep "宿主中断"
 
 宿主对话导航不改变 URL；用例通过侧边栏已选中行的公开身份及页面结果核对对话。上述原关联链路的 agent 初始提示词会被真实宿主接收；该夹具没有模型凭据，模型运行会显示缺少认证，只验证关联、导航与人工完成，不验证模型回复。Agent 模型边界及语言、主题、窄屏覆盖见下文新增回归；画布视角保留尚未覆盖。
 
+[`forms/enums.e2e.ts`](./forms/enums.e2e.ts) 保存枚举名称与多选的独立回归：真实值与显示名称分离、字符串／数字／布尔类型、嵌套与普通数组、默认和下游预填、多选与空数组、重复预填拒绝及修正、草稿重开、只读与真实重启，以及键盘、中英文、浅深主题和窄屏。夹具见 [core-regression](./fixtures/core-regression/README.md)，实际范围见[验收记录](../docs/acceptance/form-enum-controls.zh.md)。
+
 ## 新功能怎样留下回归测试
 
 1. 从 `docs/specs/` 提取操作和可观察的预期，新增或补充 `e2e/**/*.e2e.ts`；嵌套目录同样纳入 E2E 类型检查。
