@@ -71,11 +71,11 @@ test('nested DAG boundaries and parent links', () => {
 });
 
 test('conditions allow missing inputs and skipped positions never become exits', () => {
-  const e = compile(dag([node('a', {}, { on: 'boolean', a: 'number' }), node('b', {}, { b: 'number' }), node('c', { a: 'number', b: 'number' }, { answer: 'number' }), edge('a', 'c', { if: '$.on' }), edge('b', 'c')], {}, { answer: 'number' })).createExecution({});
+  const e = compile(dag([node('a', {}, { on: 'boolean', a: 'number' }), node('b', {}, { b: 'number' }), node('c', { a: 'number', b: 'number' }, { answer: 'number' }), edge('a', 'c', { if: 'on' }), edge('b', 'c')], {}, { answer: 'number' })).createExecution({});
   submit(e, 'a', { on: false, a: 1 }); submit(e, 'b', { b: 2 });
   assert.deepEqual(task(e, 'c').input, { b: 2 }); submit(e, 'c', { answer: 2 });
   assert.deepEqual(e.getResult().output, { answer: 2 });
-  const skipped = compile(dag([node('a', {}, { on: 'boolean' }), node('b'), node('c'), edge('a', 'b', { if: '$.on' }), edge('b', 'c')])).createExecution({});
+  const skipped = compile(dag([node('a', {}, { on: 'boolean' }), node('b'), node('c'), edge('a', 'b', { if: 'on' }), edge('b', 'c')])).createExecution({});
   submit(skipped, 'a', { on: false });
   assert.deepEqual(skipped.getResult().output, {});
   assert.deepEqual(skipped.getSnapshot().skippedPositions.map(p => p.definitionId), ['b', 'c']);
@@ -84,7 +84,7 @@ test('conditions allow missing inputs and skipped positions never become exits',
 });
 
 test('for instances wait for common dependencies, aggregate in original order and fill extra fields', () => {
-  const e = compile(dag([node('prepare', {}, { jobs }), node('config', {}, { currency: 'string' }), node('worker', { value: 'number', currency: 'string' }, { price: 'number', nested: array('number') }), node('finish', { price: array('number') }, { total: 'number' }), edge('prepare', 'worker', { for: '$.jobs' }), edge('config', 'worker'), edge('worker', 'finish')], {}, { total: 'number' })).createExecution({});
+  const e = compile(dag([node('prepare', {}, { jobs }), node('config', {}, { currency: 'string' }), node('worker', { value: 'number', currency: 'string' }, { price: 'number', nested: array('number') }), node('finish', { price: array('number') }, { total: 'number' }), edge('prepare', 'worker', { for: 'jobs' }), edge('config', 'worker'), edge('worker', 'finish')], {}, { total: 'number' })).createExecution({});
   submit(e, 'prepare', { jobs: [{ key: 'a/:', value: 10 }, { key: 'b', value: 20 }] });
   assert.equal(task(e, 'worker'), undefined);
   submit(e, 'config', { currency: 'CNY' });
@@ -99,7 +99,7 @@ test('for instances wait for common dependencies, aggregate in original order an
 });
 
 test('for key validation, false if bypasses identity checks, empty for rollback and retry', () => {
-  const definition = dag([node('a', {}, { jobs, enabled: 'boolean' }), node('b', { value: 'number' }, { price: 'number' }), edge('a', 'b', { if: '$.enabled', for: '$.jobs' })], {}, { price: array('number') });
+  const definition = dag([node('a', {}, { jobs, enabled: 'boolean' }), node('b', { value: 'number' }, { price: 'number' }), edge('a', 'b', { if: 'enabled', for: 'jobs' })], {}, { price: array('number') });
   const e = compile(definition).createExecution({}); const id = task(e, 'a').instanceId;
   rejected(e, id, { jobs: [{ key: '', value: 1 }], enabled: true }, 'INVALID_FOR_KEY', 'for-expansion');
   rejected(e, id, { jobs: [{ key: 'x', value: 1 }, { key: 'x', value: 2 }], enabled: true }, 'DUPLICATE_FOR_KEY');
@@ -129,7 +129,7 @@ test('early ordinary input and DAG exit conflicts roll back only triggering subm
 });
 
 test('for decision defers conflicts, activation detects saved conflicts, skipping ignores them', () => {
-  const definition = dag([node('a'), node('b'), node('c', {}, { jobs }), node('join', { value: 'number' }), edge('a', 'join'), edge('b', 'join'), edge('c', 'join', { for: '$.jobs' })]);
+  const definition = dag([node('a'), node('b'), node('c', {}, { jobs }), node('join', { value: 'number' }), edge('a', 'join'), edge('b', 'join'), edge('c', 'join', { for: 'jobs' })]);
   const e = compile(definition).createExecution({}); submit(e, 'a', { trace: 1 }); submit(e, 'b', { trace: 2 });
   rejected(e, task(e, 'c').instanceId, { jobs: [{ key: 'x', value: 1 }] }, 'INPUT_KEY_CONFLICT');
   submit(e, 'c', { jobs: [] }); assert.equal(e.getResult().status, 'completed');
@@ -138,12 +138,12 @@ test('for decision defers conflicts, activation detects saved conflicts, skippin
 });
 
 test('downstream type failure and nested DAG completion failure publish no partial expansion', () => {
-  const e = compile(dag([node('a'), node('provider', {}, { enabled: 'boolean', value: 'number' }), node('free'), node('b', { value: 'number' }), edge('a', 'free'), edge('a', 'b'), edge('provider', 'b', { if: '$.enabled' })])).createExecution({});
+  const e = compile(dag([node('a'), node('provider', {}, { enabled: 'boolean', value: 'number' }), node('free'), node('b', { value: 'number' }), edge('a', 'free'), edge('a', 'b'), edge('provider', 'b', { if: 'enabled' })])).createExecution({});
   submit(e, 'provider', { enabled: false, value: 1 });
   rejected(e, task(e, 'a').instanceId, { value: 'bad' }, 'INVALID_FIELD_TYPE', 'input-validation');
   assert.throws(() => e.submit(task(e, 'a').instanceId, { value: 'bad' }), error => error.sources[0].instanceId === task(e, 'a').instanceId && error.location.definitionId === 'b');
   submit(e, 'a', { value: 2 }); submit(e, 'free', {}); submit(e, 'b', {});
-  const inner = dag([node('select', {}, { enabled: 'boolean' }), node('value', {}, { n: 'number' }), edge('select', 'value', { if: '$.enabled' })], {}, { n: 'number' }, 'inner');
+  const inner = dag([node('select', {}, { enabled: 'boolean' }), node('value', {}, { n: 'number' }), edge('select', 'value', { if: 'enabled' })], {}, { n: 'number' }, 'inner');
   const nested = compile(dag([inner], {}, { n: 'number' })).createExecution({});
   const id = task(nested, 'select').instanceId;
   rejected(nested, id, { enabled: false }, 'MISSING_OUTPUT_FIELD', 'dag-output-validation');
@@ -152,7 +152,7 @@ test('downstream type failure and nested DAG completion failure publish no parti
 });
 
 test('recursion unfolds on demand and returns through parent DAGs', () => {
-  const definition = dag([node('step', { items: array('string') }, { items: array('string'), again: 'boolean' }), edge('step', 'D', { if: '$.again' })], { items: array('string') }, {}, 'D');
+  const definition = dag([node('step', { items: array('string') }, { items: array('string'), again: 'boolean' }), edge('step', 'D', { if: 'again' })], { items: array('string') }, {}, 'D');
   const e = compile(definition).createExecution({ items: ['a', 'b'] });
   for (const expected of [['a', 'b'], ['b'], []]) {
     const t = task(e, 'step'); assert.deepEqual(t.input.items, expected);
@@ -228,12 +228,12 @@ test('null prototypes, non-enumerable own keys and prototype-sensitive names are
 test('independent graph errors aggregate and all structural/schema restrictions enforced', () => {
   invalid(dag([node('a'), edge('missing', 'a'), edge('a', 'other')]), ['UNKNOWN_SOURCE', 'UNKNOWN_TARGET']);
   invalid(dag([node('a'), node('a')]), ['DUPLICATE_ID']);
-  invalid(dag([node('a'), node('b'), edge('a', 'b'), edge('a', 'b', { if: '$.on' })]), ['DUPLICATE_EDGE']);
+  invalid(dag([node('a'), node('b'), edge('a', 'b'), edge('a', 'b', { if: 'on' })]), ['DUPLICATE_EDGE']);
   invalid(dag([node('a'), node('b'), edge('a', 'b'), edge('b', 'a')]), ['CYCLIC_DEPENDENCY']);
   invalid(dag([node('a'), edge('a', 'root')]), ['RECURSION_WITHOUT_CONDITION']);
   invalid(dag([node('a'), edge('root', 'a')]), ['RECURSION_WITHOUT_INPUT']);
-  invalid(dag([node('a', {}, { on: 'boolean' }), edge('a', 'root', { if: '$.on' }), edge('root', 'a')]), ['CYCLIC_DEPENDENCY']);
-  invalid(dag([node('a', {}, { jobs }), node('b', {}, { jobs }), node('c'), edge('a', 'c', { for: '$.jobs' }), edge('b', 'c', { for: '$.jobs' })]), ['MULTIPLE_FOR_EDGES']);
+  invalid(dag([node('a', {}, { on: 'boolean' }), edge('a', 'root', { if: 'on' }), edge('root', 'a')]), ['CYCLIC_DEPENDENCY']);
+  invalid(dag([node('a', {}, { jobs }), node('b', {}, { jobs }), node('c'), edge('a', 'c', { for: 'jobs' }), edge('b', 'c', { for: 'jobs' })]), ['MULTIPLE_FOR_EDGES']);
   invalid(dag([dag([node('hidden')], {}, {}, 'inner'), node('a'), edge('a', 'hidden')]), ['INVALID_ENDPOINT']);
   invalid(dag([node('a'), edge('a', 'a', { id: 'link' }), edge('link', 'a')]), ['INVALID_ENDPOINT']);
   for (const type of ['object', 'array', { type: 'object' }, { type: 'array' }, array('object')]) invalid(dag([node('a', { value: type })]), ['INVALID_SCHEMA']);
@@ -245,20 +245,14 @@ test('independent graph errors aggregate and all structural/schema restrictions 
   invalid(dag([node('a', { records: array(object({ x: 'number', y: 'string' })) })], { records: array(object({ x: 'number' })) }), ['SCHEMA_TYPE_MISMATCH']);
 });
 
-test('expression grammar, scalar equality semantics, references and types', () => {
-  for (const expression of ['$.n > 1', '$.n == 01', '$.n == 1 trailing', '$. n', '$.nested.n', 'true', '$.n == null', '\u00a0$.on', '$.on && $.on']) invalid(dag([node('a', {}, { n: 'number', on: 'boolean' }), node('b'), edge('a', 'b', { if: expression })]), ['INVALID_EXPRESSION']);
-  invalid(dag([node('a'), node('b'), edge('a', 'b', { if: '$.missing' })]), ['INVALID_FIELD_REFERENCE']);
-  for (const expression of ['$.n', '$.n == "1"', '$.data == $.data']) invalid(dag([node('a', {}, { n: 'number', data: object({}) }), node('b'), edge('a', 'b', { if: expression })]), ['EXPRESSION_TYPE_MISMATCH']);
-  for (const type of [array('string'), array(object({})), array(object({ key: 'number' }))]) invalid(dag([node('a', {}, { jobs: type }), node('b'), edge('a', 'b', { for: '$.jobs' })]), ['EXPRESSION_TYPE_MISMATCH']);
-  for (const [expression, output, active] of [
-    [' \t$.n == 1e0\r\n', { n: 1, s: 'x', on: true }, true],
-    ['$.n == -0', { n: 0, s: 'x', on: true }, true],
-    ['$.n == $.n', { n: NaN, s: 'x', on: true }, false],
-    ['$.s == "a\\n b"', { n: 1, s: 'a\n b', on: true }, true],
-    ['$.on != false', { n: Infinity, s: 'x', on: true }, true],
-  ]) {
-    const e = compile(dag([node('a', {}, { n: 'number', s: 'string', on: 'boolean' }), node('b'), edge('a', 'b', { if: expression })])).createExecution({}); submit(e, 'a', output);
-    assert.equal(Boolean(task(e, 'b')), active); if (active) submit(e, 'b', {});
+test('Nunjucks grammar, comparison semantics, references and statically known result contracts', () => {
+  for (const expression of ['n == 1 trailing', '', '{{ on }}', 'on && on']) invalid(dag([node('a', {}, { n: 'number', on: 'boolean' }), node('b'), edge('a', 'b', { if: expression })]), ['INVALID_EXPRESSION']);
+  invalid(dag([node('a'), node('b'), edge('a', 'b', { if: 'missing' })]), ['INVALID_FIELD_REFERENCE']);
+  invalid(dag([node('a', {}, { n: 'number' }), node('b'), edge('a', 'b', { if: 'n' })]), ['EXPRESSION_TYPE_MISMATCH']);
+  for (const type of [array('string'), array(object({})), array(object({ key: 'number' }))]) invalid(dag([node('a', {}, { jobs: type }), node('b'), edge('a', 'b', { for: 'jobs' })]), ['EXPRESSION_TYPE_MISMATCH']);
+  for (const [expression, active] of [['n == "1"', true], ['n === "1"', false], ['n + 2 >= 3 and on', true], ['s is string and on != false', true]]) {
+    const e = compile(dag([node('a', {}, { n: 'number', s: 'string', on: 'boolean' }), node('b'), edge('a', 'b', { if: expression })])).createExecution({});
+    submit(e, 'a', { n: 1, s: 'x', on: true }); assert.equal(Boolean(task(e, 'b')), active);
   }
 });
 
@@ -284,7 +278,7 @@ test('different legal submission orders produce equal results', () => {
 
 test('for DAG instances execute independently before aggregate flows downstream', () => {
   const inner = dag([node('worker', { value: 'number' }, { price: 'number' })], { value: 'number' }, { price: 'number' }, 'inner');
-  const e = compile(dag([node('prepare', {}, { jobs }), inner, node('finish', { price: array('number') }, { sum: 'number' }), edge('prepare', 'inner', { for: '$.jobs' }), edge('inner', 'finish')], {}, { sum: 'number' })).createExecution({});
+  const e = compile(dag([node('prepare', {}, { jobs }), inner, node('finish', { price: array('number') }, { sum: 'number' }), edge('prepare', 'inner', { for: 'jobs' }), edge('inner', 'finish')], {}, { sum: 'number' })).createExecution({});
   submit(e, 'prepare', { jobs: [{ key: 'x', value: 2 }, { key: 'y', value: 4 }] });
   const workers = e.getFrontier(); assert.equal(workers.length, 2);
   const parents = e.getSnapshot().instances.filter(i => i.definitionId === 'inner');
@@ -296,7 +290,7 @@ test('for DAG instances execute independently before aggregate flows downstream'
 });
 
 test('for exit aggregate conflict rolls back last item and keeps previously completed items', () => {
-  const e = compile(dag([node('prepare', {}, { jobs }), node('worker', { value: 'number' }, { price: 'number' }), node('exit'), edge('prepare', 'worker', { for: '$.jobs' })])).createExecution({});
+  const e = compile(dag([node('prepare', {}, { jobs }), node('worker', { value: 'number' }, { price: 'number' }), node('exit'), edge('prepare', 'worker', { for: 'jobs' })])).createExecution({});
   submit(e, 'prepare', { jobs: [{ key: 'x', value: 1 }, { key: 'y', value: 2 }] });
   submit(e, 'exit', { trace: 'exit' });
   const workers = e.getFrontier(); e.submit(workers[0].instanceId, { price: 1, trace: 'item' });
@@ -306,7 +300,7 @@ test('for exit aggregate conflict rolls back last item and keeps previously comp
 });
 
 test('recursive for preserves separate identities and input item schema', () => {
-  const definition = dag([node('step', { value: 'number' }, { again: 'boolean', jobs }), edge('step', 'D', { if: '$.again', for: '$.jobs' })], { value: 'number' }, {}, 'D');
+  const definition = dag([node('step', { value: 'number' }, { again: 'boolean', jobs }), edge('step', 'D', { if: 'again', for: 'jobs' })], { value: 'number' }, {}, 'D');
   const e = compile(definition).createExecution({ value: 2 });
   submit(e, 'step', { again: true, jobs: [{ key: 'a', value: 0 }, { key: 'b', value: 0 }] });
   const workers = e.getFrontier(); assert.deepEqual(workers.map(w => w.input.value), [0, 0]);
@@ -316,7 +310,7 @@ test('recursive for preserves separate identities and input item schema', () => 
 });
 
 test('long recursive chain completes through iterative internal propagation', () => {
-  const e = compile(dag([node('step', { remaining: 'number' }, { remaining: 'number', again: 'boolean' }), edge('step', 'D', { if: '$.again' })], { remaining: 'number' }, {}, 'D')).createExecution({ remaining: 1200 });
+  const e = compile(dag([node('step', { remaining: 'number' }, { remaining: 'number', again: 'boolean' }), edge('step', 'D', { if: 'again' })], { remaining: 'number' }, {}, 'D')).createExecution({ remaining: 1200 });
   for (let n = 1200; n >= 0; n--) {
     const t = task(e, 'step'); assert.equal(t.input.remaining, n);
     e.submit(t.instanceId, { remaining: n - 1, again: n > 0 });
@@ -326,9 +320,147 @@ test('long recursive chain completes through iterative internal propagation', ()
 });
 
 test('independent graph diagnostics survive invalid expressions and schemas', () => {
-  invalid(dag([node('a'), node('b'), edge('a', 'b', { if: '$.x > 1' }), edge('b', 'absent')]), ['INVALID_EXPRESSION', 'UNKNOWN_TARGET']);
+  invalid(dag([node('a'), node('b'), edge('a', 'b', { if: 'x >' }), edge('b', 'absent')]), ['INVALID_EXPRESSION', 'UNKNOWN_TARGET']);
   invalid(dag([node('a', { bad: 'object' }), edge('a', 'absent')]), ['INVALID_SCHEMA', 'UNKNOWN_TARGET']);
   invalid(dag([node('a'), node('a'), edge('a', 'absent')]), ['DUPLICATE_ID', 'UNKNOWN_TARGET']);
   invalid({ id: 'x', dag: [] }, ['MISSING_STANDARD_FIELD']);
   invalid({ id: 'x', type: 'invalid', dag: [] }, ['INVALID_STANDARD_FIELD']);
+});
+
+test('Nunjucks edge expressions compute native booleans from nested output and builtins', () => {
+  const program = compile(dag([
+    node('review', {}, { review: object({ score: 'number', approved: 'boolean' }) }),
+    node('work'),
+    edge('review', 'work', { if: 'review.approved and (review.score + 5) >= 80 and range(2) | length == 2' }),
+  ]));
+  const run = program.createExecution({});
+  submit(run, 'review', { review: { score: 75, approved: true } });
+  assert.equal(task(run, 'work').definition.id, 'work');
+});
+
+test('dynamic for checks actual values and preserves known compile-time conflicts', () => {
+  const definition = dag([
+    node('source', {}, { selected: 'string', sets: object({ good: jobs }) }),
+    node('other', {}, { shared: 'string' }), node('worker', { value: 'number', shared: 'string', optional: 'boolean' }),
+    edge('source', 'worker', { for: 'sets[selected]' }), edge('other', 'worker'),
+  ]);
+  const execution = compile(definition).createExecution({});
+  submit(execution, 'other', { shared: 'saved' });
+  const id = task(execution, 'source').instanceId;
+  rejected(execution, id, { selected: 'bad', sets: { good: [], bad: [1] } }, 'INVALID_FOR_VALUE');
+  rejected(execution, id, { selected: 'bad', sets: { good: [], bad: [{ key: '', value: 2 }] } }, 'INVALID_FOR_KEY');
+  rejected(execution, id, { selected: 'bad', sets: { good: [], bad: [{ key: 'a', value: 2 }, { key: 'a', value: 3 }] } }, 'DUPLICATE_FOR_KEY');
+  rejected(execution, id, { selected: 'bad', sets: { good: [], bad: [{ key: 'a', value: 'wrong' }] } }, 'INVALID_FIELD_TYPE');
+  rejected(execution, id, { selected: 'bad', sets: { good: [], bad: [{ key: 'a', shared: 'conflict' }] } }, 'INPUT_KEY_CONFLICT');
+  submit(execution, 'source', { selected: 'good', sets: { good: [{ key: 'with /任意:', value: 2 }] } });
+  assert.deepEqual(task(execution, 'worker').input, { value: 2, shared: 'saved' });
+  invalid(dag([...definition.dag, node('another', {}, { shared: 'string' }), edge('another', 'worker')]), ['INPUT_SCHEMA_KEY_CONFLICT']);
+  const wrongType = structuredClone(definition); wrongType.dag[2].input_schema.shared = 'number';
+  invalid(wrongType, ['SCHEMA_TYPE_MISMATCH']);
+  const badReference = structuredClone(definition); badReference.dag[3].for = 'sets[selected] + undeclared';
+  invalid(badReference, ['INVALID_FIELD_REFERENCE']);
+});
+
+test('parenthesized fixed array paths retain declared item checks even on closed edges', () => {
+  invalid(dag([node('source', {}, { jobs }), node('worker', { value: 'string' }), edge('source', 'worker', { if: 'false', for: '(jobs)' })]), ['SCHEMA_TYPE_MISMATCH']);
+});
+
+test('missing expression values follow library defaults and final contracts; failures roll back', () => {
+  const make = (condition, iteration) => compile(dag([
+    node('source', {}, { values: array('boolean'), batches: array(jobs) }), node('worker'),
+    edge('source', 'worker', { if: condition.replaceAll('value', 'values[0]'), ...(iteration ? { for: iteration.replaceAll('jobs', 'batches[0]') } : {}) }),
+  ]));
+  for (const condition of ['value | default("false")', 'value | default(none)']) {
+    const run = make(condition).createExecution({});
+    rejected(run, task(run, 'source').instanceId, { values: [], batches: [] }, 'EXPRESSION_EVALUATION_ERROR');
+  }
+  const absent = make('value').createExecution({});
+  rejected(absent, task(absent, 'source').instanceId, { values: [], batches: [] }, 'EXPRESSION_EVALUATION_ERROR');
+  for (const condition of ['value is defined', 'value | default(false)', 'value is defined and value']) {
+    const run = make(condition, 'jobs | random').createExecution({}); submit(run, 'source', { values: [], batches: [] });
+    assert.equal(run.getResult().status, 'completed');
+  }
+  const empty = make('value | default(true)', 'jobs | default([])').createExecution({}); submit(empty, 'source', { values: [], batches: [] });
+  assert.equal(empty.getResult().status, 'completed');
+  const badFor = make('value | default(true)', 'jobs').createExecution({});
+  rejected(badFor, task(badFor, 'source').instanceId, { values: [], batches: [] }, 'INVALID_FOR_VALUE');
+  // A real library error, with location and cause, rolls back the source submission.
+  const failing = compile(dag([node('source', {}, { n: 'number' }), node('worker'), edge('source', 'worker', { if: 'n() is defined' })])).createExecution({});
+  const sourceId = task(failing, 'source').instanceId;
+  assert.throws(() => failing.submit(sourceId, { n: 1 }), error => error.code === 'EXPRESSION_EVALUATION_ERROR' && error.location.definitionPath.at(-1) === 'if' && error.cause instanceof Error);
+  assert.equal(task(failing, 'source').instanceId, sourceId);
+  assert.throws(() => compile(dag([dag([], {}, {}, 'empty'), node('target'), edge('empty', 'target', { if: '["false"] | first' })])).createExecution({}), error => error instanceof InitializationError && error.code === 'EXPRESSION_EVALUATION_ERROR');
+  assert.throws(() => compile(dag([node('rootInput', { value: 'boolean' })], { value: 'boolean' })).createExecution({ value: 'wrong' }), error => error instanceof InitializationError && error.code === 'INVALID_FIELD_TYPE');
+});
+
+test('random edge decisions resample after rollback but persisted expansion restores without sampling', t => {
+  let draws = 0;
+  t.mock.method(Math, 'random', () => ++draws <= 2 ? 0 : 0.99);
+  const program = compile(dag([
+    node('source', {}, { choices: array('boolean'), batches: array(jobs) }),
+    node('worker', { value: 'number' }),
+    edge('source', 'worker', { if: 'choices | random', for: 'batches | random' }),
+  ]));
+  const execution = program.createExecution({});
+  const id = task(execution, 'source').instanceId;
+  const output = { choices: [true], batches: [[{ key: '', value: 1 }], [{ key: 'saved', value: 2 }]] };
+  rejected(execution, id, output, 'INVALID_FOR_KEY');
+  assert.equal(draws, 2);
+  execution.submit(id, output);
+  assert.equal(draws, 4);
+  const saved = execution.exportState();
+  const restored = program.restoreExecution(JSON.parse(JSON.stringify(saved)));
+  assert.equal(draws, 4);
+  assert.deepEqual(restored.getFrontier(), execution.getFrontier());
+  assert.deepEqual(task(restored, 'worker').input, { value: 2 });
+  assert.equal(task(restored, 'worker').forItem.key, 'saved');
+  submit(restored, 'worker', {});
+  assert.equal(restored.getResult().status, 'completed');
+});
+
+test('runtime expression diagnostics identify the edge field and preserve the library reason', () => {
+  const execution = compile(dag([node('source', {}, { n: 'number' }), node('worker'), edge('source', 'worker', { id: 'checked-edge', if: 'n() is defined' })])).createExecution({});
+  assert.throws(() => submit(execution, 'source', { n: 2 }), error => {
+    assert.match(error.message, /checked-edge.*if/s);
+    assert.match(error.message, /not a function/i);
+    return true;
+  });
+});
+
+test('computed for diagnostics keep target paths without inventing an upstream data path', () => {
+  const program = expression => compile(dag([node('source', {}, { sets: object({}), selected: 'string' }), node('worker', { value: 'number' }), edge('source', 'worker', { for: expression })]));
+  const literal = program('[{key: ""}]').createExecution({});
+  assert.throws(() => submit(literal, 'source', { sets: {}, selected: 'x' }), error => error.code === 'INVALID_FOR_KEY' && error.dataPath === undefined);
+  const dynamic = program('sets[selected]').createExecution({});
+  assert.throws(() => submit(dynamic, 'source', { sets: { x: [{ key: 'a', value: 'wrong' }] }, selected: 'x' }), error => {
+    assert.deepEqual(error.dataPath, ['value']);
+    assert.equal(error.sources[0].dataPath, undefined);
+    assert.ok(error.sources[0].instanceId);
+    return true;
+  });
+});
+
+test('dynamic for consumes arrays and rows under the existing own-data container contract', () => {
+  const program = compile(dag([
+    node('source', {}, { selected: 'string', sets: object({}) }), node('worker', { value: 'number' }),
+    edge('source', 'worker', { for: 'sets[selected]' }),
+  ]));
+  let calls = 0;
+  const accessor = { key: 'a', get value() { calls++; return 1; } };
+  const proxy = value => new Proxy(value, { get() { calls++; throw Error('must not invoke'); }, ownKeys() { calls++; throw Error('must not invoke'); }, getPrototypeOf() { calls++; throw Error('must not invoke'); } });
+  const arrayAccessor = []; Object.defineProperty(arrayAccessor, '0', { get() { calls++; return { key: 'a', value: 1 }; } });
+  const date = Object.assign(new Date(), { key: 'a', value: 1 });
+  for (const [rows, code] of [
+    [[accessor], 'ACCESSOR_PROPERTY'], [[proxy({ key: 'a', value: 1 })], 'PROXY_CONTAINER'],
+    [proxy([{ key: 'a', value: 1 }]), 'PROXY_CONTAINER'], [arrayAccessor, 'ACCESSOR_PROPERTY'],
+    [[date], 'INVALID_FIELD_TYPE'], [[Object.assign(Object.create({ key: 'inherited' }), { value: 1 })], 'INVALID_FIELD_TYPE'],
+  ]) {
+    const execution = program.createExecution({});
+    rejected(execution, task(execution, 'source').instanceId, { selected: 'extra', sets: { extra: rows } }, code);
+  }
+  assert.equal(calls, 0);
+  const execution = program.createExecution({});
+  const row = Object.create(null); Object.defineProperties(row, { key: { value: 'own' }, value: { value: 2 } });
+  submit(execution, 'source', { selected: 'extra', sets: { extra: [row] } });
+  assert.deepEqual(task(execution, 'worker').input, { value: 2 });
 });

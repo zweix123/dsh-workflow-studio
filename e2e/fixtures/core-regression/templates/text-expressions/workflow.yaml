@@ -1,0 +1,42 @@
+id: regression-text-expressions
+name: 文本与原生表达式回归
+type: dag
+dag:
+  - id: source
+    type: node
+    node_kind: bash
+    command: |
+      node -e 'require("fs").appendFileSync("source-runs.txt", "run\n"); console.log(JSON.stringify({review:{approved:true,score:80,jobs:[{key:"a",title:"Alpha <&"},{key:"b",title:"Beta ; $(printf INJECTED)"}]}}))'
+    output_schema:
+      review:
+        type: object
+        properties:
+          approved: boolean
+          score: number
+          jobs:
+            type: array
+            items:
+              type: object
+              properties: { key: string, title: string }
+  - id: each
+    type: node
+    node_kind: bash
+    input_schema: { title: string }
+    output_schema: { text: string, json: string }
+    command: >-
+      node -e 'console.log(JSON.stringify({text:process.argv[1],json:process.argv[2]}))' {{ title | upper ~ ' }}' }} {{ {"title": title} | dump }}
+  - id: finish
+    type: node
+    node_kind: bash
+    command: ''
+    input_schema:
+      text: { type: array, items: string }
+      json: { type: array, items: string }
+  - type: edge
+    from: source
+    to: each
+    if: review.approved and (review.score + 1) > 80
+    for: review.jobs | reverse
+  - type: edge
+    from: each
+    to: finish

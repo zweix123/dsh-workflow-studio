@@ -12,7 +12,7 @@ test('restored for items keep separate identities and feed one aggregated downst
       { id: 'source', type: 'node' as const, input_schema: { jobs: { type: 'array' as const, items: { type: 'object' as const, properties: { key: 'string' as const, title: 'string' as const } } } }, output_schema: { jobs: { type: 'array' as const, items: { type: 'object' as const, properties: { key: 'string' as const, title: 'string' as const } } } } },
       { id: 'each', type: 'node' as const, input_schema: { title: 'string' as const }, output_schema: { done: 'string' as const } },
       { id: 'finish', type: 'node' as const, input_schema: { done: { type: 'array' as const, items: 'string' as const } } },
-      { type: 'edge' as const, from: 'source', to: 'each', for: '$.jobs' },
+      { type: 'edge' as const, from: 'source', to: 'each', for: 'jobs' },
       { type: 'edge' as const, from: 'each', to: 'finish' },
     ],
   }

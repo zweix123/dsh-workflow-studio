@@ -1,7 +1,7 @@
 import { types } from 'node:util';
 import type { CompileIssue, CompileIssueCode, DefinitionPath, DagDefinition, NodeDefinition, EdgeDefinition, Schema, TypeDescriptor } from './types.js';
 import { CompileError } from './errors.js';
-import { parse, type Expression, type Operand } from './expression.js';
+import { compileExpression, ExpressionReferenceError, type Expression } from 'dsh-workflow-node/expressions';
 import { put } from './data.js';
 
 export interface Vertex {
@@ -95,9 +95,10 @@ export function compilePlan(source: unknown, rootProvider?: Schema): Vertex {
       if (!valid) return;
       const edge: Edge = { definition: v as EdgeDefinition, path, from: v.from as string, to: v.to as string };
       for (const key of ['if', 'for'] as const) if (Object.hasOwn(v, key)) {
-        const expression = parse(v[key] as string, key === 'for');
-        if (!expression) issue('INVALID_EXPRESSION', [...path, key], 'Invalid expression grammar');
-        else if (key === 'if') edge.condition = expression; else edge.iteration = expression;
+        try {
+          const expression = compileExpression(v[key] as string);
+          if (key === 'if') edge.condition = expression; else edge.iteration = expression;
+        } catch (error) { issue('INVALID_EXPRESSION', [...path, key], String(error)); }
       }
       return edge;
     }
@@ -177,18 +178,16 @@ export function compilePlan(source: unknown, rootProvider?: Schema): Vertex {
     if (!schemasValid) continue;
     for (const edge of plan.edges) {
       const source = plan.effective.get(edge.from)!;
-      const operandType = (o: Operand, key: string): TypeDescriptor | undefined => {
-        if ('literal' in o) return typeof o.literal as 'string' | 'number' | 'boolean';
-        if (!Object.hasOwn(source, o.field)) { issue('INVALID_FIELD_REFERENCE', [...edge.path, key], `Undeclared field ${o.field}`); return; }
-        return source[o.field];
+      const expressionType = (expression: Expression, key: string): TypeDescriptor | undefined => {
+        try { return expression.inspect(source) as TypeDescriptor | undefined; }
+        catch (error) { issue(error instanceof ExpressionReferenceError ? 'INVALID_FIELD_REFERENCE' : 'INVALID_EXPRESSION', [...edge.path, key], String(error)); }
       };
       if (edge.condition) {
-        const left = operandType(edge.condition.left, 'if');
-        const right = edge.condition.right ? operandType(edge.condition.right, 'if') : undefined;
-        if (left && (edge.condition.operator ? right && (typeof left !== 'string' || left !== right) : left !== 'boolean')) issue('EXPRESSION_TYPE_MISMATCH', [...edge.path, 'if'], 'Condition requires boolean or matching scalars');
+        const type = expressionType(edge.condition, 'if');
+        if (type && type !== 'boolean') issue('EXPRESSION_TYPE_MISMATCH', [...edge.path, 'if'], 'Condition requires boolean');
       }
       if (edge.iteration) {
-        const value = operandType(edge.iteration.left, 'for');
+        const value = expressionType(edge.iteration, 'for');
         if (value && (typeof value === 'string' || value.type !== 'array' || typeof value.items === 'string' || value.items.type !== 'object' || !Object.hasOwn(value.items.properties, 'key') || value.items.properties.key !== 'string')) issue('EXPRESSION_TYPE_MISMATCH', [...edge.path, 'for'], 'for requires object array with string key');
         else if (value && typeof value !== 'string' && value.type === 'array' && typeof value.items !== 'string' && value.items.type === 'object') {
           edge.itemSchema = {}; for (const k of Object.keys(value.items.properties)) if (k !== 'key') put(edge.itemSchema, k, value.items.properties[k]);
@@ -197,9 +196,11 @@ export function compilePlan(source: unknown, rootProvider?: Schema): Vertex {
     }
     for (const [id, vertex] of plan.positions) {
       const incoming = plan.incoming.get(id)!;
-      if (incoming.filter(e => Object.hasOwn(e.definition, 'for')).length > 1 || incoming.some(e => Object.hasOwn(e.definition, 'for') && !e.itemSchema)) continue;
-      const sources = incoming.length ? incoming.map(e => e.iteration ? e.itemSchema! : plan.effective.get(e.from)!) : [plan.vertex.input];
-      covers(merge(sources, 'INPUT_SCHEMA_KEY_CONFLICT', [...vertex.path, 'input_schema']), vertex.input, [...vertex.path, 'input_schema']);
+      const unknown = incoming.some(e => e.iteration && !e.itemSchema);
+      const sources = incoming.length ? incoming.map(e => e.iteration ? e.itemSchema ?? {} : plan.effective.get(e.from)!) : [plan.vertex.input];
+      const merged = merge(sources, 'INPUT_SCHEMA_KEY_CONFLICT', [...vertex.path, 'input_schema']);
+      const knownTarget = unknown ? Object.fromEntries(Object.entries(vertex.input).filter(([key]) => Object.hasOwn(merged, key))) : vertex.input;
+      covers(merged, knownTarget, [...vertex.path, 'input_schema']);
     }
     const exits = [...plan.positions].filter(([id]) => !plan.outgoing.get(id)!.length).map(([id]) => plan.effective.get(id)!);
     covers(merge(exits, 'OUTPUT_SCHEMA_KEY_CONFLICT', [...plan.vertex.path, 'output_schema']), plan.vertex.output, [...plan.vertex.path, 'output_schema'], true);

@@ -1,23 +1,16 @@
-import type { NodeData, NodeDefinition, NodeValue } from './index.js'
-
-const reference = /\{\{\s*([\p{L}_][\p{L}\p{N}_]*(?:\.[\p{L}_][\p{L}\p{N}_]*)*)\s*\}\}/gu
+import type { NodeData, NodeDefinition } from './index.js'
+import { validateTemplate, renderTemplate, interpolationSpans } from './expressions.js'
 
 export function validateTextTemplate(node: NodeDefinition, field: 'prompt' | 'command'): void {
-  const text = node[field] as string
-  const remainder = text.replace(reference, (_match, path: string) => {
-    let schema: NodeValue = node.input_schema ?? {}
-    for (const key of path.split('.')) {
-      if (!schema || typeof schema !== 'object' || Array.isArray(schema) || !Object.hasOwn(schema, key)) throw new Error(`Node ${node.id}: undeclared input reference ${path}`)
-      const type: NodeValue | undefined = schema[key]
-      schema = type && typeof type === 'object' && !Array.isArray(type) && type.type === 'object' ? type.properties! : null
-    }
-    return ''
-  })
-  if (/{{|}}|{%|%}|{#|#}/.test(remainder)) throw new Error(`Node ${node.id}: unsupported ${field} template syntax`)
-  if (field === 'command') validateShellParameters(node.id, text)
+  try {
+    const text = node[field] as string
+    validateTemplate(text, node.input_schema ?? {})
+    if (field === 'command') validateShellParameters(node.id, text, interpolationSpans(text))
+  } catch (cause) { throw new Error(`Node ${node.id}: ${field}: ${cause instanceof Error ? cause.message : String(cause)}`, { cause }) }
 }
 
-function validateShellParameters(id: string, text: string): void {
+function validateShellParameters(id: string, text: string, spans: ReturnType<typeof interpolationSpans>): void {
+  const ends = new Map(spans.map(span => [span.start, span.end]))
   let quote = '', word = '', escaped = false, comment = false, substitution = 0, parameter = 0, heredoc = false, needsCommand = true, redirect = false
   const heredocs: Array<{ delimiter: string; stripTabs: boolean }> = []
   const invalid = () => { throw new Error(`Node ${id}: command references must be independent unquoted data arguments`) }
@@ -29,8 +22,8 @@ function validateShellParameters(id: string, text: string): void {
   }
   for (let i = 0; i < text.length; i++) {
     const char = text[i]!
-    if (text.startsWith('{{', i)) {
-      const end = text.indexOf('}}', i) + 2
+    if (ends.has(i)) {
+      const end = ends.get(i)!
       if (quote || escaped || comment || substitution || parameter || heredoc || needsCommand || word || !/[ \t\n]/.test(text[i - 1] ?? '') || (end < text.length && !/[ \t\n;|&<>)]/.test(text[end]!))) invalid()
       word = 'argument'; i = end - 1; continue
     }
@@ -70,10 +63,13 @@ function validateShellParameters(id: string, text: string): void {
 }
 
 export function renderTextTemplate(text: string, input: NodeData, shell = false): string {
-  return text.replace(reference, (_match, path: string) => {
-    let value: NodeValue | undefined = input
-    for (const key of path.split('.')) value = value && typeof value === 'object' && !Array.isArray(value) && Object.hasOwn(value, key) ? value[key] : undefined
-    const result = value === undefined ? '' : typeof value === 'string' ? value : JSON.stringify(value)
-    return shell ? `'${result.replaceAll("'", "'\\''")}'` : result
-  })
+  if (!shell) return renderTemplate(text, input)
+  const spans = interpolationSpans(text)
+  let result = '', offset = 0
+  for (const span of spans) {
+    const value = renderTemplate(span.text, input)
+    result += text.slice(offset, span.start) + `'${value.replaceAll("'", "'\\''")}'`
+    offset = span.end
+  }
+  return result + text.slice(offset)
 }

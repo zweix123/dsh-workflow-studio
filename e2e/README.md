@@ -87,3 +87,5 @@ Agent 结果交付新增 [agent-host.e2e.ts](./workflows/agent-host.e2e.ts) 与 
 节点操作位与输入浮窗的独立回归见 `workflows/node-actions.e2e.ts`：固定第 1/3 位及键盘、原生 Form Modal 的校验/关闭/成功交付、中英文主题窄屏、草稿隔离与重启、已接受结果交付失败重试。Agent 单条直达、多条最新优先选择及失败恢复见 `workflows/agent-handoff.e2e.ts`。卡片业务入口已从详情抽屉迁出，`inspectNode` 仅负责只读检查。运行真实宿主时不要并行重建插件输出，以免触发宿主热重载而销毁当前页面。
 
 [`forms/dialog.e2e.ts`](./forms/dialog.e2e.ts) 对照宿主设置浮窗验证面板主题，覆盖长表单独立滚动、固定标题和提交区、可见校验错误、390px 窄屏、键盘关闭返回焦点和草稿重开。规格与实际结果见 [Form 浮窗](../docs/specs/form-dialog.zh.md)。
+
+[text-expressions.e2e.ts](./workflows/text-expressions.e2e.ts) 在真实宿主验证 Nunjucks 原生条件、reverse 计算数组、Bash filter/dump/含定界符字面量与 Shell 特殊字符、按序聚合及部分完成重启。实际范围见[文本与表达式验收](../docs/acceptance/text-expressions.zh.md)。

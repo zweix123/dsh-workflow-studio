@@ -129,7 +129,7 @@ test('cross-column edges use the outer gutter and custom-layout cards do not ove
 test('vertical for items retain original order and aggregate below the group', () => {
   const definition: DagDefinition = { id: 'root', type: 'dag', layout: { direction: 'vertical', segments: [{ start_at: 'done', direction: 'vertical' }] }, dag: [
     { id: 'prepare', type: 'node', output_schema: { jobs: { type: 'array', items: { type: 'object', properties: { key: 'string' } } } } },
-    node('worker'), node('done'), { type: 'edge', from: 'prepare', to: 'worker', for: '$.jobs' }, edge('worker', 'done'),
+    node('worker'), node('done'), { type: 'edge', from: 'prepare', to: 'worker', for: 'jobs' }, edge('worker', 'done'),
   ] }
   const program = compile(definition)
   const execution = program.createExecution({})
@@ -159,7 +159,7 @@ test('vertical for items retain original order and aggregate below the group', (
 test('recursive DAG instances reuse the definition layout without changing restored execution facts', () => {
   const definition: DagDefinition = { id: 'recur', type: 'dag', layout: { direction: 'vertical' }, dag: [
     { id: 'step', type: 'node', output_schema: { again: 'boolean' } },
-    { type: 'edge', from: 'step', to: 'recur', if: '$.again' },
+    { type: 'edge', from: 'step', to: 'recur', if: 'again' },
   ] }
   const program = compile(definition)
   const execution = program.createExecution({})

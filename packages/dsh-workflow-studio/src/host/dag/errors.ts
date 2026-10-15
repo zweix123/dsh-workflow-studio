@@ -3,7 +3,7 @@ import type { CompileIssue, ExecutionErrorCode, ExecutionPhase, ErrorLocation, D
 export class CompileError extends Error {
   readonly issues: readonly CompileIssue[];
   constructor(issues: readonly CompileIssue[]) {
-    super(issues.map(i => `${i.code}: ${i.message}`).join('\n'));
+    super(issues.map(i => `${i.code} at ${i.path.join('.') || '<root>'}: ${i.message}`).join('\n'));
     this.name = 'CompileError';
     this.issues = issues.map(i => ({ ...i, path: [...i.path] }));
   }
@@ -25,7 +25,7 @@ export class ExecutionError extends Error {
   readonly sources?: readonly ErrorSource[];
   override readonly cause?: unknown;
   constructor(operation: 'createExecution' | 'submit', failure: Failure) {
-    super(`${failure.code} (${failure.phase})`);
+    super(`${failure.code} (${failure.phase}) at ${failure.location.definitionId ?? 'definition'} ${(failure.location.definitionPath ?? []).join('.')}${failure.cause instanceof Error ? `: ${failure.cause.message}` : ''}`);
     this.name = 'ExecutionError'; this.operation = operation;
     this.code = failure.code; this.phase = failure.phase; this.location = failure.location;
     if (failure.dataPath !== undefined) this.dataPath = failure.dataPath;

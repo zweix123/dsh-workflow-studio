@@ -10,10 +10,10 @@
 | `compiler.ts` | 定义校验、Schema 与表达式检查、依赖计划 |
 | `runtime.ts` | 按需实例化、内部推进、快照与原子提交 |
 | `data.ts` | 数据容器检查、Schema 校验、声明结构复制 |
-| `expression.ts` | 有限表达式解析和求值 |
+| 公共包 `dsh-workflow-node/expressions` | 统一 Nunjucks 解析、原生求值及可确定引用检查 |
 | `errors.ts`、`types.ts` | 结构化异常与类型契约 |
 
-Host 源码从该模块入口导入。执行根目录的 `npm run build` 后，也可直接调用独立 ESM 产物 `packages/dsh-workflow-studio/lib/host/dag/index.js`；类型声明位于 `lib/types/host/dag/index.d.ts`（相对于插件目录）。运行环境与项目一致：Node.js `^22.19.0 || >=24.0.0`，无第三方运行时依赖。
+Host 源码从该模块入口导入。执行根目录的 `npm run build` 后，也可直接调用独立 ESM 产物 `packages/dsh-workflow-studio/lib/host/dag/index.js`；类型声明位于 `lib/types/packages/dsh-workflow-studio/src/host/dag/index.d.ts`（相对于插件目录）。运行环境与项目一致：Node.js `^22.19.0 || >=24.0.0`，独立产物通过公共 `dsh-workflow-node/expressions` 入口依赖 Nunjucks 3.2.4；需安装仓库依赖并先构建公共节点包（根目录 build 已包含）。
 
 以下命令从项目根目录执行，展示普通节点由调用方完成并提交结果的完整过程：
 

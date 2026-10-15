@@ -438,7 +438,7 @@ test('form preserves upstream zero, false and empty text over defaults', async (
 
 test('form keeps its accepted result when DAG submission fails and rejects changed input', async () => {
   const f = await fixture()
-  await putTemplate(f.templateRoot, 'rejected-form', `id: root\ntype: dag\noutput_schema:\n  result: string\ndag:\n  - id: answer\n    type: node\n    node_kind: form\n    output_schema:\n      enabled: boolean\n  - id: finish\n    type: node\n    node_kind: bash\n    command: ''\n    output_schema:\n      result: string\n  - type: edge\n    from: answer\n    to: finish\n    if: $.enabled\n`)
+  await putTemplate(f.templateRoot, 'rejected-form', `id: root\ntype: dag\noutput_schema:\n  result: string\ndag:\n  - id: answer\n    type: node\n    node_kind: form\n    output_schema:\n      enabled: boolean\n  - id: finish\n    type: node\n    node_kind: bash\n    command: ''\n    output_schema:\n      result: string\n  - type: edge\n    from: answer\n    to: finish\n    if: enabled\n`)
   const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Rejected form', templateId: 'rejected-form' })).json() as any
   const nodeId = created.snapshot.instances.find((item: any) => item.definitionId === 'answer').instanceId
   const path = `${INSTANCES_PATH}/${created.id}`
@@ -674,7 +674,7 @@ test('for-expanded agent instances keep separate host conversations', async () =
     prompt: async () => ({ accepted: true }),
   } }
   const f = await fixture(services)
-  await putTemplate(f.templateRoot, 'agent-items', `id: root\ntype: dag\ndag:\n  - id: source\n    type: node\n    node_kind: bash\n    command: emit-jobs\n    output_schema:\n      jobs:\n        type: array\n        items:\n          type: object\n          properties:\n            key: string\n            title: string\n  - id: each\n    type: node\n    node_kind: agent\n    prompt: 'Discuss {{ title }}'\n    input_schema:\n      title: string\n  - type: edge\n    from: source\n    to: each\n    for: $.jobs\n`)
+  await putTemplate(f.templateRoot, 'agent-items', `id: root\ntype: dag\ndag:\n  - id: source\n    type: node\n    node_kind: bash\n    command: emit-jobs\n    output_schema:\n      jobs:\n        type: array\n        items:\n          type: object\n          properties:\n            key: string\n            title: string\n  - id: each\n    type: node\n    node_kind: agent\n    prompt: 'Discuss {{ title }}'\n    input_schema:\n      title: string\n  - type: edge\n    from: source\n    to: each\n    for: jobs\n`)
   const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Session agent items', templateId: 'agent-items' })).json() as any
   const path = `${INSTANCES_PATH}/${created.id}`
   const source = created.snapshot.instances.find((item: any) => item.definitionId === 'source').instanceId
@@ -713,7 +713,7 @@ test('restart preserves a successful command awaiting DAG submission and exposes
     }) }),
   } }
   const f = await fixture(services)
-  await putTemplate(f.templateRoot, 'reject-real', `id: root\ntype: dag\noutput_schema:\n  result: string\ndag:\n  - id: run\n    type: node\n    node_kind: bash\n    command: success\n    output_schema:\n      enabled: boolean\n  - id: end\n    type: node\n    node_kind: bash\n    command: ''\n    output_schema:\n      result: string\n  - type: edge\n    from: run\n    to: end\n    if: $.enabled\n`)
+  await putTemplate(f.templateRoot, 'reject-real', `id: root\ntype: dag\noutput_schema:\n  result: string\ndag:\n  - id: run\n    type: node\n    node_kind: bash\n    command: success\n    output_schema:\n      enabled: boolean\n  - id: end\n    type: node\n    node_kind: bash\n    command: ''\n    output_schema:\n      result: string\n  - type: edge\n    from: run\n    to: end\n    if: enabled\n`)
   await putTemplate(f.templateRoot, 'uncertain', `id: root\ntype: dag\ndag:\n  - id: run\n    type: node\n    node_kind: bash\n    command: uncertain\n    is_auto_start: true\n`)
   const first = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Reject real', templateId: 'reject-real' })).json() as any
   const firstPath = `${INSTANCES_PATH}/${first.id}`
@@ -998,11 +998,11 @@ dag:
   - type: edge
     from: emit
     to: conditional
-    if: $.enabled
+    if: enabled
   - type: edge
     from: emit
     to: each
-    for: $.jobs
+    for: jobs
 `)
   const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Branches', templateId: 'branches' })).json() as any
   const emit = created.snapshot.instances.find((item: any) => item.definitionId === 'emit')
@@ -1054,7 +1054,7 @@ dag:
   - type: edge
     from: source
     to: each
-    for: $.jobs
+    for: jobs
   - type: edge
     from: each
     to: finish
@@ -1122,7 +1122,7 @@ dag:
   - type: edge
     from: start
     to: finish
-    if: $.enabled
+    if: enabled
 `)
   const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Reject', templateId: 'reject' })).json() as any
   const start = created.snapshot.instances.find((item: any) => item.definitionId === 'start')
@@ -1231,7 +1231,7 @@ test('bash validates complete stdout JSON before accepting a business result or 
     { id: 'source', type: 'node', node_kind: 'bash', command: 'original-command', output_schema: schema },
     { id: 'each', type: 'node', node_kind: 'bash', command: '', input_schema: { title: 'string' } },
     { id: 'condition', type: 'node', node_kind: 'bash', command: '' },
-    { type: 'edge', from: 'source', to: 'each', for: '$.jobs' }, { type: 'edge', from: 'source', to: 'condition', if: '$.enabled' },
+    { type: 'edge', from: 'source', to: 'each', for: 'jobs' }, { type: 'edge', from: 'source', to: 'condition', if: 'enabled' },
   ] }))
   for (const [index, result] of [
     { stdout: '', error: /JSON/ }, { stdout: 'log\n{}', error: /JSON/ }, { stdout: '[]', error: /object/ },
@@ -1339,7 +1339,7 @@ test('closed sources stay legitimately missing through propagation and a nested 
       { id: 'agent', type: 'node', node_kind: 'agent', input_schema: missing, prompt: 'label={{ payload.label }}; object={{ payload }}; count={{ count }}' },
       { id: 'run', type: 'node', node_kind: 'bash', input_schema: missing, command: 'printf %s {{ payload.label }} {{ count }}' },
     ] },
-    { type: 'edge', from: 'flag', to: 'closed', if: '$.enabled' }, { type: 'edge', from: 'closed', to: 'propagate' },
+    { type: 'edge', from: 'flag', to: 'closed', if: 'enabled' }, { type: 'edge', from: 'closed', to: 'propagate' },
     { type: 'edge', from: 'propagate', to: 'nested' }, { type: 'edge', from: 'flag', to: 'nested' },
   ] }))
   const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Missing', templateId: 'missing' })).json() as any
@@ -1368,8 +1368,8 @@ test('structured input references render object fields and JSON text without app
   const schema = { config: { type: 'object', properties: { label: 'string', count: 'number' } }, items: { type: 'array', items: 'string' } }
   await putTemplate(f.templateRoot, 'structured', JSON.stringify({ id: 'root', type: 'dag', dag: [
     { id: 'emit', type: 'node', node_kind: 'bash', command: 'emit', output_schema: schema },
-    { id: 'agent', type: 'node', node_kind: 'agent', input_schema: schema, prompt: '{{ config.label }} / {{ config.count }} / {{ config }} / {{ items }}' },
-    { id: 'run', type: 'node', node_kind: 'bash', input_schema: schema, command: 'echo {{ config.label }} {{ config }} {{ items }}' },
+    { id: 'agent', type: 'node', node_kind: 'agent', input_schema: schema, prompt: '{{ config.label }} / {{ config.count }} / {{ config | dump }} / {{ items | dump }}' },
+    { id: 'run', type: 'node', node_kind: 'bash', input_schema: schema, command: 'echo {{ config.label }} {{ config | dump }} {{ items | dump }}' },
     { type: 'edge', from: 'emit', to: 'agent' }, { type: 'edge', from: 'emit', to: 'run' },
   ] }))
   const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Structured', templateId: 'structured' })).json() as any
@@ -1404,7 +1404,7 @@ test('ordinary vertices and DAG boundaries enforce the same recursively compatib
     assert.equal(response.status, 422)
     assert.match((await response.json() as any).error.message, config.error)
   }
-  for (const [index, prompt] of ['{{ value.unknown }}', '{{ value.count.more }}', '{{ value|filter }}', '{{ value[0] }}', '{{ $.value }}', '{{ value', '{# comment #}'].entries()) {
+  for (const [index, prompt] of ['{{ value.unknown }}', '{{ value.count.more }}', '{{ value|filter }}', '{{ value[0] }}', '{{ $.value }}', '{{ value'].entries()) {
     const id = `reference-${index}`
     await putTemplate(f.templateRoot, id, JSON.stringify({ id: 'root', type: 'dag', dag: [
       { id: 'source', type: 'node', node_kind: 'bash', command: '', output_schema: object },
@@ -1891,7 +1891,7 @@ test('nested and expanded Bash nodes receive the saved template source independe
   const { directory } = await mappedTemplate(f, assetDefinition([
     { id: 'source', type: 'node', node_kind: 'form', output_schema: { rows } },
     { id: 'nested', type: 'dag', input_schema: { text: 'string' }, dag: [{ ...assetTask('each', assetCommand + ' {{ text }}'), input_schema: { text: 'string' }, is_auto_start: true }] },
-    { type: 'edge', from: 'source', to: 'nested', for: '$.rows' },
+    { type: 'edge', from: 'source', to: 'nested', for: 'rows' },
   ]))
   await mkdir(join(directory, 'scripts')); await writeFile(join(directory, 'scripts', 'init.sh'), 'printf "%s" "$1"\n')
   const response = await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Expanded', templateId: 'asset-runtime' })
@@ -1950,8 +1950,8 @@ test('recursive Bash calls share one saved template directory while agent keeps 
   const { directory } = await mappedTemplate(f, assetDefinition([
     { id: 'source', type: 'node', node_kind: 'form', output_schema: { items } },
     { id: 'loop', type: 'dag', input_schema: { items }, dag: [
-      { ...assetTask('step', assetCommand + ' {{ items }}'), input_schema: { items }, output_schema: { items, again: 'boolean' }, is_auto_start: true },
-      { type: 'edge', from: 'step', to: 'loop', if: '$.again' },
+      { ...assetTask('step', assetCommand + ' {{ items | dump }}'), input_schema: { items }, output_schema: { items, again: 'boolean' }, is_auto_start: true },
+      { type: 'edge', from: 'step', to: 'loop', if: 'again' },
     ] },
     { id: 'agent', type: 'node', node_kind: 'agent', prompt: 'Original prompt', is_auto_start: true },
     { type: 'edge', from: 'source', to: 'loop' },
@@ -2082,4 +2082,38 @@ test('台后人工确认后的 DAG 写入失败保留获准结果，重开存储
   const completed = await (await fetch(reopened.url(path))).json() as any
   assert.equal(completed.snapshot.instances.find((i: any) => i.instanceId === task).status, 'completed')
   assert.equal(starts, 1)
+})
+
+test('未保存 DAG 决策的恢复重提重新求值随机边，已保存 Bash 成功结果不再执行业务', async t => {
+  let calls = 0, draws = 0, rejectWrite = true
+  t.mock.method(Math, 'random', () => { draws++; return 0 })
+  const services = { shell: { sandboxMode: 'workspace-write', resolve: (request: unknown) => request, execute: async () => {
+    calls++
+    return { result: async () => ({ exitCode: 0, stdout: { text: '{"text":"accepted"}', truncated: false }, stderr: { text: '' }, sandbox: { mode: 'workspace-write' } }) }
+  } } }
+  const f = await fixture(services, undefined, value => {
+    const row = value as any
+    if (rejectWrite && row.snapshot.instances.some((item: any) => item.definitionId === 'source' && item.status === 'completed')) throw new Error('Injected decision write failure')
+  })
+  await putTemplate(f.templateRoot, 'random-submit-retry', JSON.stringify({ id: 'root', type: 'dag', dag: [
+    { id: 'source', type: 'node', node_kind: 'bash', command: 'emit', output_schema: { text: 'string' } },
+    { id: 'next', type: 'node', node_kind: 'bash', command: '', input_schema: { text: 'string' } },
+    { type: 'edge', from: 'source', to: 'next', if: '(range(1) | random) == 0' },
+  ] }))
+  const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Random retry', templateId: 'random-submit-retry' })).json() as any
+  const path = `${INSTANCES_PATH}/${created.id}`, id = created.snapshot.instances.find((item: any) => item.definitionId === 'source').instanceId
+  await postJson(f.url(`${path}/nodes/${id}/actions/start`), {})
+  const accepted = await untilDetail(f.url(path), detail => detail.executions?.[id]?.status === 'succeeded')
+  assert.equal(accepted.snapshot.instances.find((item: any) => item.instanceId === id).status, 'ready')
+  assert.equal(calls, 1)
+  assert.equal(draws, 1)
+  await f.close()
+  rejectWrite = false
+  const reopened = await openHost(f.storageRoot, f.templateRoot, f.root, services)
+  cleanups.push(reopened.close)
+  const restored = await (await fetch(reopened.url(path))).json() as any
+  assert.equal(calls, 1)
+  assert.equal(draws, 2)
+  assert.equal(restored.snapshot.instances.find((item: any) => item.instanceId === id).status, 'completed')
+  assert.deepEqual(restored.snapshot.instances.find((item: any) => item.definitionId === 'next').input, { text: 'accepted' })
 })

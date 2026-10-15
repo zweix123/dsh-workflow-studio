@@ -35,3 +35,7 @@
       name: dsh-workflow-template
       config:
         directory: "@dsh-workflow/core-regression-fixture/templates/serial-chain"
+    - id: regression-text-expressions
+      name: dsh-workflow-template
+      config:
+        directory: "@dsh-workflow/core-regression-fixture/templates/text-expressions"

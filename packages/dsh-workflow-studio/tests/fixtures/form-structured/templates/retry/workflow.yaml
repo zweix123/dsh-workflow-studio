@@ -45,4 +45,4 @@ dag:
   - type: edge
     from: answer
     to: finish
-    if: $.enabled
+    if: enabled

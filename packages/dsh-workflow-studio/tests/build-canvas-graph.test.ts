@@ -7,7 +7,7 @@ const detail: InstanceDetail = {
   id: 'run', workspaceId: 'workspace', name: 'Run', templateId: 'flow', createdAt: '2026-09-23T00:00:00Z', input: {},
   definition: { id: 'root', type: 'dag', dag: [
     { id: 'prepare', type: 'node' }, { id: 'work', type: 'node' }, { id: 'later', type: 'node' },
-    { type: 'edge', from: 'prepare', to: 'work', for: '$.jobs' },
+    { type: 'edge', from: 'prepare', to: 'work', for: 'jobs' },
     { type: 'edge', from: 'work', to: 'later' },
   ] },
   snapshot: {
@@ -51,7 +51,7 @@ test('projects created instances and waiting positions with horizontal dependenc
   assert.deepEqual(edges.filter(edge => edge.data?.status === 'aggregation').map(edge => edge.source).sort(), ['i3', 'i4'])
   assert.ok(edges.every(edge => edge.markerEnd))
   assert.equal(typeof edges[0]?.markerEnd === 'object' && edges[0].markerEnd.color, 'var(--dsw-alias-state-business-primary)')
-  assert.ok(edges.filter(edge => edge.data?.status === 'active').every(edge => edge.data?.each === '$.jobs' && edge.label === undefined))
+  assert.ok(edges.filter(edge => edge.data?.status === 'active').every(edge => edge.data?.each === 'jobs' && edge.label === undefined))
   assert.ok(edges.filter(edge => edge.data?.status === 'pending').every(edge => edge.data?.each === undefined))
   const outlet = nodes.find(node => node.type === 'aggregate')!
   assert.ok(outlet.position.x + Number(outlet.style?.width) < later.position.x)
@@ -73,7 +73,7 @@ test('keeps nested DAG children inside visible groups and stacks created recursi
     definition: { id: 'root', type: 'dag', dag: [
       { id: 'inner', type: 'dag', dag: [
         { id: 'work', type: 'node' },
-        { type: 'edge', from: 'work', to: 'inner', if: '$.again' },
+        { type: 'edge', from: 'work', to: 'inner', if: 'again' },
       ] },
     ] },
     snapshot: {
@@ -107,13 +107,13 @@ test('keeps nested DAG children inside visible groups and stacks created recursi
   assert.ok(recursion.position.y > worker.position.y)
   assert.equal(nodes.filter(node => node.data.status === 'waiting').length, 1)
   assert.equal(nodes.filter(node => node.data.kind === 'dag').length, 2)
-  assert.equal(edges[0]?.data?.condition, '$.again')
+  assert.equal(edges[0]?.data?.condition, 'again')
   assert.equal(edges[1]?.data?.status, 'pending')
 })
 
 test('shows skipped positions and inactive conditional edges without inventing an instance', () => {
   const closed: InstanceDetail = structuredClone(detail)
-  closed.definition.dag[3] = { type: 'edge', from: 'prepare', to: 'work', if: '$.enabled' }
+  closed.definition.dag[3] = { type: 'edge', from: 'prepare', to: 'work', if: 'enabled' }
   closed.snapshot.instances = closed.snapshot.instances.filter(row => row.definitionId !== 'work')
   closed.snapshot.skippedPositions = [{ parentInstanceId: 'i1', definitionId: 'work', definitionPath: ['dag', 1] }]
   closed.snapshot.edges[0]!.status = 'inactive'
@@ -122,12 +122,12 @@ test('shows skipped positions and inactive conditional edges without inventing a
   assert.equal(nodes.find(node => node.data.label === 'work')?.data.status, 'skipped')
   assert.equal(edges[0]?.data?.status, 'inactive')
   assert.equal(typeof edges[0]?.markerEnd === 'object' && edges[0].markerEnd.color, 'var(--dsw-alias-label-tertiary)')
-  assert.equal(edges[0]?.data?.condition, '$.enabled')
+  assert.equal(edges[0]?.data?.condition, 'enabled')
 })
 
 test('does not connect a closed condition to an instance created by another edge', () => {
   const branched: InstanceDetail = structuredClone(detail)
-  branched.definition.dag[3] = { type: 'edge', from: 'prepare', to: 'work', if: '$.enabled' }
+  branched.definition.dag[3] = { type: 'edge', from: 'prepare', to: 'work', if: 'enabled' }
   branched.definition.dag.push({ type: 'edge', from: 'prepare', to: 'work' })
   branched.snapshot.instances = branched.snapshot.instances.filter(row => row.instanceId !== 'i4')
   delete branched.snapshot.instances.find(row => row.instanceId === 'i3')!.forItem
@@ -143,14 +143,14 @@ test('does not connect a closed condition to an instance created by another edge
 
 test('long expressions do not widen unrelated ranks and retain both originals', () => {
   const short = structuredClone(detail)
-  short.definition.dag[3] = { type: 'edge', from: 'prepare', to: 'work', if: '$.ok', for: '$.jobs' }
+  short.definition.dag[3] = { type: 'edge', from: 'prepare', to: 'work', if: 'ok', for: 'jobs' }
   const long = structuredClone(short)
-  long.definition.dag[3] = { type: 'edge', from: 'prepare', to: 'work', if: '$.very.long.expression'.repeat(40), for: '$.jobs'.repeat(40) }
+  long.definition.dag[3] = { type: 'edge', from: 'prepare', to: 'work', if: 'very.long.expression'.repeat(40), for: 'jobs'.repeat(40) }
   const a = buildCanvasGraph(short)
   const b = buildCanvasGraph(long)
   assert.deepEqual(a.nodes.map(node => [node.id, node.position]), b.nodes.map(node => [node.id, node.position]))
-  assert.equal(b.edges[0]?.data?.condition, '$.very.long.expression'.repeat(40))
-  assert.equal(b.edges[0]?.data?.each, '$.jobs'.repeat(40))
+  assert.equal(b.edges[0]?.data?.condition, 'very.long.expression'.repeat(40))
+  assert.equal(b.edges[0]?.data?.each, 'jobs'.repeat(40))
 })
 
 test('a branch merge leaves card bounds separate', () => {

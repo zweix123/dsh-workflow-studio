@@ -1,8 +1,8 @@
 import type { DataMap, Schema, InstanceId, ForItemIdentity, ErrorLocation, ErrorSource, ExecutionPhase, Program, Execution, FrontierItem, ExecutionSnapshot, ExecutionResult, SavedExecution } from './types.js';
 import type { Vertex, Plan, Edge } from './compiler.js';
 import { cloneDefinition } from './compiler.js';
-import { copy, fail, put } from './data.js';
-import { evaluate } from './expression.js';
+import { container, copy, fail, put } from './data.js';
+import type { Expression } from 'dsh-workflow-node/expressions';
 import { Fault, InitializationError, SubmissionError, type Failure } from './errors.js';
 
 interface Instance {
@@ -22,7 +22,7 @@ interface Position {
 interface EdgeState { status: 'pending' | 'active' | 'inactive'; rows?: { input: DataMap; identity: ForItemIdentity }[] }
 interface Frame { id: InstanceId; plan: Plan; positions: Map<string, Position>; edges: Map<Edge, EdgeState> }
 interface State { root: InstanceId; next: number; instances: Map<InstanceId, Instance>; frames: Map<InstanceId, Frame> }
-interface Source { data: DataMap; schema: Schema; origin: ErrorSource }
+interface Source { data: DataMap; schema: Schema; origin: ErrorSource; computed?: boolean }
 
 // Only records in touched DAG frames are copied. Accepted data and unrelated instances stay shared.
 class Transaction {
@@ -67,14 +67,17 @@ function positionSource(frame: Frame, id: string): Source {
   const position = frame.positions.get(id)!;
   return { data: position.output!, schema: frame.plan.effective.get(id)!, origin: { position: { parentInstanceId: frame.id, definitionId: id }, ...(position.instances.length === 1 && !frame.plan.incoming.get(id)!.some(e => e.iteration) ? { instanceId: position.instances[0]! } : {}) } };
 }
+function sourceAt(source: Source, path: readonly (string | number)[]): ErrorSource {
+  return source.computed ? source.origin : { ...source.origin, dataPath: [...(source.origin.dataPath ?? []), ...path] };
+}
 function merge(sources: Source[], phase: ExecutionPhase, loc: ErrorLocation, output = false): DataMap {
   const result: DataMap = {};
-  const origins = new Map<string, ErrorSource>();
+  const origins = new Map<string, Source>();
   for (const source of sources) {
     const data = validate(source.data, source.schema, false, phase, loc, [source]);
     for (const key of Object.keys(data)) {
-      if (origins.has(key)) throw new Fault({ code: output ? 'DAG_OUTPUT_KEY_CONFLICT' : 'INPUT_KEY_CONFLICT', phase, location: loc, dataPath: [key], sources: [{ ...origins.get(key)!, dataPath: [...(origins.get(key)!.dataPath ?? []), key] }, { ...source.origin, dataPath: [...(source.origin.dataPath ?? []), key] }] });
-      put(result, key, data[key]); origins.set(key, source.origin);
+      if (origins.has(key)) throw new Fault({ code: output ? 'DAG_OUTPUT_KEY_CONFLICT' : 'INPUT_KEY_CONFLICT', phase, location: loc, dataPath: [key], sources: [sourceAt(origins.get(key)!, [key]), sourceAt(source, [key])] });
+      put(result, key, data[key]); origins.set(key, source);
     }
   }
   return result;
@@ -85,7 +88,7 @@ function validate(data: DataMap, schema: Schema, required: boolean, phase: Execu
     if (error instanceof Fault && error.failure.dataPath?.length) {
       const path = error.failure.dataPath;
       const source = sources.find(s => Object.hasOwn(s.data, path[0]!));
-      if (source) throw new Fault({ ...error.failure, sources: [{ ...source.origin, dataPath: [...(source.origin.dataPath ?? []), ...path] }] });
+      if (source) throw new Fault({ ...error.failure, sources: [sourceAt(source, path)] });
     }
     throw error;
   }
@@ -96,33 +99,45 @@ function aggregate(frame: Frame, id: string, instances: Instance[]): DataMap {
   for (const key of keys) put(result, key, instances.map(i => Object.hasOwn(i.output!, key) ? i.output![key] : null));
   return copy(result, frame.plan.effective.get(id)!, true, 'group-aggregation', targetLocation(frame, frame.plan.positions.get(id)!));
 }
+function evaluate(expression: Expression, data: DataMap, location: ErrorLocation): unknown {
+  try { return expression.evaluate(data); }
+  catch (cause) { throw new Fault({ code: 'EXPRESSION_EVALUATION_ERROR', phase: 'edge-evaluation', location, cause }); }
+}
 function edgeValue(frame: Frame, edge: Edge, state: EdgeState): void {
   const source = frame.positions.get(edge.from)!;
   if (source.status === 'skipped') { state.status = 'inactive'; return; }
   const loc = { parentInstanceId: frame.id, definitionPath: [...edge.path, edge.condition ? 'if' : 'for'], ...(edge.definition.id === undefined ? {} : { definitionId: edge.definition.id }) };
   const data = copy(source.output!, frame.plan.effective.get(edge.from)!, true, 'edge-evaluation', loc);
   if (edge.condition) {
-    const value = evaluate(edge.condition, data);
+    const value = evaluate(edge.condition, data, loc);
     if (typeof value !== 'boolean') fail('EXPRESSION_EVALUATION_ERROR', 'edge-evaluation', loc);
     if (!value) { state.status = 'inactive'; return; }
   }
   if (!edge.iteration) { state.status = 'active'; return; }
   const forLoc = { ...loc, definitionPath: [...edge.path, 'for'] };
-  const value = evaluate(edge.iteration, data);
+  const value = evaluate(edge.iteration, data, forLoc);
   if (!Array.isArray(value)) fail('INVALID_FOR_VALUE', 'for-expansion', forLoc);
-  const field = 'field' in edge.iteration.left ? edge.iteration.left.field : '';
+  const path = edge.iteration.path;
   const keys = new Set<string>();
   const rows: NonNullable<EdgeState['rows']> = [];
-  for (let index = 0; index < value.length; index++) {
-    const item = value[index] as DataMap;
-    if (item === null || typeof item !== 'object' || Array.isArray(item)) fail('INVALID_FOR_VALUE', 'for-expansion', forLoc, [field, index]);
-    const key = item.key;
-    if (typeof key !== 'string' || key.length === 0) fail('INVALID_FOR_KEY', 'for-expansion', forLoc, [field, index, 'key']);
-    const identity = { key, index };
-    if (keys.has(key)) fail('DUPLICATE_FOR_KEY', 'for-expansion', { ...forLoc, forItem: identity }, [field, index, 'key']);
-    keys.add(key);
-    const input: DataMap = {}; for (const k of Object.keys(item)) if (k !== 'key') put(input, k, item[k]);
-    rows.push({ input, identity });
+  try {
+    const elements = container(value, true, 'for-expansion', forLoc, path ?? []);
+    for (let index = 0; index < elements.length!.value; index++) {
+      const item = Object.hasOwn(elements, index) ? elements[String(index)]!.value : undefined;
+      if (item === null || typeof item !== 'object' || Array.isArray(item)) fail('INVALID_FOR_VALUE', 'for-expansion', forLoc, path ? [...path, index] : undefined);
+      const properties = container(item, false, 'for-expansion', forLoc, [...(path ?? []), index]);
+      const key = Object.hasOwn(properties, 'key') ? properties.key!.value : undefined;
+      if (typeof key !== 'string' || key.length === 0) fail('INVALID_FOR_KEY', 'for-expansion', forLoc, path ? [...path, index, 'key'] : undefined);
+      const identity = { key, index };
+      if (keys.has(key)) fail('DUPLICATE_FOR_KEY', 'for-expansion', { ...forLoc, forItem: identity }, path ? [...path, index, 'key'] : undefined);
+      keys.add(key);
+      const input: DataMap = {}; for (const k of Object.keys(properties)) if (k !== 'key') put(input, k, properties[k]!.value);
+      rows.push({ input, identity });
+    }
+  } catch (error) {
+    // A computed result has no proven path in the original upstream output.
+    if (!path && error instanceof Fault) { delete error.failure.dataPath; delete error.failure.sources; }
+    throw error;
   }
   state.rows = rows; state.status = rows.length ? 'active' : 'inactive';
 }
@@ -133,8 +148,8 @@ function inputs(frame: Frame, id: string): { sources: Source[]; identity?: ForIt
   if (iteration) {
     const edge = frame.edges.get(iteration)!;
     if (edge.status !== 'active') return;
-    const field = 'field' in iteration.iteration!.left ? iteration.iteration!.left.field : '';
-    return edge.rows!.map(row => ({ identity: row.identity, sources: [{ data: row.input, schema: iteration.itemSchema!, origin: { ...positionSource(frame, iteration.from).origin, dataPath: [field, row.identity.index] } }, ...ordinary] }));
+    const path = iteration.iteration!.path;
+    return edge.rows!.map(row => ({ identity: row.identity, sources: [{ data: row.input, schema: iteration.itemSchema ?? {}, computed: !path, origin: { ...positionSource(frame, iteration.from).origin, ...(path ? { dataPath: [...path, row.identity.index] } : {}) } }, ...ordinary] }));
   }
   return ordinary.length ? [{ sources: ordinary }] : undefined;
 }

@@ -23,7 +23,11 @@
       "default": "./lib/text-template.js"
     },
     "./client": "./lib/client.js",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./expressions": {
+      "types": "./lib/types/dsh-workflow-node/src/expressions.d.ts",
+      "default": "./lib/expressions.js"
+    }
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "~4.0.4",
@@ -37,5 +41,8 @@
         "@deepseek-ai/dsh-client-locale"
       ]
     }
+  },
+  "dependencies": {
+    "nunjucks": "3.2.4"
   }
 }

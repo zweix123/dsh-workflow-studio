@@ -41,11 +41,13 @@ function assertForkContext(parent: Agent): void {
 }
 
 function startForeground(context: NodeContext): NodePlan {
-  const rendered = renderTextTemplate(context.definition.prompt as string, context.input)
-  const prompt = rendered.trim() ? rendered : '请先询问我希望处理什么任务。'
   const previous = state(context.fact)
   if (context.fact?.status === 'succeeded' || previous?.promptStarted) return { fact: context.fact! }
   if (context.fact?.status === 'running') throw new Error('Node is already running')
+  let rendered: string
+  try { rendered = renderTextTemplate(context.definition.prompt as string, context.input) }
+  catch (cause) { throw new Error(`Node ${context.definition.id}: prompt: ${String(cause)}`, { cause }) }
+  const prompt = rendered.trim() ? rendered : '请先询问我希望处理什么任务。'
   const business: AgentState = { ...previous, mode: 'foreground', sessionId: previous?.sessionId ?? randomUUID(), requestId: previous?.requestId ?? randomUUID() }
   return { fact: { kind: 'agent', status: 'running', business }, run: async () => {
     const sessionId = SessionId(business.sessionId!)
@@ -92,7 +94,7 @@ function attemptPlan(context: NodeContext, parentFor: () => Promise<Agent>): Nod
       if (isBackground) return { kind: 'agent', status: 'waiting', business: { ...business, pendingOutput: output } } as NodeFact
       return { kind: 'agent', status: 'succeeded', business, output } as NodeFact
     } catch (error) {
-      attempt.status = 'failed'; attempt.error = error instanceof Error ? error.message : String(error)
+      attempt.status = 'failed'; attempt.error = `Node ${context.definition.id}: ${isBackground ? 'prompt / execution' : 'execution'}: ${error instanceof Error ? error.message : String(error)}`
       return { kind: 'agent', status: 'failed', business, error: attempt.error } as NodeFact
     } finally { await run?.dispose() }
   } }

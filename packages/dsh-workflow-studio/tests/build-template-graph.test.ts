@@ -9,13 +9,13 @@ test('template graph keeps all static vertices, nested groups, recursion, and ex
     { id: 'start', type: 'node', node_kind: 'bash', command: 'echo hi' },
     { id: 'inner', type: 'dag', description: 'A group', dag: [
       { id: 'work', type: 'node', node_kind: 'agent', prompt: 'Long prompt' },
-      { type: 'edge', from: 'work', to: 'inner', if: '$.again' },
+      { type: 'edge', from: 'work', to: 'inner', if: 'again' },
     ] },
     { id: 'later', type: 'node' },
     { id: 'jobs', type: 'node' },
-    { type: 'edge', from: 'start', to: 'inner', if: '$.yes' },
+    { type: 'edge', from: 'start', to: 'inner', if: 'yes' },
     { type: 'edge', from: 'inner', to: 'later' },
-    { type: 'edge', from: 'start', to: 'jobs', for: '$.items' },
+    { type: 'edge', from: 'start', to: 'jobs', for: 'items' },
   ] }
   const graph = buildTemplateGraph(definition)
   assert.deepEqual(graph.nodes.map(node => node.data.label).sort(), ['inner', 'inner', 'jobs', 'later', 'start', 'work'])
@@ -23,8 +23,8 @@ test('template graph keeps all static vertices, nested groups, recursion, and ex
   assert.equal(graph.nodes.find(node => node.data.label === 'work')?.parentId, group.id)
   assert.equal(graph.nodes.find(node => node.data.kind === 'recursive')?.parentId, group.id)
   assert.equal(graph.edges.length, 4)
-  assert.equal(graph.edges.find(edge => edge.data?.each)?.data?.each, '$.items')
-  assert.equal(graph.edges.find(edge => edge.data?.condition === '$.again')?.target, `${group.id}/recursive`)
+  assert.equal(graph.edges.find(edge => edge.data?.each)?.data?.each, 'items')
+  assert.equal(graph.edges.find(edge => edge.data?.condition === 'again')?.target, `${group.id}/recursive`)
   assert.equal(definitionAt(definition, ['dag', 1])?.description, 'A group')
   assert.equal(definitionAt(definition, ['dag', 1, 'dag', 0])?.prompt, 'Long prompt')
   assert.ok(graph.nodes.find(node => node.data.label === 'start')!.position.x < group.position.x)

@@ -80,7 +80,7 @@ test('every graph object shows snapshot configuration first and flat runtime fie
       { id: 'same', type: 'node', node_kind: 'bash', command: snapshotCommand, dag: 'ordinary custom field', output_schema: { answer: 'string' } },
       { id: 'nested', type: 'dag', description: 'Nested snapshot', dag: [
         { id: 'same', type: 'node', node_kind: 'bash', command: 'nested command' },
-        { type: 'edge', from: 'same', to: 'nested', if: '$.again' },
+        { type: 'edge', from: 'same', to: 'nested', if: 'again' },
       ] },
       { id: 'later', type: 'node', node_kind: 'bash', command: 'waiting command' },
       { id: 'closed', type: 'node', node_kind: 'bash', command: 'skipped command' },

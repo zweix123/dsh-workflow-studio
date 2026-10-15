@@ -27,11 +27,11 @@ dag:
   - type: edge
     from: source
     to: active
-    if: $.enabled
+    if: enabled
   - type: edge
     from: source
     to: closed
-    if: $.enabled == false
+    if: enabled == false
   - type: edge
     from: active
     to: join

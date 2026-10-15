@@ -40,7 +40,7 @@ dag:
   - type: edge
     from: source
     to: each
-    for: $.jobs
+    for: jobs
   - type: edge
     from: each
     to: finish

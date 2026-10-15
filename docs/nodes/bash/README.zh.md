@@ -31,6 +31,8 @@ command: npm test
 
 输入先在本节点 `input_schema` 中声明；路径与取值规则见[共用输入引用](../input-references.zh.md)。
 
+Bash 使用 Nunjucks 默认表达式插值，支持内置 filter/test；结构化 JSON 使用 `{{ value | dump }}`。不通过模板条件、循环、注释或空白裁剪生成命令结构。
+
 bash 的占位符必须是独立、未额外加引号的数据参数；不能用作命令名、拼进参数或放进引号、注释、命令替换和 heredoc。节点使用 Shell 单引号转义，含空格、引号、换行和特殊字符的值始终保持为一个参数；缺失值形成一个空参数。
 
 ```yaml

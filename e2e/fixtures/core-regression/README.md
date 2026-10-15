@@ -7,6 +7,7 @@
 - gate：自动命令写入 `gate-runs.txt`，等待工作区 `release.txt`；用例从外部释放或停止宿主。命令的条件轮询最多 60 秒，不是演示等待。
 - branches：真实布尔输出决定分支，关闭的命令应永不生成 `closed-runs.txt`，汇合收到激活分支输出。
 - loop：默认两项 a/Alpha、b/Beta；工作区存在 `empty.txt` 时输出空数组。`each-runs.txt` 核对实际完成顺序，页面输入核对聚合顺序。
+- text-expressions：Nunjucks 原生条件与 reverse 计算数组展开，Bash upper/dump 和含 `}}` 的字面量安全传参，部分完成后重启按源顺序聚合；source-runs.txt 核对成功业务不重跑。
 - session：相同 task 定义创建两次独立对话，人工完成后推进 after；不声明 agent 业务输出。
 - serial-chain：采用 OpenSpec 四阶段示例的依赖结构，以真实表单和 Bash 节点独立验证串行链对齐与跨节点边绕行，不依赖内置模板版本或模型服务。
 - form-enums：真实 form 收集字符串、数字、布尔及嵌套枚举，验证名称映射、复选框组、自动多选、空数组与普通重复数组，再交付同配置的下游 form。

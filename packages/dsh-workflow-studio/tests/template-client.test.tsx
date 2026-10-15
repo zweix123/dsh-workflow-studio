@@ -40,7 +40,7 @@ test('template tab rescans, shows invalid entries, and reuses and closes read-on
   const definition = { id: 'root', type: 'dag', description: '原始描述', dag: [
     { id: 'write', type: 'node', node_kind: 'agent', prompt, dag: 'custom metadata', output_schema: { answer: 'string' }, custom: { zero: 0, flag: false, empty: '' } },
     { id: 'review', type: 'node', node_kind: 'bash', command: 'echo ok' },
-    { type: 'edge', from: 'write', to: 'review', if: '$.answer == "yes"' },
+    { type: 'edge', from: 'write', to: 'review', if: 'answer == "yes"' },
   ] }
   let catalogLoads = 0
   let detailLoads = 0

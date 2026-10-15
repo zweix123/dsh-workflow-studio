@@ -108,13 +108,13 @@ test('real parallel branches are not flattened into a serial chain', () => {
 
 test('duplicate nested bypass definitions keep independent route objects and their original expressions', () => {
   const inner = structuredClone(serialChain)
-  inner.dag.push({ type: 'edge', from: names[1]!, to: names[3]!, if: '$.enabled' })
+  inner.dag.push({ type: 'edge', from: names[1]!, to: names[3]!, if: 'enabled' })
   const graph = buildTemplateGraph({ id: 'root', type: 'dag', dag: [inner] })
   const routes = graph.edges.filter(edge => edge.data.perimeter)
   assert.equal(routes.length, 2)
   assert.notEqual(routes[0]!.data.perimeter, routes[1]!.data.perimeter)
   assert.deepEqual(routes[0]!.data.perimeter, routes[1]!.data.perimeter)
-  assert.equal(routes[1]!.data.condition, '$.enabled')
+  assert.equal(routes[1]!.data.condition, 'enabled')
   const group = graph.nodes.find(node => node.data.kind === 'dag')!
   const cards = graph.nodes.filter(node => node.parentId === group.id)
   assert.ok(routes.every(edge => edge.data.perimeter!.coordinate < group.position.y + Math.min(...cards.map(node => node.position.y))))

@@ -140,3 +140,5 @@ starter 的流程是：request 表单填写 task → discuss 台前 Agent 消费
 | Agent 完成后下游没有结果 | 是否声明输出，台后是否已人工完成，是否存在交付错误；见 [Agent 节点](./nodes/agent/README.zh.md) |
 | 修改后仍是旧内容 | 是否真正重载声明，查看的是否是已有实例快照 |
 | Bash 找不到附属脚本 | 核对实例保存的来源、包及文件是否仍存在、宿主权限；见 [Bash 节点](./nodes/bash/README.zh.md#模板附属文件) |
+
+文本能力复用公共 `dsh-workflow-node/text-template` 与 `dsh-workflow-node/expressions`，节点插件不依赖 Studio 内部 DAG。上下文、显式 dump、Bash 独立参数及静态/运行时检查边界见[输入引用](./nodes/input-references.zh.md)和[DAG 表达式](./dag-syntax.zh.md#5-字段引用if-与-for-的写法)。校验必须覆盖所有定义；测试还应验证真实节点调用、结果契约和恢复重提，不只测试库本身。

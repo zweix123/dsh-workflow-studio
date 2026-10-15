@@ -29,8 +29,10 @@ async function execute(command: string, { workspaceId, templateDirectory, servic
 }
 
 function start(context: NodeContext): { fact: NodeFact; run?: () => Promise<NodeFact> } {
-  const command = renderTextTemplate(context.definition.command as string, context.input, true)
   if (context.fact?.status === 'succeeded') return { fact: context.fact }
+  let command: string
+  try { command = renderTextTemplate(context.definition.command as string, context.input, true) }
+  catch (cause) { throw new Error(`Node ${context.definition.id}: command: ${String(cause)}`, { cause }) }
   if (context.fact?.status === 'running') throw new Error('Node is already running')
   if (!command.trim() && !Object.keys(context.definition.output_schema ?? {}).length) return { fact: { kind: 'bash', status: 'succeeded', output: {}, business: { stdout: '', stderr: '', exitCode: 0 } } }
   return {

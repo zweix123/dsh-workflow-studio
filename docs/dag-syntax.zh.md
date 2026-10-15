@@ -26,7 +26,7 @@
 
 “必须”和“不得”表示强制要求。“待确定”表示尚未规定，不能假定实现已支持。“编译期”或“静态检查”指执行前对源程序定义的检查，不要求实现生成机器码。
 
-本期只定义有限字段引用与条件比较，不定义节点代码、通用表达式语言、并发调度、错误恢复、重试或迭代间依赖，不保证递归终止。
+表达式采用 Nunjucks；本项目维护数据与编排契约，不另造表达式语言。不定义节点代码、并发调度、业务错误恢复、重试或迭代间依赖，不保证递归终止。
 
 ### 1.1 最小可运行模板
 
@@ -279,7 +279,7 @@ dag:
 
 对象类型必须使用 `{"type": "object", "properties": Schema}`，数组类型必须使用 `{"type": "array", "items": T}`。字符串类型描述只允许 `"string"`、`"number"`、`"boolean"`；`"object"`、`"array"` 简写在编译期报错。类型描述可以递归嵌套，每层对象都必须提供 `properties`，每层数组都必须提供 `items`，不能在内部重新使用已取消的简写。本期不提供 `null` 类型、联合类型或隐式类型转换。
 
-`number` 的精度、范围、舍入和溢出行为均遵循 JavaScript Number，不另设整数或高精度小数类型。配置中的数字解析为 Number 后参与传递和比较，超出可精确表示范围时采用 JavaScript 的结果。配置使用 YAML；第 5 节表达式内部的数字和字符串字面量仍使用 JSON 语法，不因文件格式或 JavaScript 值语义而增加 JavaScript 表达式或新的 Schema 类型。
+`number` 的精度、范围、舍入和溢出行为均遵循 JavaScript Number，不另设整数或高精度小数类型。配置中的数字解析为 Number 后参与传递和比较，超出可精确表示范围时采用 JavaScript 的结果。配置使用 YAML；第 5 节表达式的字面量和运算遵循 Nunjucks，不增加 JavaScript 表达式或新的 Schema 类型。
 
 `object` 与 `array` 在本语言中分别检查；`null` 不视为 `object`。顶层输入输出 map 与声明 object 只接受普通数据对象，包括无原型对象；Date、Map、Set、业务类实例等特殊对象在这些位置必须报错，不得按自身字段复制后隐式转换成普通对象。它们作为未声明字段的值时，仍原样保留引用。对象字段按自身的字符串键处理，不读取原型链属性。类型的基础定义参见 [ECMAScript 数据类型与值](https://tc39.es/ecma262/multipage/ecmascript-data-types-and-values.html#sec-ecmascript-language-types)。
 
@@ -360,50 +360,26 @@ Proxy 属于特殊代理对象，不作为顶层 map、声明 object 或声明 a
 
 ## 5. 字段引用、`if` 与 `for` 的写法
 
-边上的 $ 引用该边上游已通过校验的输出 `map`。若上游是实例组，则引用第 9.2 节定义的聚合输出。字段读取遵循第 7.2 节，不修改上游输出，也不执行节点业务代码。
+边 `if`、`for` 的字符串是一个不带 `{{ }}` 定界符的 [Nunjucks 表达式](https://mozilla.github.io/nunjucks/templating.html)。上下文是该边上游已通过校验的输出 map；实例组使用第 9.2 节的聚合输出。使用普通变量、属性与索引，不增加 `$` 根变量，也不按节点 ID 隐式读取其他数据。工作流定义不会先作为模板生成或重写。
 
-以下产生式描述配置解析后 `if`、`for` 字符串的完整内容。`FieldName` 使用正则表达式记法，`JSONString`、`JSONNumber` 使用 JSON 自身的字符串和数字语法，与外层配置文件的格式无关。
+以下为边字段片段：
 
-```text
-ForExpr ::= FieldRef
-IfExpr ::= FieldRef | Operand ("==" | "!=") Operand
-Operand ::= FieldRef | ScalarLiteral
-FieldRef ::= "$." FieldName
-FieldName ::= [A-Za-z_][A-Za-z0-9_]*
-ScalarLiteral ::= JSONString | JSONNumber | "true" | "false"
+```yaml
+if: 'review.approved and review.score + 5 >= 80'
+for: 'review.jobs'
 ```
 
-`FieldRef` 只引用顶层字段，不支持嵌套路径、索引、通配符或函数。虽然 Schema 可以描述嵌套结构，表达式本期仍只能引用顶层字段。业务 `map` 的键可以是任意字符串，但不符合 `FieldName` 的键无法在表达式中引用。
+解析、比较、逻辑、算术、filter、test 与内置全局函数均交给库；`==` 沿用库的比较语义，严格比较使用 `===`。不保留旧 `$.field` 格式或自定义比较规则。通用语法以库文档为准。
 
-表达式首尾及操作符周围允许 JSON 空白字符：空格、制表符、换行符和回车符。字段引用、数字及操作符内部不得插入空白；字符串字面量内部内容按 JSON 解码保留，不做去空白处理。表达式必须完整匹配语法，去掉首尾空白后为空、或存在多余内容时必须拒绝。
+`if` 必须得到原生 boolean；false 关闭边，字符串 `"false"`、缺失值等不满足结果契约。`for` 必须得到带合法 key 的对象数组；key 非空且同次展开唯一，移除 key 后参与输入合并。显式空数组跳过目标。边取得原生值，不通过文本渲染后 JSON 解析或真值转换模拟类型。
 
-本期不支持其他比较、布尔组合、算术或通用语句。例子均为边定义的字段片段：
+固定业务属性路径可从 Schema 确定时必须声明，额外运行数据不能补救非法引用。能够确定的直接结果类型和数组元素声明继续检查；动态访问和计算结果无法证明结构时允许执行，将最终结果、逐项类型及合并冲突交给运行时。不维护完整表达式类型推导系统，未知部分也不豁免其他已知错误。
 
-```json
-{"if": "$.enabled", "for": "$.jobs"}
-```
-
-```json
-{"if": "$.status == \"ready\""}
-```
-
-```json
-{"if": "$.count != 0"}
-```
-
-引用字段必须出现在上游的有效 `output_schema` 中，不能依靠额外输出字段。静态检查要求：
-
-- `if` 直接引用的字段必须声明为 `boolean`。
-- ==、!= 的两个操作数必须同为 `string`、`number` 或 `boolean`。`object`、`array`、`null` 不支持比较。通过同类型校验后，分别采用 JavaScript ===、!== 的值比较语义，不使用隐式转换；表达式书写仍为 ==、!=。
-- `for` 引用的字段必须声明为带 `items` 的 `array`，`items` 必须描述 `object`，并明确声明字符串 `key`。逐项业务输入与目标契约的检查见第 6.2 节。
-
-实例组的有效输出 Schema 按第 4.4 节提升为 `array`；聚合数组不能直接用作布尔条件或标量比较操作数。
-
-`number` 按转换后的 JavaScript Number 值比较，不按 JSON 数字的书写形式比较，例如 1、1.0、1e0 相等，0 与 -0 相等；数字字符串不会自动转换为 `number`。字符串按 JavaScript 严格相等规则比较码元序列，不进行大小写转换或 Unicode 规范化。比较语义参见 [ECMAScript 严格相等](https://tc39.es/ecma262/multipage/abstract-operations.html#sec-isstrictlyequal)。
+缺失值在表达式内部遵循库，包括存在性测试、默认值和短路；只要求最终结果满足消费契约。声明字段存在但类型错误时仍先拒绝，默认值不能掩盖输入错误。环境关闭 HTML 自动转义，不配置外部模板加载器、文件系统搜索目录、异步或自定义扩展。节点文本的上下文、输出和 Bash 限制见[输入引用](./nodes/input-references.zh.md)。
 
 ## 6. 静态合法性检查
 
-执行前必须检查全部定义，包括本次可能因 `if` 或空 `for` 而不执行的定义。实际数据碰巧满足要求不能使静态非法程序变为合法。输入字段未被来源声明覆盖时必须静态报错，包括任意层级的嵌套声明。
+执行前必须检查全部定义，包括本次可能因 `if` 或空 `for` 而不执行的定义。实际数据碰巧满足要求不能使静态非法程序变为合法。来源声明可以确定时，输入字段未被覆盖必须静态报错，包括任意层级的嵌套声明；动态 for 的限制见第 6.2 节。
 
 ### 6.1 身份、端点与无环约束
 
@@ -421,7 +397,7 @@ ScalarLiteral ::= JSONString | JSONNumber | "true" | "false"
 
 ### 6.2 输入声明匹配与冲突
 
-静态检查按定义中的全部边分析，不以条件是否互斥、是否可能关闭或数组是否可能为空来放宽约束。
+静态检查按定义中的全部边分析，不以条件是否互斥、是否可能关闭或数组是否可能为空来放宽能够确定的约束。
 
 | 执行位置 | 用于检查输入的来源声明 |
 | --- | --- |
@@ -436,13 +412,15 @@ ScalarLiteral ::= JSONString | JSONNumber | "true" | "false"
 
 未声明的额外输出不参与静态类型匹配，不能补足缺少的来源声明。没有任何来源声明提供目标依赖字段时编译报错。额外输出在运行时仍参与实际键冲突检查；实际到达目标已声明的字段仍按目标输入 Schema 检查类型。
 
+动态访问或计算数组无法确定元素声明时，仅将未知项的来源覆盖、类型和合并冲突留至运行时；普通前驱等已知来源仍完整检查，包括已知来源之间的冲突及其与接收方的类型兼容。此时不能宣称编译已证明全部输入来源。实际输入允许缺失的规则不变，不能把推迟检查解释为新增全部输入必填要求。
+
 ### 6.3 DAG 边界与检查范围
 
 DAG 的 `input_schema` 必须按输入匹配规则递归覆盖每个结构入口的 `input_schema`，且类型兼容；入口声明的依赖必须有 DAG 输入声明作为潜在来源。全部结构出口的有效 `output_schema` 平铺合并后，必须无声明键冲突，并覆盖 DAG `output_schema` 的必需字段及类型要求。上述检查也不因条件可能关闭而放宽。
 
 执行前还必须检查实体结构、必需标准字段、Schema 描述及其嵌套类型、表达式语法和引用字段类型。`if` 运行时为 `false` 时不求值 `for`，不代表可以免除 `for` 的静态检查。
 
-静态检查只证明声明契约相容，不证明所有运行分支都会提供完整数据。DAG 声明输出缺失、实际值类型错误、额外字段造成实际键冲突、`for` 的 `key` 为空或重复等情况，必须在运行时检查并报错。
+静态检查仅对能够确定的声明证明契约相容，不证明动态表达式的全部来源，也不证明所有运行分支都会提供完整数据。DAG 声明输出缺失、实际值类型错误、额外字段造成实际键冲突、`for` 的 `key` 为空或重复等情况，必须在运行时检查并报错。
 
 ## 7. 激活、实例与执行位置
 
@@ -463,11 +441,11 @@ DAG 的 `input_schema` 必须按输入匹配规则递归覆盖每个结构入口
 3. `if` 缺省或为 `true`，且没有 `for` 时，边激活，提供上游输出。
 4. 有 `for` 时按下述读取规则取得数组，检查元素为 `object`、`key` 非空且不重复。非空数组使边激活，空数组不激活边。
 
-`if`/`for` 以来源位置的有效 `output_schema` 为依据，按第 4.5 节读取和校验实际引用的字段。读取时不补值，不改写上游输出；`if` 关闭时不求值 `for`。上游输出已在返回时校验全部声明字段，因此 `if` 关闭不能豁免上游输出缺字段或类型错误。
+`if`/`for` 在来源输出上下文中按库规则求值，固定引用按有效 `output_schema` 静态检查，最终结果按本节检查。缺失值的存在性检查、默认值与短路遵循库，不改写上游输出；`if` 关闭时不求值 `for`。上游输出已在返回时校验全部声明字段，因此 `if` 关闭不能豁免上游输出缺字段或类型错误。
 
 例如，前置声明 `enabled:boolean`、jobs 为合法的 `for` 数组类型，实际返回 `{}` 时，必须在提交输出时抛错并回滚。实际返回 `{"enabled": false, "jobs": []}` 时输出校验通过，边不激活且不求值 `for`。
 
-`for` 数组和元素 `key` 缺失必须报错；显式空数组是合法值，不创建实例。非空数组的 `key` 还必须满足非空和唯一要求。`if` 关闭时不进行本次 `for` 的非空 `key` 和唯一性检查；这些身份约束与始终执行的输出类型校验不同。条件独立求值，不保证互斥。
+直接以缺失值作为 `for` 结果、或元素 `key` 缺失必须报错；显式空数组是合法值，不创建实例。非空数组的 `key` 还必须满足非空和唯一要求。`if` 关闭时不进行本次 `for` 的非空 `key` 和唯一性检查；这些身份约束与始终执行的输出类型校验不同。条件独立求值，不保证互斥。
 
 ### 7.3 实例数量与跳过传播
 
@@ -637,8 +615,8 @@ node 和 dag 都是顶点，DAG 输出合并采用同样的尽早冲突检测规
       "input_schema": {"order_id": "string", "currency": "string"},
       "output_schema": {"price": "number"}
     },
-    {"id": "jobs_worker", "type": "edge", "from": "prepare", "to": "worker", "for": "$.jobs"},
-    {"id": "config_worker", "type": "edge", "from": "config", "to": "worker", "if": "$.enabled"}
+    {"id": "jobs_worker", "type": "edge", "from": "prepare", "to": "worker", "for": "jobs"},
+    {"id": "config_worker", "type": "edge", "from": "config", "to": "worker", "if": "enabled"}
   ]
 }
 ```
@@ -705,7 +683,7 @@ check_order 是 outer 的结构入口和出口；check 是 check_order 的结构
         "again": "boolean"
       }
     },
-    {"id": "recur", "type": "edge", "from": "step", "to": "D", "if": "$.again"}
+    {"id": "recur", "type": "edge", "from": "step", "to": "D", "if": "again"}
   ]
 }
 ```
@@ -744,8 +722,8 @@ check_order 是 outer 的结构入口和出口；check 是 check_order 的结构
       "input_schema": {"result": "number"},
       "output_schema": {"result": "number"}
     },
-    {"type": "edge", "from": "select", "to": "left", "if": "$.flag"},
-    {"type": "edge", "from": "select", "to": "right", "if": "$.flag == false"},
+    {"type": "edge", "from": "select", "to": "left", "if": "flag"},
+    {"type": "edge", "from": "select", "to": "right", "if": "flag == false"},
     {"type": "edge", "from": "left", "to": "merge"},
     {"type": "edge", "from": "right", "to": "merge"}
   ]
@@ -797,3 +775,5 @@ check_order 是 outer 的结构入口和出口；check 是 check_order 的结构
 本项目的初始化、查询和提交用法见[内部引擎 API](./development/dag-engine-api.zh.md)；完整类型和异常定义从 `packages/dsh-workflow-studio/src/host/dag/index.ts` 导出。实例 ID 的内部生成、状态存储、模块划分、解析和推进算法属于实现设计，不改变本规范的执行行为。
 
 实现必须遵守本文规定的可观察行为，包括静态拒绝条件、声明结构与额外引用的隔离边界、输入存在时检查类型、输出严格校验、提交回滚、实例数量及聚合顺序，不能将它们作为实现方自行选择的策略。
+
+表达式求值时机沿用事务与保存边界：普通恢复直接还原已保存的边状态、展开项及输入输出，不重新抽样；回滚后重提，以及成功业务已保存而 DAG 状态未保存时的恢复重提，重新求值尚未提交的边。库的 random 等能力在重新求值时允许产生不同结果；不增加缓存或随机种子。Agent/Bash 新业务尝试重新渲染，已成功业务仅重提 DAG 时不重复业务。

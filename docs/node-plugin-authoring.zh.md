@@ -74,3 +74,5 @@ ctx.workflowNodes.register(ctx, name, node, { dispose: releaseNodeResources })
 ## 模板联合装配
 
 默认节点装配见 `packages/dsh-workflow-bundle/cordis.patch.yml`，公共登记、Studio 与三个内置节点都是普通宿主插件。模板加载插件可用 `nodeService(kind)` 等待完整模板依赖，或查询/订阅登记变化；不能只依赖 workflowNodes 就宣称具体类型可用。默认两份业务模板通过通用模板加载插件登记；开发功能模板由独立附加包声明资源，不进入默认装配。模板只在声明加载或重载时读取 YAML；节点依赖消失或恢复只重新判定已加载定义，不读取新文件。第三方节点与模板的联合验收见[联合验收记录](./acceptance/node-template-joint.zh.md)。
+
+文本能力复用公共 `dsh-workflow-node/text-template` 与 `dsh-workflow-node/expressions`，节点插件不依赖 Studio 内部 DAG。上下文、显式 dump、Bash 独立参数及静态/运行时检查边界见[输入引用](./nodes/input-references.zh.md)和[DAG 表达式](./dag-syntax.zh.md#5-字段引用if-与-for-的写法)。校验必须覆盖所有定义；测试还应验证真实节点调用、结果契约和恢复重提，不只测试库本身。

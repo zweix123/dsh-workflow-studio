@@ -1,3 +1,5 @@
+当前文本与表达式规则（2026-10-15）由[文本插值与表达式求值](./text-expressions.zh.md)更新。本文的最小模板语法、默认 JSON 转换与拒绝条件/循环/filter 等描述保留为历史基线，不作为当前支持范围。
+
 当前 Agent 规则（2026-10-13）由[Agent 节点结果交付规格](./session-agent-node-result-handoff.zh.md)更新：类型为 agent，支持台前/台后与声明输出。本文中 session_agent 拒绝输出、只提交空对象的规则为此前基线；输入引用、Bash、Form 和公共 DAG 规则继续适用。
 
 # 节点输入输出与统一顶点来源校验规格

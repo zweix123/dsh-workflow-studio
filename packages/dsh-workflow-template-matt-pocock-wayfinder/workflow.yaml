@@ -129,8 +129,8 @@ dag:
         type: edge
         from: 处理单个决策票
         to: 决策票递归树
-        if: $.continue_decision
-        for: $.next_tickets
+        if: continue_decision
+        for: next_tickets
   - id: 发布规格
     type: dag
     input_schema: &a7
@@ -219,17 +219,17 @@ dag:
         type: edge
         from: 实现下一张票
         to: 实现循环
-        if: $.continue_implementation
+        if: continue_implementation
   - id: 开始选择决策票
     type: edge
     from: 绘制-Wayfinder-地图
     to: 选择全部决策票
-    if: $.requires_wayfinding
+    if: requires_wayfinding
   - id: 分发全部决策票
     type: edge
     from: 选择全部决策票
     to: 决策票递归树
-    for: $.tickets
+    for: tickets
   - id: 规划上下文进入规格
     type: edge
     from: 绘制-Wayfinder-地图
