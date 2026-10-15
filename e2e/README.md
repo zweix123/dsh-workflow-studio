@@ -94,3 +94,5 @@ Agent 结果交付新增 [agent-host.e2e.ts](./workflows/agent-host.e2e.ts) 与 
 [run-records.e2e.ts](./workflows/run-records.e2e.ts) 验证 Bash 三次尝试的历史与实际副作用次数、重启只读、台后 Agent 卡片无记录动作、抽屉最新与旧记录导航及返回实例、Form 业务成功与 DAG 异常独立展示、重试交付，以及中英文、浅深主题、窄屏和键盘。持久化故障和并发通过现有实例 HTTP 集成测试补充，详见[验收记录](../docs/acceptance/node-run-records.zh.md)。
 
 Agent 入口分层与主对话／原生记录的返回规则见[规格](../docs/specs/session-agent-instance-navigation.zh.md)，本轮真实宿主验证见[验收](../docs/acceptance/agent-record-navigation.zh.md)。`agent-handoff.e2e.ts` 覆盖台前卡片留空、详情交付记录、台后执行记录、旧失败记录重启后返回，以及英文窄屏键盘返回；`run-records.e2e.ts` 覆盖台后最新与旧记录分别返回同一节点。
+
+[error-colors.e2e.ts](./workflows/error-colors.e2e.ts) 在真实 rc.1 宿主中检查浅深主题的模板错误、空名称／同名校验、删除菜单与确认按钮、失败节点文字及状态点、运行错误、记录摘要与全文的实际计算颜色，并确认普通日志、取消按钮和布局警告不被染红。实际结果见[错误色验收](../docs/acceptance/error-colors.zh.md)。

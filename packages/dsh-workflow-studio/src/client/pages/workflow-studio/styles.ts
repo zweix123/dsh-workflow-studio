@@ -120,7 +120,7 @@ ${reactFlowCss}
 .dsh-workflow-template-item > button:hover { color: var(--dsw-alias-state-business-primary); }
 .dsh-workflow-template-item > button:disabled { color: var(--dsw-alias-label-tertiary); cursor: default; }
 .dsh-workflow-template-item > button:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 2px; }
-.dsh-workflow-template-item > p { margin: 8px 0 0; color: var(--dsw-alias-label-error); font-size: 12px; overflow-wrap: anywhere; }
+.dsh-workflow-template-item > p { margin: 8px 0 0; color: var(--dsw-alias-state-error-primary); font-size: 12px; overflow-wrap: anywhere; }
 .dsh-workflow-template-item > p strong { margin-right: 8px; }
 .dsh-workflow-template-item .dsh-workflow-layout-notices { margin: 10px 0 0; }
 .dsh-workflow-template-list > .dsh-workflow-template-empty { margin-top: 20px; }
@@ -278,7 +278,7 @@ ${reactFlowCss}
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: var(--dsw-alias-label-error);
+  color: var(--dsw-alias-state-error-primary);
   font: inherit;
   font-size: 13px;
   text-align: left;
@@ -322,7 +322,6 @@ ${reactFlowCss}
 .dsh-workflow-delete-dialog p { margin: 6px 0; font-size: 13px; line-height: 20px; }
 .dsh-workflow-delete-name { font-weight: 600; overflow-wrap: anywhere; }
 .dsh-workflow-delete-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 22px; }
-.dsh-workflow-delete-confirm { color: var(--dsw-alias-label-error); }
 .dsh-workflow-create { display: flex; flex: 1; flex-direction: column; min-height: 0; padding: 28px 36px; }
 .dsh-workflow-create-heading,
 .dsh-workflow-detail-header {
@@ -385,7 +384,7 @@ ${reactFlowCss}
   font-size: 12px;
 }
 .dsh-workflow-template-empty code { overflow-wrap: anywhere; color: var(--dsw-alias-label-secondary); }
-.dsh-workflow-error { margin-top: 12px !important; color: var(--dsw-alias-label-error) !important; }
+.dsh-workflow-error { margin-top: 12px !important; color: var(--dsw-alias-state-error-primary) !important; }
 .dsh-workflow-form-actions { display: flex; justify-content: flex-end; flex: none; margin-top: 20px; padding-top: 18px; border-top: 0.5px solid var(--dsw-alias-border-l3); }
 .dsh-workflow-button {
   min-height: 32px;
@@ -398,6 +397,7 @@ ${reactFlowCss}
   font-size: 13px;
   cursor: pointer;
 }
+.dsh-workflow-button.dsh-workflow-delete-confirm { color: var(--dsw-alias-state-error-primary); }
 .dsh-workflow-button:disabled { cursor: default; opacity: .45; }
 .dsh-workflow-button-primary {
   border-color: transparent;
@@ -408,7 +408,7 @@ ${reactFlowCss}
 .dsh-workflow-detail { display: flex; flex-direction: column; height: 100%; min-height: 0; container-type: inline-size; }
 .dsh-workflow-detail-header { flex: none; margin: 0; padding: 16px 20px; border-bottom: 0.5px solid var(--dsw-alias-border-l3); }
 .dsh-workflow-run { display: flex; position: relative; flex: 1; min-height: 0; min-width: 0; }
-.dsh-workflow-run-error { margin: 0; padding: 8px 20px; color: var(--dsw-alias-label-error); font-size: 12px; }
+.dsh-workflow-detail .dsh-workflow-run-error { margin: 0; padding: 8px 20px; color: var(--dsw-alias-state-error-primary); font-size: 12px; }
 .dsh-workflow-layout-notices { display: grid; gap: 8px; min-width: 0; margin: 10px 20px; }
 .dsh-workflow-create .dsh-workflow-layout-notices { margin: 12px 0 0; }
 .dsh-workflow-layout-notice { --layout-tone: var(--dsw-alias-state-warning-primary, #a8690d); border-left: 3px solid var(--layout-tone); border-radius: 3px 7px 7px 3px; background: color-mix(in srgb, var(--layout-tone) 9%, var(--dsw-alias-bg-layer-1)); color: var(--dsw-alias-label-primary); padding: 9px 11px; font-size: 12px; line-height: 1.5; }
@@ -512,8 +512,8 @@ ${reactFlowCss}
 .dsh-workflow-dag-group[data-status='running'] .dsh-workflow-node-status i { background: var(--dsw-alias-state-business-primary); }
 .dsh-workflow-node[data-status='completed'] .dsh-workflow-node-status i,
 .dsh-workflow-dag-group[data-status='completed'] .dsh-workflow-node-status i { background: var(--dsw-alias-state-success-primary); }
-.dsh-workflow-node[data-status='error'] .dsh-workflow-node-status { color: var(--dsw-alias-label-error); }
-.dsh-workflow-node[data-status='error'] .dsh-workflow-node-status i { background: var(--dsw-alias-label-error); }
+.dsh-workflow-node[data-status='error'] .dsh-workflow-node-status { color: var(--dsw-alias-state-error-primary); }
+.dsh-workflow-node[data-status='error'] .dsh-workflow-node-status i { background: var(--dsw-alias-state-error-primary); }
 .dsh-workflow-node[data-status='unknown'] .dsh-workflow-node-status i { background: var(--dsw-alias-label-secondary); }
 .dsh-workflow-node[data-status='waiting'] { border-style: dashed; }
 .dsh-workflow-node[data-status='skipped'] { opacity: .55; }
@@ -549,5 +549,9 @@ ${reactFlowCss}
 .dsh-workflow-records summary time { display: block; color: var(--dsw-alias-label-secondary); font-size: 12px; }
 .dsh-workflow-records summary:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 2px; }
 .dsh-workflow-record-error { display: block; color: var(--dsw-alias-state-error-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dsh-workflow-notice[role='alert'],
+.dsh-workflow-template-detail > [role='alert'],
+.dsh-workflow-runtime [role='alert'],
+.dsh-workflow-records [role='alert'] { color: var(--dsw-alias-state-error-primary); }
 .dsh-workflow-records pre { white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
 `
