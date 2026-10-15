@@ -36,7 +36,7 @@ test('Bash 历次失败与成功保留输入、命令和日志，最新展开，
   expect(await readFile(join(dsh.workspace, 'attempts.txt'), 'utf8')).toBe('attempt\nattempt\nattempt\n')
 })
 
-test('台后 Agent 历史保留提示词，金刚位直达最新记录，旧记录从详情打开', async ({ app, screen, browser, dsh }) => {
+test('台后 Agent 金刚位仅业务交互，最新与旧执行记录均从详情抽屉打开', async ({ app, screen, browser, dsh }) => {
   const { fileURLToPath } = await import('node:url')
   await dsh.stop(); await dsh.addBundle(fileURLToPath(new URL('../fixtures/agent-host', import.meta.url))); await dsh.start(); await dsh.authenticate(browser)
   await app.open('/')
@@ -50,7 +50,9 @@ test('台后 Agent 历史保留提示词，金刚位直达最新记录，旧记�
   await screen.getByRole('button', '重试 retry', { exact: true }).tap()
   await expect(browser.locator(`${history} details:first-child`)).toContainText('待确认')
   await expect(browser.locator(`${history} details`)).toHaveCount(2)
-  await screen.getByRole('button', '执行记录 retry', { exact: true }).tap()
+  await expect(screen.getByRole('button', '执行记录 retry', { exact: true })).toHaveCount(0)
+  await expect(browser.locator('[data-graph-node][data-definition-id="retry"] [data-action-position="1"] button')).toHaveCount(0)
+  await browser.locator(`${history} details:first-child button`).press('Enter')
   await expect(browser.locator('body')).toContainText('一次性子智能体记录')
   await expect(screen.getByRole('dialog', '历次尝试', { exact: true })).toHaveCount(0)
   await screen.getByRole('button', '返回实例', { exact: true }).tap()

@@ -85,12 +85,12 @@ Codex 内置浏览器继续用于探索新场景、人工检查界面和故障�
 
 Agent 结果交付新增 [agent-host.e2e.ts](./workflows/agent-host.e2e.ts) 与 [agent-handoff.e2e.ts](./workflows/agent-handoff.e2e.ts)，使用[确定性模型边界夹具](./fixtures/agent-host/README.md)驱动真实 rc.1 宿主，覆盖父会话隐藏、原生 fork/structured_output、子记录重启、台前补充重试、台后待确认恢复、失败/中断、双工作区自动任务实际写读产物和语言主题窄屏。原 [session-agent.e2e.ts](./workflows/session-agent.e2e.ts) 已切换为 agent 类型并保留对话关联回归。模型夹具不代表真实模型交付质量，范围见[验收记录](../docs/acceptance/agent-result-handoff.zh.md)。
 
-节点操作位与输入浮窗的独立回归见 `workflows/node-actions.e2e.ts`：固定第 1/3 位及键盘、原生 Form Modal 的校验/关闭/成功交付、中英文主题窄屏、草稿隔离与重启、已接受结果交付失败重试。台后 Agent 最新执行记录直达、台前详情交付记录、各次记录返回实例及失败恢复见 `workflows/agent-handoff.e2e.ts`。卡片业务入口已从详情抽屉迁出，`inspectNode` 仅负责只读检查。运行真实宿主时不要并行重建插件输出，以免触发宿主热重载而销毁当前页面。
+节点操作位与输入浮窗的独立回归见 `workflows/node-actions.e2e.ts`：固定第 1/3 位及键盘、原生 Form Modal 的校验/关闭/成功交付、中英文主题窄屏、草稿隔离与重启、已接受结果交付失败重试。台后 Agent 最新与旧执行记录从详情抽屉访问、台前详情交付记录、各次记录返回实例及失败恢复见 `workflows/agent-handoff.e2e.ts`。卡片业务入口已从详情抽屉迁出，`inspectNode` 仅负责只读检查。运行真实宿主时不要并行重建插件输出，以免触发宿主热重载而销毁当前页面。
 
 [`forms/dialog.e2e.ts`](./forms/dialog.e2e.ts) 对照宿主设置浮窗验证面板主题，覆盖长表单独立滚动、固定标题和提交区、可见校验错误、390px 窄屏、键盘关闭返回焦点和草稿重开。规格与实际结果见 [Form 浮窗](../docs/specs/form-dialog.zh.md)。
 
 [text-expressions.e2e.ts](./workflows/text-expressions.e2e.ts) 在真实宿主验证 Nunjucks 原生条件、reverse 计算数组、Bash filter/dump/含定界符字面量与 Shell 特殊字符、按序聚合及部分完成重启。实际范围见[文本与表达式验收](../docs/acceptance/text-expressions.zh.md)。
 
-[run-records.e2e.ts](./workflows/run-records.e2e.ts) 验证 Bash 三次尝试的历史与实际副作用次数、重启只读、台后 Agent 最新原生记录直达、旧记录导航及返回实例、Form 业务成功与 DAG 异常独立展示、重试交付，以及中英文、浅深主题、窄屏和键盘。持久化故障和并发通过现有实例 HTTP 集成测试补充，详见[验收记录](../docs/acceptance/node-run-records.zh.md)。
+[run-records.e2e.ts](./workflows/run-records.e2e.ts) 验证 Bash 三次尝试的历史与实际副作用次数、重启只读、台后 Agent 卡片无记录动作、抽屉最新与旧记录导航及返回实例、Form 业务成功与 DAG 异常独立展示、重试交付，以及中英文、浅深主题、窄屏和键盘。持久化故障和并发通过现有实例 HTTP 集成测试补充，详见[验收记录](../docs/acceptance/node-run-records.zh.md)。
 
 Agent 入口分层与主对话／原生记录的返回规则见[规格](../docs/specs/session-agent-instance-navigation.zh.md)，本轮真实宿主验证见[验收](../docs/acceptance/agent-record-navigation.zh.md)。`agent-handoff.e2e.ts` 覆盖台前卡片留空、详情交付记录、台后执行记录、旧失败记录重启后返回，以及英文窄屏键盘返回；`run-records.e2e.ts` 覆盖台后最新与旧记录分别返回同一节点。

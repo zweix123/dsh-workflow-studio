@@ -36,7 +36,7 @@ Agent 与 Bash 共用的 `{{ }}` 规则见[输入引用](./nodes/input-reference
 
 [节点与 DAG 的运行记录](./specs/node-run-records.zh.md)已实施各节点业务历史、DAG 异常历史和统一重试交付；实际验证、环境与未验证项见[验收记录](./acceptance/node-run-records.zh.md)。
 
-Agent 台前卡片保留对话与完成，交付记录从详情历史进入；台后卡片提供执行记录。主对话与各次原生记录都能[返回所属实例与节点](./specs/session-agent-instance-navigation.zh.md)，实际验证见[记录导航验收](./acceptance/agent-record-navigation.zh.md)。
+Agent 台前卡片保留对话与完成，台后卡片只提供业务交互；台前交付记录与台后执行记录均从侧边详情抽屉的运行历史进入。主对话与各次原生记录都能[返回所属实例与节点](./specs/session-agent-instance-navigation.zh.md)，实际验证见[记录导航验收](./acceptance/agent-record-navigation.zh.md)。
 
 [标识符字符规则与定义名称](./specs/identifiers-and-data-references.zh.md)已实施统一 ID 与逐项 key 字符规则、JSON 业务字段名及可选 name 展示；实际自动化与宿主验证范围见[验收记录](./acceptance/identifiers-and-data-references.zh.md)。
 

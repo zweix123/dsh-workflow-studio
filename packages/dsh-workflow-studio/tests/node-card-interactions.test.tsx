@@ -1190,7 +1190,7 @@ test('browser contributions match their source and isolate component and synchro
 })
 
 
-test('Agent record navigation reports host failures and remains retryable, and always targets the latest attempt', async () => {
+test('Agent records stay in the drawer, preserve each address, and navigation failures remain retryable', async () => {
   const { dom, cleanup } = testDom()
   const ctx = new Context()
   const registry = new BrowserNodeRegistry((_namespace, key) => zh[key as keyof typeof zh] ?? key)
@@ -1206,28 +1206,22 @@ test('Agent record navigation reports host failures and remains retryable, and a
   const container = dom.window.document.getElementById('root')!
   const root = createRoot(container)
   const render = () => act(async () => root.render(<InstanceRunPanel nodes={registry} detail={withNodeViews(detail)} t={key => zh[key]} onUpdate={() => {}} onWidthUpdate={() => {}} />))
-  const records = () => container.querySelector<HTMLButtonElement>('[aria-label="执行记录 task"]')!
   const previousError = console.error; console.error = () => {}
   try {
+    const record = (id: string, savedAddress?: ReturnType<typeof address>) => ({ id, operation: { text: 'Task' }, status: 'failed', startedAt: '2026-10-15T00:00:00Z', input: {}, data: { prompt: `Prompt ${id}`, ...(savedAddress ? { address: savedAddress } : {}) } })
+    detail.executions.n.records = [record('old-record', address('old')), record('latest-no-address')]
     await render()
-    await act(async () => records().click())
-    assert.match(container.textContent!, /host record unavailable/)
-    fail = false
-    await act(async () => records().click())
-    assert.equal(opened[0].childSessionId, 'old')
-    assert.equal(container.querySelector('[role="dialog"]'), null)
-    detail.executions.n.attempts.push({ id: 'missing', status: 'failed' }, { id: 'new', status: 'succeeded', address: address('new') })
-    await render()
-    await act(async () => records().click())
-    assert.equal(opened[1].childSessionId, 'new')
-    assert.equal(container.querySelector('[role="dialog"]'), null)
-    detail.executions.n.attempts.push({ id: 'latest-no-address', status: 'failed' })
-    await render()
-    assert.equal(records().disabled, true)
-    assert.match(records().title, /尚无原生记录地址/)
-    detail.executions.n.records = [{ id: 'old-record', operation: { text: 'Task' }, status: 'succeeded', startedAt: '2026-10-15T00:00:00Z', input: {}, data: { prompt: 'Original prompt', address: address('old') } }]
-    await render()
+    assert.equal(container.querySelector('[aria-label="执行记录 task"]'), null)
+    assert.equal(container.querySelector('[data-action-position="1"] button'), null)
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="详情 task"]')!.click())
+    const history = inspectorSection(container, '运行记录')
+    const entries = history.querySelectorAll('details')
+    assert.equal(entries.length, 2)
+    assert.equal(entries[0].open, true)
+    assert.match(entries[0].textContent!, /尚无原生记录地址/)
+    assert.equal(entries[0].querySelector('button'), null)
+    assert.equal(entries[1].open, false)
+    await act(async () => { entries[1].open = true })
     const historical = inspectorSection(container, '运行记录').querySelector<HTMLButtonElement>('button')!
     fail = true
     await act(async () => historical.click())
@@ -1237,6 +1231,13 @@ test('Agent record navigation reports host failures and remains retryable, and a
     await act(async () => historical.click())
     assert.equal(opened.at(-1).childSessionId, 'old')
     assert.equal(inspectorSection(container, '运行记录').querySelector('[role="alert"]'), null)
+    detail.executions.n.records.push(record('new-record', address('new')))
+    await render()
+    const latest = inspectorSection(container, '运行记录').querySelector('details')!
+    assert.match(latest.textContent!, /Prompt new-record/)
+    await act(async () => latest.querySelector<HTMLButtonElement>('button')!.click())
+    assert.equal(opened.at(-1).childSessionId, 'new')
+    assert.equal(container.querySelector('[aria-label="执行记录 task"]'), null)
 
   } finally { console.error = previousError; await act(async () => root.unmount()); await ctx.fiber.dispose(); cleanup() }
 })

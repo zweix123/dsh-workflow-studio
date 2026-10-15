@@ -76,8 +76,13 @@ test('built-in actions declare stable positions through failures and accepted re
     assert.deepEqual(actions(agentNode, fact).map(a => [a.id, a.position]), [['open', 1], ['complete', 2]])
     assert.deepEqual(agentNode.describe!({ ...context, fact, ready: false }).actions.map(a => [a.id, a.position]), [['open', 1]])
   }
-  assert.deepEqual(actions(agentNode, failure, background).map(a => [a.id, a.position, Boolean(a.disabled)]), [['records', 1, false], ['complete', 2, true], ['start', 3, false]])
-  assert.deepEqual(actions(agentNode, { ...failure, status: 'succeeded', output: {} }, background).map(a => [a.id, a.position, Boolean(a.disabled)]), [['records', 1, false], ['complete', 2, false]])
+  for (const status of ['running', 'waiting', 'failed', 'unknown', 'succeeded']) {
+    const fact = { ...failure, status, ...(status === 'waiting' ? { business: { ...failure.business, pendingOutput: {} } } : {}) }
+    assert.equal(actions(agentNode, fact, background).some(a => a.position === 1), false)
+    assert.deepEqual(agentNode.describe!({ ...context, definition: background, fact, ready: false }).actions, [])
+  }
+  assert.deepEqual(actions(agentNode, failure, background).map(a => [a.id, a.position, Boolean(a.disabled)]), [['complete', 2, true], ['start', 3, false]])
+  assert.deepEqual(actions(agentNode, { ...failure, status: 'succeeded', output: {} }, background).map(a => [a.id, a.position, Boolean(a.disabled)]), [['complete', 2, false]])
 })
 
 test('server and browser registries reject invalid contract identities without normalizing them', async () => {

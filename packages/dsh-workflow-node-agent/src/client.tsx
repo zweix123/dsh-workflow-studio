@@ -45,9 +45,6 @@ export function apply(ctx: Context): void {
     ...agentClient,
     handlers: { 'open-session': props => {
       if (typeof props.execution?.sessionId === 'string' && props.execution.sessionCreated === true) ctx.uiWorkspace.openSession(props.execution.sessionId as SessionId)
-    }, records: props => {
-      const address = (props.execution as NodeViewProps['execution'] & AgentState)?.attempts?.at(-1)?.address
-      if (address) openRecord(address)
     } },
     Record: props => <AgentRecord {...props} openRecord={openRecord} />,
   }

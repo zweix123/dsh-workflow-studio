@@ -140,12 +140,10 @@ export function createAgentNode(host?: Context): ServerNode & { dispose(): Promi
       const generating = live && (live.status !== 'idle' || live.inbox.nextTurn.length > 0 || live.inbox.nextStep.length > 0)
       const canComplete = isBackground ? business?.pendingOutput !== undefined || fact?.status === 'succeeded' : business?.sessionCreated
       const records = Boolean(business?.attempts?.length)
-      const latestAddress = business?.attempts?.at(-1)?.address
       const retry = isBackground && (fact?.status === 'failed' || fact?.status === 'unknown')
       return { actions: [
         ...(ready && !business?.sessionCreated && !records && !retry && business?.pendingOutput === undefined && fact?.status !== 'succeeded' ? [{ id: 'start', position: 1 as const, icon: 'execute' as const, label: { namespace: name, key: 'executeNode' }, target: { type: 'server' as const }, disabled: fact?.status === 'running' }] : []),
         ...(!isBackground && business?.sessionCreated ? [{ id: 'open', position: 1 as const, icon: 'conversation' as const, label: { namespace: name, key: 'openSession' }, target: { type: 'client' as const, handler: 'open-session' } }] : []),
-        ...(isBackground && records ? [{ id: 'records', position: 1 as const, icon: 'record' as const, label: { namespace: name, key: 'openRecord' }, target: { type: 'client' as const, handler: 'records' }, disabled: !latestAddress, ...(!latestAddress ? { disabledReason: { namespace: name, key: 'recordUnavailable' } } : {}) }] : []),
         ...(ready ? [{ id: 'complete', position: 2 as const, icon: 'complete' as const, label: { namespace: name, key: fact?.status === 'succeeded' ? 'retryDelivery' : 'completeSessionAgent' }, target: { type: 'server' as const }, disabled: !canComplete || fact?.status === 'running' || fact?.status !== 'succeeded' && Boolean(generating) }] : []),
         ...(ready && retry ? [{ id: 'start', position: 3 as const, icon: 'retry' as const, label: { namespace: name, key: 'retryNavigation' }, target: { type: 'server' as const } }] : []),
       ] }

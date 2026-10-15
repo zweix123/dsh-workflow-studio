@@ -1,5 +1,7 @@
 # 节点与 DAG 运行记录验收
 
+2026-10-15 后续入口调整：台后执行记录已迁入侧边详情抽屉。本文“金刚位直达最新”及卡片无地址禁用的历史结论适用于迁移前版本，当前行为与复验见[Agent 记录导航验收](./agent-record-navigation.zh.md)。
+
 依据：[运行记录规格](../specs/node-run-records.zh.md)、[操作位规格](../specs/node-action-positions.zh.md)。
 
 日期：2026-10-15。范围：起始 `bdbbe904e1eadaffd68e012413183db6cf628367` 之后本功能的代码、文档和回归用例。没有迁移或补齐旧历史，没有发布 Issue。
