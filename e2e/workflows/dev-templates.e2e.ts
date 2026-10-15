@@ -17,7 +17,7 @@ test('开发模板按需附加，默认入口无开发模板，四份资源及 A
   await addWorkspace(screen, dsh.workspace)
   await screen.getByRole('tab', '模板管理', { exact: true }).tap()
   await expect(screen.getByRole('button', /^打开模板 开发 ·/)).toHaveCount(0)
-  await expect(screen.getByRole('button', '打开模板 OpenSpec 需求交付工作流', { exact: true })).toBeEnabled()
+  await expect(screen.getByRole('button', '打开模板 OpenSpec 变更工作流', { exact: true })).toBeEnabled()
 
   await installDevelopmentTemplates(dsh, browser)
   await app.open('/')

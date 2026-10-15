@@ -16,6 +16,6 @@
     "@dsh-workflow/node-form": "0.1.0",
     "dsh-workflow-template": "0.1.0",
     "@dsh-workflow/template-matt-pocock-wayfinder": "0.1.0",
-    "@dsh-workflow/template-openspec-delivery": "0.1.0"
+    "@dsh-workflow/template-openspec-change": "0.1.0"
   }
 }

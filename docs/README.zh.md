@@ -20,9 +20,8 @@
 
 Agent 与 Bash 共用的 `{{ }}` 规则见[输入引用](./nodes/input-references.zh.md)。每个节点目录以 `README.zh.md` 为完整入口。
 
-## 模板与功能体验
+## 开发功能体验
 
-- [OpenSpec 需求交付](./openspec-workflow.zh.md)：业务模板的使用方式。
 - [开发功能模板](../packages/dsh-workflow-dev-templates/README.zh.md)：单独体验节点能力，作为开发时附加包使用。
 
 ## 插件与内部开发

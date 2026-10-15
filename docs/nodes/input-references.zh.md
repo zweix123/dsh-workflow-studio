@@ -46,4 +46,4 @@ dag:
     to: verify
 ```
 
-verify 同时等待会话完成并从 request 接收真实 text；会话空输出不会透传业务字段。mattpocock 与 OpenSpec 中文内置模板通过需求表单取得真实输入。Wayfinder 的 Agent 节点直接声明业务输出，由完成操作核验并交付；OpenSpec 保留名称确认表单，之后各阶段采用无输出的台前会话。对象或数组可由 form 的结构化契约直接收集；需要粘贴 JSON 文本时，也可由 `printf '%s' {{ result_json }}` 的 bash 节点交付并校验 JSON 对象。mattpocock 模板保留条件分支与递归流程，并直接交付结构化 Agent 结果；[OpenSpec 模板](../openspec-workflow.zh.md)在需求和名称表单后依次执行 propose、apply、archive，并将原始需求和名称直接传给各会话节点。
+verify 同时等待会话完成并从 request 接收真实 text；会话空输出不会透传业务字段。mattpocock 与 OpenSpec 中文内置模板通过需求表单取得真实输入。Wayfinder 的 Agent 节点直接声明业务输出，由完成操作核验并交付；OpenSpec 的方案节点声明并交付实际 change 名称，实施与归档采用无输出的台前会话。对象或数组可由 form 的结构化契约直接收集；需要粘贴 JSON 文本时，也可由 `printf '%s' {{ result_json }}` 的 bash 节点交付并校验 JSON 对象。mattpocock 模板保留条件分支与递归流程，并直接交付结构化 Agent 结果；OpenSpec 模板由需求表单、澄清需求与生成方案、实施与验证、同步规格与归档四阶段组成；需求只传给方案节点，方案交付的名称直接传给实施和归档。

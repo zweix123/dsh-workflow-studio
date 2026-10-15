@@ -26,18 +26,21 @@ class FixtureAdapter extends LlmAdapter {
         return
       }
     }
+    const openspec = text.includes('OPENSPEC_CHANGE_E2E')
     const tool = options.tools?.find(tool => tool.name === 'structured_output')
     if (tool) {
       if (text.includes('MISSING_MATERIAL') && !text.includes('MATERIAL_READY')) throw new Error('Required material is missing')
       if (text.includes('COMPACT_PROBE') && (text.includes('ERASED_SEED_902') || text.includes('LATE_MESSAGE_498'))) throw new Error('fork included shadowed or later material')
       if (!text.includes('CONTEXT_MARKER_731')) throw new Error('fork did not inherit completed parent context')
-      const block = { type: 'tool-call', id: randomUUID(), name: 'structured_output', arguments: JSON.stringify({ result: 'CONTEXT_MARKER_731', ...(expectedDirectory ? { directory: expectedDirectory } : {}) }) }
+      if (openspec && !text.includes('OPENSPEC_CREATED_CHANGE=fix-login-redirect-loop')) throw new Error('fork did not inherit the proposed change name')
+      const output = openspec ? { change_name: 'fix-login-redirect-loop' } : { result: 'CONTEXT_MARKER_731', ...(expectedDirectory ? { directory: expectedDirectory } : {}) }
+      const block = { type: 'tool-call', id: randomUUID(), name: 'structured_output', arguments: JSON.stringify(output) }
       yield { type: 'block-start', index: 0, blockType: 'tool-call' }
       yield { type: 'block-end', index: 0, block }
       yield { type: 'finish', reason: { kind: 'tool-calls' } }
     } else {
       if (!options.purpose && text.includes('SLOW_MAIN')) await setTimeout(5000, undefined, { signal: options.signal })
-      const block = { type: 'text', text: 'CONTEXT_MARKER_731' }
+      const block = { type: 'text', text: openspec ? 'CONTEXT_MARKER_731 OPENSPEC_CREATED_CHANGE=fix-login-redirect-loop（模拟规划结果，仅验证交付）' : 'CONTEXT_MARKER_731' }
       yield { type: 'block-start', index: 0, blockType: 'text' }
       yield { type: 'text-delta', index: 0, text: block.text }
       yield { type: 'block-end', index: 0, block }

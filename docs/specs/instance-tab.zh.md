@@ -1,6 +1,6 @@
 # 实例 Tab 产品规格
 
-当前内置模板范围（2026-10-12）：提供 mattpocock 中文版 `matt-pocock-wayfinder-workflow.zh` 和 OpenSpec 需求交付中文版 `openspec-delivery.zh`，不提供英文版或 GitHub Spec Kit。下文涉及六份模板、旧 OpenSpec 流程和双语同构的内容为此前范围，不再适用于当前内置模板；新 OpenSpec 流程见[需求交付模板规格](./openspec-delivery-template.zh.md)。模板加载按[模板插件分发规格](./template-plugin-distribution.zh.md)执行。
+当前内置模板范围（2026-10-12）：提供 mattpocock 中文版 `matt-pocock-wayfinder-workflow.zh` 和 OpenSpec 变更中文版 `openspec-change.zh`，不提供英文版或 GitHub Spec Kit。下文涉及六份模板、旧 OpenSpec 流程和双语同构的内容为此前范围，不再适用于当前内置模板；新 OpenSpec 流程见[变更模板规格](./openspec-change-template.zh.md)。模板加载按[模板插件分发规格](./template-plugin-distribution.zh.md)执行。
 
 后续规则（2026-10-03）：[模板通过插件分发](./template-plugin-distribution.zh.md)已确认、待实施，替代本文关于全局模板目录、启动时复制内置模板、目录名作为模板 ID 及创建时读取源文件的规则。模板来源、名称和可用性按新规格执行；实例定义快照与实例存储作用域继续沿用本文约定。
 

@@ -7,3 +7,5 @@
 `host_probe` 是使用公共节点契约的测试贡献，通过公开 Agent / Subagent 服务验证宿主创建、隐藏、fork、原生压缩/已结束轮次边界、后续消息隔离、原生记录和持久化能力。台后任务还实际调用预设中的 bash 写读工作区产物；双工作区模板核对工具执行目录和交付结果，防止只验证工具名或空任务。不添加产品测试接口。其他模板直接使用产品 `agent`，覆盖交付、人工确认、重试和中断。
 
 回归：[宿主能力](../../workflows/agent-host.e2e.ts)、[Agent 用户链路](../../workflows/agent-handoff.e2e.ts)。实际范围和未验证项见[验收记录](../../../docs/acceptance/agent-result-handoff.zh.md)。
+
+[OpenSpec 模板回归](../../workflows/openspec-change.e2e.ts)直接加载默认模板：`OPENSPEC_CHANGE_E2E` 请求返回模拟规划名称，fork 必须继承该已完成回复才可通过原生 `structured_output` 交付 `change_name`。只验证四阶段交互、名称传递与重启恢复，不生成 OpenSpec 文件或执行实际技能。

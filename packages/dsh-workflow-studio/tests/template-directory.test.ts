@@ -15,7 +15,7 @@ import { validateWorkflowNodes } from '../src/host/workflow/index.js'
 test('independent template packages contain the valid Chinese Matt Pocock and OpenSpec templates', async () => {
   for (const [packageDirectory, name] of [
     ['dsh-workflow-template-matt-pocock-wayfinder', 'matt-pocock-wayfinder-workflow.zh'],
-    ['dsh-workflow-template-openspec-delivery', 'openspec-delivery.zh'],
+    ['dsh-workflow-template-openspec-change', 'openspec-change.zh'],
   ]) {
     const root = fileURLToPath(new URL(`../../${packageDirectory}/`, import.meta.url))
     assert.deepEqual((await readdir(root)).sort(), ['cordis.patch.yml', 'package.json', 'workflow.yaml'])

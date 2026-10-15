@@ -13,7 +13,7 @@
       name: dsh-workflow-template
       config:
         directory: '@dsh-workflow/template-matt-pocock-wayfinder'
-    - id: workflow-template-openspec-delivery.zh
+    - id: workflow-template-openspec-change.zh
       name: dsh-workflow-template
       config:
-        directory: '@dsh-workflow/template-openspec-delivery'
+        directory: '@dsh-workflow/template-openspec-change'

@@ -36,7 +36,7 @@
 
 ## 2026-10-12 独立模板包复验
 
-依据：[模板插件分发规格](../specs/template-plugin-distribution.zh.md)、[模板管理规格](../specs/template-management.zh.md)。被测范围为本次模板拆包后的工作区：mattpocock 中文版和 OpenSpec 需求交付中文版分别位于 `packages/dsh-workflow-template-matt-pocock-wayfinder/`、`packages/dsh-workflow-template-openspec-delivery/`，Studio 不再携带模板 YAML，模板 ID 与内容保持原样。下文 2026-10-04 的六份模板与双语范围为历史结果，不代表当前范围。
+依据：[模板插件分发规格](../specs/template-plugin-distribution.zh.md)、[模板管理规格](../specs/template-management.zh.md)。被测范围为本次模板拆包后的工作区：mattpocock 中文版和 OpenSpec 变更中文版分别位于 `packages/dsh-workflow-template-matt-pocock-wayfinder/`、`packages/dsh-workflow-template-openspec-change/`，Studio 不再携带模板 YAML，模板 ID 与内容保持原样。下文 2026-10-04 的六份模板与双语范围为历史结果，不代表当前范围。
 
 环境：本机已有 dsh `0.2.0-rc.1`、Node `26.7.0`、npm `11.19.0`、pnpm `11.25.0`；每条浏览器用例使用隔离临时 home 与工作区、中文 Chromium、1440×900。复用 `e2e/dsh.ts`，无模型凭据或模型调用，结束后夹具清理宿主及临时数据。
 

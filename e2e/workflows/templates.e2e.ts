@@ -7,7 +7,7 @@ test('默认装配从独立模板包加载两份中文模板并创建实例，�
   await addWorkspace(screen, dsh.workspace)
   const templates = [
     ['matt-pocock-wayfinder-workflow.zh', 'Matt-Pocock-工程工作流', '@dsh-workflow/template-matt-pocock-wayfinder'],
-    ['openspec-delivery.zh', 'OpenSpec 需求交付工作流', '@dsh-workflow/template-openspec-delivery'],
+    ['openspec-change.zh', 'OpenSpec 变更工作流', '@dsh-workflow/template-openspec-change'],
   ]
   await screen.getByRole('tab', '模板管理', { exact: true }).tap()
   for (const [, name, packageName] of templates) {

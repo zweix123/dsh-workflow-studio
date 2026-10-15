@@ -1,0 +1,89 @@
+id: openspec-change.zh
+name: OpenSpec 变更工作流
+type: dag
+output_schema: {}
+description: 把需求整理成可审阅的方案，按方案实施并验证，最后同步规格、归档变更。
+dag:
+  - id: 填写需求
+    type: node
+    node_kind: form
+    output_schema:
+      request: string
+    schema:
+      properties:
+        request:
+          title: 原始需求
+          description: 填写希望构建或修复的内容、预期行为、范围及已知复现条件；目标项目默认是当前实例工作区。
+    uiSchema:
+      request:
+        ui:widget: textarea
+
+  - id: 澄清需求与生成方案
+    type: node
+    node_kind: agent
+    input_schema:
+      request: string
+    output_schema:
+      change_name: string
+    prompt: |
+      原始需求：
+      {{ request }}
+
+      调用 openspec-propose 技能，默认以当前实例工作区为目标，一个实例对应一个 change。
+      在当前会话澄清需求，在创建 change 前确定简短的英文 kebab-case 名称，生成技能要求的规划产物。
+      将澄清后的需求与已确认决策写入规划文件；方案需要修改时继续当前会话，更新同一个 change 的产物。
+      本节点只生成方案，不实施或归档。技能缺失、阻塞或仍有未解决问题时留在当前会话处理。
+
+      完成后展示实际 change 名称、产物位置、需求范围、关键决策和任务清单，供用户审阅。
+      提醒用户确认方案后在工坊点击“完成”，再手动启动“实施与验证”。
+      完成时通过已有结构化结果交付输出 change_name，其值必须是实际创建的 change 名称，不是候选名称。
+
+  - id: 实施与验证
+    type: node
+    node_kind: agent
+    input_schema:
+      change_name: string
+    prompt: |
+      本次 OpenSpec change 名称：
+      {{ change_name }}
+
+      用户启动本节点表示开始实施该 change。调用 openspec-apply-change 技能，明确指定上述名称。
+      默认以当前实例工作区为目标，从磁盘读取该 change 的当前规划产物，不依赖其他节点的聊天历史。
+      按技能执行任务与项目要求的验证，更新任务状态；发现范围或方案需要调整时，
+      在当前会话更新同一个 change 的相关规划，取得必要的用户决定后继续实施与验证。
+      技能缺失、找不到 change 或执行阻塞时留在当前会话处理。本节点不执行归档。
+
+      完成后展示已完成内容、验证结果及剩余问题，区分通过、失败和未验证项。
+      所有实施任务及必要验证完成后，提醒用户在工坊点击“完成”，再手动启动“同步规格与归档”。
+      本节点完成仅提交空对象。
+
+  - id: 同步规格与归档
+    type: node
+    node_kind: agent
+    input_schema:
+      change_name: string
+    prompt: |
+      本次 OpenSpec change 名称：
+      {{ change_name }}
+
+      用户启动本节点表示请求归档该 change。调用 openspec-archive-change 技能，明确指定上述名称。
+      默认以当前实例工作区为目标，从磁盘读取该 change 的状态、任务和 delta specs，不依赖其他节点的聊天历史。
+      按技能检查完成情况与规格同步状态，展示同步内容并取得技能要求的选择。
+      如用户选择同步，完成同步并验证后归档；技能缺失、找不到 change、失败或取消时留在当前会话处理。
+
+      归档成功后展示真实归档位置、规格同步结果及剩余警告，提醒用户在工坊点击“完成”。
+      本节点完成仅提交空对象。
+
+  - type: edge
+    from: 填写需求
+    to: 澄清需求与生成方案
+  - type: edge
+    from: 澄清需求与生成方案
+    to: 实施与验证
+  - type: edge
+    from: 实施与验证
+    to: 同步规格与归档
+  # 实施节点输出为空，归档所需的名称直接来自生成方案节点。
+  - type: edge
+    from: 澄清需求与生成方案
+    to: 同步规格与归档

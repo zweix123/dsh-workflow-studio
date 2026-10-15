@@ -65,6 +65,35 @@ test('template identity and display name come from loaded YAML across workspaces
 })
 
 
+test('template IDs allow dotted lowercase segments and reject malformed values without changing nested IDs', async () => {
+  const h = await host()
+  try {
+    for (const id of ['a', '0', 'review-2.zh', 'release.v2']) {
+      await h.declare(`@acme/workflows/templates/valid-${id}`, `id: ${JSON.stringify(id)}\nname: 中文名称\ntype: dag\ndag:\n  - { id: 中文子流程, type: dag, dag: [] }\n`)
+      const detail = await h.request(`${TEMPLATES_PATH}/${id}`)
+      assert.equal(detail.status, 200, id)
+      assert.equal((await detail.json()).definition.dag[0].id, '中文子流程')
+      const created = await h.request(INSTANCES_PATH, { workspaceId: 'a', name: id, templateId: id })
+      assert.equal(created.status, 201, id)
+      assert.equal((await created.json()).templateId, id)
+    }
+    const invalid = ['', ' ', 'Review', '中文模板', 'review_task', 'review/task', '../review',
+      '.review', 'review.', '-review', 'review-', 'review..zh', 'review--task', 'review-.zh',
+      'review.-zh', ' review', 'review ', 'review task', 'review\n', 'review\r', 'review\t', 'review\u2028', 'review?x', 'review#x', 'review%2ftask']
+    for (const [index, id] of invalid.entries()) {
+      const source = `@acme/workflows/templates/invalid-${index}`
+      await h.declare(source, `id: ${JSON.stringify(id)}\nname: Invalid\ntype: dag\ndag: []\n`)
+      const rows = (await (await h.request(TEMPLATES_PATH)).json()).templates
+      const row = rows.find((row: any) => row.source === source)
+      assert.equal(row.id, id)
+      assert.match(row.error, /Template root id must use lowercase ASCII/, JSON.stringify(id))
+      assert.notEqual((await h.request(INSTANCES_PATH, { workspaceId: 'a', name: `invalid-${index}`, templateId: id })).status, 201, JSON.stringify(id))
+    }
+    assert.equal((await h.request(`${TEMPLATES_PATH}/review-2.zh`)).status, 200)
+  } finally { await h.close() }
+})
+
+
 test('package-root templates support scoped and unscoped names and reject filesystem and URL addresses', async () => {
   const h = await host()
   try {
@@ -296,8 +325,8 @@ test('the default templates use the public loader and registration contract', as
     await installBuiltinNodes(h)
     const patch = parse(await readFile(new URL('../../dsh-workflow-bundle/cordis.patch.yml', import.meta.url), 'utf8'))
     const templates = patch[0].insert.filter((entry: any) => entry.name === 'dsh-workflow-template')
-    const names = ['matt-pocock-wayfinder-workflow.zh', 'openspec-delivery.zh']
-    const packages = ['dsh-workflow-template-matt-pocock-wayfinder', 'dsh-workflow-template-openspec-delivery']
+    const names = ['matt-pocock-wayfinder-workflow.zh', 'openspec-change.zh']
+    const packages = ['dsh-workflow-template-matt-pocock-wayfinder', 'dsh-workflow-template-openspec-change']
     assert.equal(templates.length, packages.length)
     const bundle = JSON.parse(await readFile(new URL('../../dsh-workflow-bundle/package.json', import.meta.url), 'utf8'))
     for (const [index, packageDirectory] of packages.entries()) {
@@ -315,7 +344,7 @@ test('the default templates use the public loader and registration contract', as
     assert.ok(rows.every((row: any) => row.name && !row.error))
     for (const [templateId, templateName] of [
       ['matt-pocock-wayfinder-workflow.zh', 'Matt-Pocock-工程工作流'],
-      ['openspec-delivery.zh', 'OpenSpec 需求交付工作流'],
+      ['openspec-change.zh', 'OpenSpec 变更工作流'],
     ]) {
       const response = await h.request(INSTANCES_PATH, { workspaceId: 'a', name: templateId, templateId })
       assert.equal(response.status, 201)
@@ -325,16 +354,16 @@ test('the default templates use the public loader and registration contract', as
 })
 
 
-test('the OpenSpec template preserves requirement and name across separate, ordered sessions', async () => {
+test('the OpenSpec template hands the proposed change name to implementation and archive in order', async () => {
   const h = await host()
   try {
     await installBuiltinNodes(h)
-    const directory = '@dsh-workflow/template-openspec-delivery'
+    const directory = '@dsh-workflow/template-openspec-change'
     const yaml = await readFile(new URL(import.meta.resolve(`${directory}/workflow.yaml`)), 'utf8')
     await h.declare(directory, yaml)
     const catalog = (await (await h.request(TEMPLATES_PATH)).json()).templates
     assert.equal(catalog.length, 1)
-    assert.equal(catalog[0].id, 'openspec-delivery.zh')
+    assert.equal(catalog[0].id, 'openspec-change.zh')
     assert.equal(catalog[0].error, undefined)
     const response = await h.request(INSTANCES_PATH, { workspaceId: 'a', name: 'OpenSpec run', templateId: catalog[0].id })
     assert.equal(response.status, 201)
@@ -347,17 +376,25 @@ test('the OpenSpec template preserves requirement and name across separate, orde
     }
     const request = '修复登录重定向循环。\n复现：登录后返回原页面。保留中文、"引号"和 <标记>。'
     const change_name = 'fix-login-redirect-loop'
+    assert.deepEqual(definition.dag.filter((item: any) => item.type === 'node').map((node: any) => node.id),
+      ['填写需求', '澄清需求与生成方案', '实施与验证', '同步规格与归档'])
     submit('填写需求', { request })
-    assert.deepEqual(execution.getFrontier()[0]!.input, { request })
-    submit('为需求起名', {})
-    submit('确认需求名称', { change_name })
-    for (const id of ['propose', 'apply', 'archive']) {
+    const [proposal] = execution.getFrontier()
+    assert.equal(proposal!.definition.id, '澄清需求与生成方案')
+    assert.deepEqual(proposal!.input, { request })
+    assert.deepEqual(proposal!.definition.output_schema, { change_name: 'string' })
+    assert.notEqual(proposal!.definition.is_auto_start, true)
+    const proposalPrompt = renderTextTemplate(proposal!.definition.prompt as string, proposal!.input)
+    assert.ok(proposalPrompt.includes(request))
+    assert.ok(!proposalPrompt.includes('{{'))
+    submit('澄清需求与生成方案', { change_name })
+    for (const id of ['实施与验证', '同步规格与归档']) {
       const [node] = execution.getFrontier()
       assert.equal(node!.definition.id, id)
-      assert.deepEqual(node!.input, { request, change_name })
+      assert.deepEqual(node!.input, { change_name })
       const prompt = renderTextTemplate(node!.definition.prompt as string, node!.input)
-      assert.ok(prompt.includes(request))
       assert.ok(prompt.includes(change_name))
+      assert.ok(!prompt.includes(request))
       assert.ok(!prompt.includes('{{'))
       assert.notEqual(node!.definition.is_auto_start, true)
       submit(id, {})

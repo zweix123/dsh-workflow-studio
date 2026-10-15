@@ -6,7 +6,7 @@ Add this local directory after building the repository. Its ordinary dsh patch i
 dsh plugin --profile web add ./packages/dsh-workflow-bundle
 ```
 
-The bundle also installs the template loader and two Chinese templates: Matt Pocock Wayfinder (`matt-pocock-wayfinder-workflow.zh`) and [OpenSpec delivery](../../docs/openspec-workflow.zh.md) (`openspec-delivery.zh`). See [the template author guide](../../docs/template-plugin-authoring.zh.md), [the node author guide](../../docs/node-plugin-authoring.zh.md), and their links to production implementations.
+The bundle also installs the template loader and two Chinese templates: Matt Pocock Wayfinder (`matt-pocock-wayfinder-workflow.zh`) and OpenSpec change (`openspec-change.zh`). See [the template author guide](../../docs/template-plugin-authoring.zh.md), [the node author guide](../../docs/node-plugin-authoring.zh.md), and their links to production implementations.
 
 Template packages declare their loader and node package versions in `peerDependencies`. This bundle supplies the packages through `dependencies` and activates nodes and template loader declarations in `cordis.patch.yml`. It loads template resources directly rather than also applying each template package's bundle patch. Keep each node and template declaration enabled only once in a profile; package dependencies alone do not activate plugins.
 
