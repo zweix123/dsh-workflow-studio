@@ -1,12 +1,22 @@
 import { defineDomain, domainTable, type Domain } from '@deepseek-ai/dsh-storage-domain'
 import { z } from 'zod'
 
+export const runRecordSchema = z.object({
+  id: z.string(),
+  operation: z.union([z.object({ text: z.string() }).strict(), z.object({ namespace: z.string(), key: z.string() }).strict()]),
+  status: z.enum(['running', 'waiting', 'succeeded', 'failed', 'unknown', 'cancelled']),
+  startedAt: z.iso.datetime(), finishedAt: z.iso.datetime().optional(),
+  input: z.record(z.string(), z.json()), output: z.record(z.string(), z.json()).optional(),
+  error: z.string().optional(), data: z.record(z.string(), z.json()).optional(),
+}).strict()
+
 const executionSchema = z.object({
   kind: z.string(),
   status: z.enum(['running', 'waiting', 'succeeded', 'failed', 'unknown', 'cancelled']),
   business: z.json().optional(),
   output: z.record(z.string(), z.json()).optional(),
   error: z.string().optional(),
+  records: z.array(runRecordSchema).optional(),
 }).strict()
 
 const instanceSchema = z.object({
@@ -23,6 +33,7 @@ const instanceSchema = z.object({
   state: z.json().optional(),
   drawerWidth: z.number().positive().finite().optional(),
   executions: z.record(z.string(), executionSchema).optional(),
+  dagRecords: z.record(z.string(), z.array(runRecordSchema.extend({ submissionId: z.string() }))).optional(),
 }).strict()
 
 export const workflowInstanceDomain = defineDomain({

@@ -3,7 +3,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-shell'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import { WorkspaceId } from '@deepseek-ai/dsh-workspace'
-import type { ServerNode, NodeFact, NodeContext } from 'dsh-workflow-node/contract'
+import type { ServerNode, NodeFact, NodeContext, NodePlan } from 'dsh-workflow-node/contract'
 
 interface Result { ok: boolean; stdout: string; stderr: string; exitCode: number | null; error?: string; stdoutTruncated?: boolean }
 
@@ -18,7 +18,7 @@ async function execute(command: string, { workspaceId, templateDirectory, servic
   })
   if (!spec.sandboxPolicy || spec.sandboxPolicy.mode === 'danger-full-access') throw new Error('Sandbox execution is unavailable')
   const outcome = await (await services.shell.execute(spec)).result()
-  const result = { stdout: outcome.stdout.text, stderr: outcome.stderr.text, exitCode: outcome.exitCode, stdoutTruncated: outcome.stdout.truncated }
+  const result = { stdout: outcome.stdout.text, stderr: outcome.stderr.text, exitCode: outcome.exitCode, stdoutTruncated: outcome.stdout.truncated, stderrTruncated: outcome.stderr.truncated, signal: outcome.signal ?? null, timedOut: outcome.timedOut ?? false, aborted: outcome.aborted ?? false }
   if (outcome.exitCode !== 0 || outcome.signal || outcome.timedOut || outcome.aborted || outcome.sandbox?.denied || outcome.sandbox?.runnerFailed || !outcome.sandbox || outcome.sandbox.mode === 'danger-full-access') {
     const reason = outcome.sandbox?.denied ? 'Sandbox denied the command' : outcome.sandbox?.runnerFailed ? 'Sandbox runner failed'
       : !outcome.sandbox || outcome.sandbox.mode === 'danger-full-access' ? 'Sandbox execution was unavailable'
@@ -28,17 +28,18 @@ async function execute(command: string, { workspaceId, templateDirectory, servic
   return { ...result, ok: true }
 }
 
-function start(context: NodeContext): { fact: NodeFact; run?: () => Promise<NodeFact> } {
+function start(context: NodeContext): NodePlan {
   if (context.fact?.status === 'succeeded') return { fact: context.fact }
   let command: string
   try { command = renderTextTemplate(context.definition.command as string, context.input, true) }
   catch (cause) { throw new Error(`Node ${context.definition.id}: command: ${String(cause)}`, { cause }) }
   if (context.fact?.status === 'running') throw new Error('Node is already running')
-  if (!command.trim() && !Object.keys(context.definition.output_schema ?? {}).length) return { fact: { kind: 'bash', status: 'succeeded', output: {}, business: { stdout: '', stderr: '', exitCode: 0 } } }
+  if (!command.trim() && !Object.keys(context.definition.output_schema ?? {}).length) return { attempt: { namespace: name, key: 'executeNode' }, fact: { kind: 'bash', status: 'succeeded', output: {}, business: { command, stdout: '', stderr: '', exitCode: 0 } } }
   return {
-    fact: { kind: 'bash', status: 'running' },
+    attempt: { namespace: name, key: 'executeNode' },
+    fact: { kind: 'bash', status: 'running', business: { command } },
     run: async () => {
-      const result = await execute(command, context)
+      const result = { ...await execute(command, context), command }
       if (!result.ok) return { kind: 'bash', status: 'failed', business: result as unknown as NodeFact['business'], error: result.error }
       try {
         let output = {}
@@ -60,7 +61,7 @@ function start(context: NodeContext): { fact: NodeFact; run?: () => Promise<Node
 
 export const bashNode: ServerNode = {
   kind: 'bash',
-  describe({ ready, fact }) { return { actions: ready ? [{ id: 'start', label: { namespace: name, key: 'executeNode' }, target: { type: 'server' }, position: 1, icon: 'execute', disabled: fact?.status === 'running' }] : [] } },
+  describe({ ready, fact }) { return { actions: ready ? [{ id: 'start', label: { namespace: name, key: fact?.status === 'succeeded' ? 'retryDelivery' : fact && fact.status !== 'running' ? 'rerunNode' : 'executeNode' }, target: { type: 'server' }, position: 1, icon: 'execute', disabled: fact?.status === 'running' }] : [] } },
   validateFact(fact) { if (fact.business !== undefined && (fact.business === null || typeof fact.business !== 'object' || Array.isArray(fact.business))) throw new Error('Invalid bash business state') },
 
   requires: ['workspaceRegistry', 'shell', 'sandboxPolicy'],
@@ -76,6 +77,7 @@ export const bashNode: ServerNode = {
   },
   recover(fact) { return fact.status === 'running' ? { ...fact, status: 'unknown', error: 'Previous command result is unknown; run it again only if safe.' } : fact },
   project(fact) { return (fact.business ?? {}) as Record<string, never> },
+  record(fact) { return (fact.business ?? {}) as Record<string, never> },
   blocksDeletion(_fact, active) { return active },
 }
 

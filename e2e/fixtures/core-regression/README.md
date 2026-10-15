@@ -6,6 +6,7 @@
 - identifier-keys：源命令输出一项合法和一项非法 key，验证整个展开回滚及重启后的前沿。
 - lifecycle：手动 Bash 留下 `lifecycle-runs.txt`，用于核实创建不会自动执行。
 - bash：自动节点交付真实字符串；retry 的前两次分别非零退出、交付错误类型，第三次成功。工作区 `attempts.txt` 和 `automatic-runs.txt` 核对副作用次数。
+- run-records：真实命令向 stdout/stderr 各写入超过宿主捕获上限的内容，验证当次历史明确标识日志截断、日志与合法空业务结果分开显示。
 - gate：自动命令写入 `gate-runs.txt`，等待工作区 `release.txt`；用例从外部释放或停止宿主。命令的条件轮询最多 60 秒，不是演示等待。
 - branches：真实布尔输出决定分支，关闭的命令应永不生成 `closed-runs.txt`，汇合收到激活分支输出。
 - loop：默认两项 a/Alpha、b/Beta；工作区存在 `empty.txt` 时输出空数组。`each-runs.txt` 核对实际完成顺序，页面输入核对聚合顺序。

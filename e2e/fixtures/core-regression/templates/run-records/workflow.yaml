@@ -1,0 +1,8 @@
+id: regression-run-records
+name: 运行记录回归
+type: dag
+dag:
+  - id: overflow
+    type: node
+    node_kind: bash
+    command: node -e 'process.stdout.write("stdout-evidence\n" + "x".repeat(2097152)); process.stderr.write("stderr-evidence\n" + "y".repeat(2097152))'

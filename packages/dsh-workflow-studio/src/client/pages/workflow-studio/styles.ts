@@ -543,4 +543,11 @@ ${reactFlowCss}
   .dsh-workflow-create-dialog { height: calc(100vh - 20px); border-radius: 18px; }
   .dsh-workflow-create { padding: 21px 18px; }
 }
+
+.dsh-workflow-records details { padding: 12px 0; border-top: 0.5px solid var(--dsw-alias-border-l3); min-width: 0; }
+.dsh-workflow-records summary { cursor: pointer; overflow-wrap: anywhere; }
+.dsh-workflow-records summary time { display: block; color: var(--dsw-alias-label-secondary); font-size: 12px; }
+.dsh-workflow-records summary:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 2px; }
+.dsh-workflow-record-error { display: block; color: var(--dsw-alias-state-error-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dsh-workflow-records pre { white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
 `

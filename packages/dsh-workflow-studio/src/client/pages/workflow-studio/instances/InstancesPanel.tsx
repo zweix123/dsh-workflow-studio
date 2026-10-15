@@ -10,6 +10,7 @@ import { LayoutNotices } from '../LayoutNotices.js'
 type Props = { t: WorkflowTranslate; useWorkspaces: <T>(selector: (snapshot: WorkspaceSnapshot) => T) => T; onSelect: (detail: InstanceDetail) => void; onOpenExisting: (id: string) => boolean; onDeleted: (id: string) => void }
 
 const errorKeys: Record<InstanceErrorCode | 'request-failed', WorkflowKey> = {
+  'persistence-failed': 'requestFailed',
   'invalid-request': 'invalidRequest',
   'invalid-name': 'invalidName',
   'duplicate-name': 'duplicateName',

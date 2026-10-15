@@ -23,17 +23,24 @@ export const formNode: ServerNode = {
     for (const [key, type] of Object.entries(node.input_schema ?? {})) if (!Object.hasOwn(fields, key) || !matchesContract(fields[key]!, type)) throw new Error(`Node ${node.id}: prefill input ${key} must match output_schema type`)
   },
   ready() { return undefined },
-  action(context, name, payload) {
+  action(context, action, payload) {
     if (context.fact?.status === 'succeeded') {
-      if (name === 'retry' && object(payload) && !Object.keys(payload).length) return { fact: context.fact }
+      if (action === 'retry' && object(payload) && !Object.keys(payload).length) return { fact: context.fact }
       throw new Error('Form has already been submitted')
     }
-    if (name !== 'submit') throw new Error('Unsupported form action')
-    const output = validateSubmission(context.definition, payload)
-    return { fact: { kind: 'form', status: 'succeeded', output, business: { submitted: true } } as NodeFact }
+    if (action !== 'submit') throw new Error('Unsupported form action')
+    const attempt = { namespace: name, key: 'formSubmit' }
+    try {
+      const output = validateSubmission(context.definition, payload)
+      return { attempt, fact: { kind: 'form', status: 'succeeded', output, business: { submitted: true, submission: output } } as NodeFact }
+    } catch (error) {
+      if (!(error instanceof NodeInputError)) throw error
+      return { attempt, rejection: error.message, fact: { kind: 'form', status: 'failed', error: error.message, business: { submission: payload as import('dsh-workflow-node/contract').NodeValue } } }
+    }
   },
   recover(fact) { return fact },
   project() { return {} },
+  record(fact) { return (fact.business ?? {}) as NodeData },
 }
 
 export const name = '@dsh-workflow/node-form'

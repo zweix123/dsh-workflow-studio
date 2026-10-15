@@ -38,11 +38,21 @@ ctx.workflowNodes.register(ctx, name, node, { dispose: releaseNodeResources })
 - `validate(definition)` 校验本类型业务配置，`validateFact(fact)` 可拒绝无法解释的保存状态。公共结构与输入输出语义由 Studio/DAG 校验；不要覆盖这些语义。
 - `ready(context)` 决定是否自动启动；`action(context, id, payload)` 必须重新校验动作、业务阶段和参数。返回 `NodePlan`，包含待保存事实及可选异步 `run`。首次运行也可能没有事实。有外部副作用的业务放入 run；Studio 先保存初始事实再调用，ready/action 只准备该计划。
 - `run` 返回同 kind 的事实。成功事实的输出必须满足声明；可提前调用 `validateOutput`。未声明输出时交付 `{}`。取消、失败、等待或未知均不推进 DAG。
-- `context.save` 用于正在执行调用的进度事实。必须 `await`，失败后停止把未保存进展当作可靠事实；不要另建保存重试系统。异步业务应返回最终事实，由 Studio 协调最终保存与 DAG 提交。
+- `context.save` 用于正在执行调用的进度事实。必须 `await`，失败会抛出公共 `NodePersistenceError`，必须停止并向外传播，不得捕获后返回成功或普通失败事实；不要另建保存重试系统。异步业务应返回最终事实，由 Studio 协调最终保存与 DAG 提交。
 - `recover` 校验通过后解释已有事实。已接受的成功结果不重新执行业务，Studio 可恢复其 DAG 提交；结果未知或失败不因插件恢复自动重跑。需要恢复外部任务时，节点必须根据自己的已保存业务身份明确判断，而不能把 running 默认解释为“尚未执行”。
 
 
 完整定义中的任意必需类型缺失或冲突都会暂停该实例的新业务，包括已完成节点、未激活分支和尚未展开的节点。已开始调用仍可保存合法结果及提交 DAG，后续新业务继续等待。恢复依赖后重新校验完整定义和事实，按原有自动/手动规则继续。
+
+## 运行记录契约
+
+`NodePlan.attempt?: NodeText` 声明一次实际业务尝试的操作名称；Bash 执行、Agent 台后任务/台前结果交付、Form 正式提交使用此入口。只读查看、因在途被拒的重复请求、确认待确认结果及重交接受结果不声明新尝试。
+
+Studio 在启动 `run` 前将初始事实和记录一起保存；保存失败不调用 `run`。同次 `context.save` 与最终事实更新同一记录，其他分支的历史从最新保存状态合并。`NodeFact.records` 是公共只读历史，节点不自行覆盖、编号或补齐它。记录包括独立 ID、操作名称、状态、开始/结束时间、实际输入、接受结果、错误和可选 `data`。节点通过 `record(fact): NodeData` 提供本次公开快照，必须可序列化且对应当次实际使用内容；不要在查看历史时重新读模板、文件或渲染文本。`record` 返回的数据直接进入公开历史，不能包含只供服务端保存的私有状态。
+
+同步正式提交被业务校验拒绝时可返回 `attempt`、失败事实和 `rejection`；Studio 先保存记录，再以 `node-input-invalid` 返回拒绝原因。请求本身非法或当前不允许处理时直接拒绝，不造业务记录。异步结果必须可靠保存后才能接受、交付；保存失败时当前页面可显示临时 `persistenceError`，不能据此声称重启后有完整诊断。没有确定结果的中断由 `recover` 标为未知，不自动重跑；待确认仍待确认，成功只重交。
+
+浏览器的 `Record?: ComponentType<{ record: NodeRunRecord; t }>` 只负责当次专属内容，公共详情统一提供摘要、输入、结果与错误；没有动作、确认或草稿回调。允许只读复制和打开该次宿主原生记录，不允许业务重试、编辑或使旧结果生效。可用原生地址必须来自该次快照。不要把 DAG 编排异常复制进普通节点历史；DAG 由 Studio 单独记录，二者不提供关联列表或跳转。
 
 ## 资源清理
 
@@ -54,7 +64,7 @@ ctx.workflowNodes.register(ctx, name, node, { dispose: releaseNodeResources })
 
 ## 展示与可选浏览器入口
 
-`describe({ definition, input, fact?, ready })` 是纯只读入口，返回可序列化 `NodePresentation`。其中 `actions` 每项有稳定 id、`NodeText` 文案、目标、`position: 1 | 2 | 3`、公共 `icon` 标识和可选 disabled。同位置最多一个动作；缺位留空，不补位。目标为 `{ type: 'server' }` 或 `{ type: 'client', handler }`。首次无事实也可列出操作，禁止为了枚举按钮调用 ready/action。`project(fact)` 决定提供给前端的业务数据；持久化的原始 business 不自动公开。
+`describe({ definition, input, fact?, ready })` 是纯只读入口，返回可序列化 `NodePresentation`。其中 `actions` 每项有稳定 id、`NodeText` 文案、目标、`position: 1 | 2 | 3`、公共 `icon` 标识和可选 `disabled` / `disabledReason: NodeText`。同位置最多一个动作；缺位留空，不补位。目标为 `{ type: 'server' }` 或 `{ type: 'client', handler }`。首次无事实也可列出操作，禁止为了枚举按钮调用 ready/action。`project(fact)` 决定提供给前端的业务数据；持久化的原始 business 不自动公开。
 
 公共图标标识为 `execute`、`complete`、`conversation`、`record`、`retry`、`edit`，分别使用宿主 rc.1 的 TriangleRightFill、CheckOutline、NewChatOutline、ClockOutline、RefreshOutline、EditOutline Regular 图标。Studio 统一渲染图标和文字；节点不能传入任意 SVG 或额外按钮。Studio 保留编排状态和卡片外壳，插件的业务表达不能改变 DAG 完成事实。
 
@@ -68,7 +78,7 @@ ctx.workflowNodes.register(ctx, name, node, { dispose: releaseNodeResources })
 可选客户端导出普通 dsh browser 插件，在 manifest 的 `dsh.client` 声明 web 入口及宿主依赖。导出与 manifest 一致的 `name`，`inject` 包含 `workflowNodeViews`，调用 `ctx.workflowNodeViews.register(ctx, name, clientNode)`。类型从 `dsh-workflow-node/ui` 导入：
 
 - `Summary` 只能填充公共卡片的业务摘要区域，不能替换整张卡片或身份、状态、连接点和三个固定操作位。
-- `Panel` 在公共详情的业务区域展示只读内容，接收 `NodeDetailsProps`，没有 action、草稿或编辑回调；不能提供执行、完成、填写或宿主导航入口。
+- `Panel` 在公共详情的业务区域展示只读内容，接收 `NodeDetailsProps`，没有 action、草稿或编辑回调；不能提供执行、完成、填写或主对话导航入口。历史中的原生执行记录导航由 `Record` 提供。
 - `interactions` 按 handler 名称登记 `NodeViewProps` 模块，处理插件自管浮窗。Studio 按真实节点实例和贡献代次挂载，传入 `request: { handler, sequence }`；只有匹配的模块收到请求。同一动作多次点击时 sequence 增加。模块使用 `action(name, payload)` 请求业务，读取 ready、pending、output、execution、error 更新界面，交互回调的异常通过 `reportError(error)` 交给公共反馈通道；action 的 Promise 结束表示请求完成，交付成功以 ready 与 output 为准。
 - 浮窗与临时草稿由插件自己的 React 状态管理。模块在同一实例页面驻留，关闭浮窗或切换 Tab 不销毁草稿；`active: false` 时隐藏浮窗，页面销毁或插件卸载会销毁模块。已保存结果从公共 props 恢复。不能用定义 id 代替节点实例 id 缓存草稿。Form 复用 rc.1 的 Modal，校验失败保留输入，成功交付后关闭；服务端已接受的结果仅可重交。
 - `handlers` 以名称提供同步或异步前端动作。Studio 处理防重、等待与错误反馈。查看和导航可以在历史节点上使用，与业务执行权限分开。

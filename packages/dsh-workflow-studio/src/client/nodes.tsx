@@ -16,5 +16,5 @@ const icons = { execute: IconTriangleRightFillRegular, complete: IconCheckOutlin
 export function NodeButton({ action, nodes, pending, blocked, label, onClick }: { action: NodeAction; nodes: NodeViews; pending: boolean; blocked: boolean; label?: string; onClick: () => void }) {
   const text = nodes.text(action.label)
   const Icon = icons[action.icon]
-  return <button type="button" className="nodrag nopan" aria-label={label ? `${text} ${label}` : text} disabled={Boolean(action.disabled) || pending || (action.target.type === 'server' && blocked)} onClick={event => { event.stopPropagation(); onClick() }}>{Icon && <Icon size={12} aria-hidden="true" />}{text}</button>
+  return <button type="button" className="nodrag nopan" aria-label={label ? `${text} ${label}` : text} title={action.disabledReason ? nodes.text(action.disabledReason) : undefined} disabled={Boolean(action.disabled) || pending || (action.target.type === 'server' && blocked)} onClick={event => { event.stopPropagation(); onClick() }}>{Icon && <Icon size={12} aria-hidden="true" />}{text}</button>
 }

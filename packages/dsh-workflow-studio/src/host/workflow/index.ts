@@ -1,8 +1,9 @@
+import { randomUUID } from 'node:crypto'
 import { copy } from '../dag/data.js'
 import type { Context } from '@deepseek-ai/cordis'
 import { z } from 'zod'
 import { compile, SubmissionError, type DagDefinition, type ExecutionSnapshot, type JsonObject, type SavedExecution } from '../dag/index.js'
-import { isIdentifier, hasValidActionIdentifiers, NodeInputError, type NodeContext, type NodeFact, type NodePlan, type NodeLookup } from 'dsh-workflow-node/contract'
+import { isIdentifier, hasValidActionIdentifiers, NodeInputError, NodePersistenceError, type NodeContext, type NodeFact, type NodePlan, type NodeLookup } from 'dsh-workflow-node/contract'
 import type { InstanceDetail, NodeExecution } from '../../shared/types/workflow-instance.js'
 import { WorkflowInstanceStore, type StoredInstance } from '../storage/workflow-instance-store.js'
 import { executeWorkflowNode } from './dag.js'
@@ -13,12 +14,11 @@ export { initializeWorkflow } from './dag.js'
 export { nodeDefinitionAt, validateWorkflowNodes, type WorkflowNode } from './definition.js'
 export { WorkflowInstanceError } from './errors.js'
 
-class NodePersistenceError extends Error {}
-
 export class WorkflowEngine {
   private readonly active = new Set<string>()
   private readonly tasks = new Set<Promise<void>>()
   private closing = false
+  private readonly persistenceErrors = new Map<string, string>()
 
   async close(): Promise<void> { this.closing = true; await this.store.serial(async () => {}); await Promise.allSettled([...this.tasks]) }
 
@@ -46,7 +46,7 @@ export class WorkflowEngine {
       if (this.active.has(key)) throw new WorkflowInstanceError('node-running', 'Node is already running', this.detail(row))
       const node = this.nodes.get(workflowNode(ready.definition).node_kind)!
       if (token && this.nodes.identify?.(node.kind)?.token !== token) throw new WorkflowInstanceError('node-kind-invalid', 'Node contribution has changed', this.detail(row))
-      const previous = row.executions?.[nodeId] as NodeFact | undefined
+      const previous = this.currentFact(row, nodeId)
       const context = this.context(row, ready, previous)
       const release = this.nodes.acquire?.(node.kind)
       if (this.nodes.acquire && !release) throw new WorkflowInstanceError('instance-incompatible', 'Node implementation is unloading', this.detail(row))
@@ -96,7 +96,7 @@ export class WorkflowEngine {
         changed = true
       }
     }
-    if (changed) await this.store.save({ ...row, executions })
+    if (changed) await this.store.save({ ...row, executions: Object.fromEntries(Object.entries(executions).map(([id, fact]) => [id, this.record(row, id, fact)])) })
     for (const item of this.frontier(this.requireInstance(id))) {
       const latest = this.requireInstance(id)
       const fact = latest.executions?.[item.instanceId]
@@ -110,11 +110,11 @@ export class WorkflowEngine {
     catch (error) { incompatible = error instanceof Error ? error.message : String(error) }
     const executions = Object.fromEntries(Object.entries(row.executions ?? {}).map(([nodeId, stored]) => {
       const node = this.nodes.get(stored.kind)
-      const fact = stored
+      const fact = this.currentFact(row, nodeId)!
       const { business: _business, ...common } = fact
       let data = {} as import('dsh-workflow-node/contract').NodeData
       try { data = node?.project(structuredClone(fact)) ?? data } catch { /* Public common facts remain readable. */ }
-      return [nodeId, { ...(data && typeof data === 'object' && !Array.isArray(data) ? data : {}), ...common }]
+      return [nodeId, { ...(data && typeof data === 'object' && !Array.isArray(data) ? data : {}), ...common, ...(this.persistenceErrors.has(this.key(row.id, nodeId)) ? { persistenceError: this.persistenceErrors.get(this.key(row.id, nodeId)) } : {}) }]
     })) as Record<string, NodeExecution>
     const definitionSnapshot = row.definition as DagDefinition
     const nodeViews = Object.fromEntries((row.snapshot as unknown as ExecutionSnapshot).instances.filter(item => item.type === 'node').map(item => {
@@ -123,11 +123,12 @@ export class WorkflowEngine {
       const node = this.nodes.get(kind)
       const identity = this.nodes.identify?.(kind)
       let presentation = { actions: [] } as import('dsh-workflow-node/contract').NodePresentation
-      try { if (node && definition) presentation = node.describe?.(structuredClone({ definition, input: item.input as import('dsh-workflow-node/contract').NodeData, fact: row.executions?.[item.instanceId], ready: item.status === 'ready' })) ?? presentation } catch { /* Local presentation failure never hides public details. */ }
+      try { if (node && definition) presentation = node.describe?.(structuredClone({ definition, input: item.input as import('dsh-workflow-node/contract').NodeData, fact: this.currentFact(row, item.instanceId), ready: item.status === 'ready' })) ?? presentation } catch { /* Local presentation failure never hides public details. */ }
       return [item.instanceId, { ...presentation, actions: presentation.actions.filter(hasValidActionIdentifiers), ...identity }]
     }))
     return {
       nodeViews,
+      dagRecords: Object.fromEntries(Object.entries(row.dagRecords ?? {}).map(([id, records]) => [id, records.map(({ submissionId: _submissionId, ...record }) => record)])),
       id: row.id, workspaceId: row.workspaceId, name: row.name, templateId: row.templateId, templateName: ((row.definition as DagDefinition).name ?? (row.definition as DagDefinition).id), createdAt: row.createdAt,
       revision: row.revision ?? 0, definition: row.definition as DagDefinition, input: row.input as JsonObject,
       snapshot: row.snapshot as unknown as ExecutionSnapshot,
@@ -136,6 +137,10 @@ export class WorkflowEngine {
     }
   }
 
+  private currentFact(row: StoredInstance, nodeId: string): NodeFact | undefined {
+    const fact = row.executions?.[nodeId]
+    return fact?.status === 'running' && this.persistenceErrors.has(this.key(row.id, nodeId)) ? this.record(row, nodeId, this.nodes.get(fact.kind)?.recover(structuredClone(fact)) ?? fact) : fact
+  }
   private validate(row: StoredInstance): void {
     validateWorkflowNodes(row.definition as DagDefinition, this.nodes)
     for (const fact of Object.values(row.executions ?? {})) this.nodes.get(fact.kind)?.validateFact?.(structuredClone(fact))
@@ -169,14 +174,18 @@ export class WorkflowEngine {
       save: async next => { if (next.kind !== node.kind) throw new Error('Mismatched node fact'); await this.store.serial(async () => {
         const latest = this.store.get(row.id)
         if (!latest || !this.active.has(key) || latest.executions?.[ready.instanceId]?.status !== 'running') return
-        await this.store.save({ ...latest, executions: { ...latest.executions, [ready.instanceId]: next } })
-      }).catch(error => { throw new NodePersistenceError(String(error)) }) },
+        await this.store.save({ ...latest, executions: { ...latest.executions, [ready.instanceId]: this.record(latest, ready.instanceId, next) } })
+      }).catch(error => { this.persistenceErrors.set(key, String(error)); throw new NodePersistenceError(String(error)) }) },
     }
   }
   private async accept(row: StoredInstance, nodeId: string, kind: string, plan: NodePlan, release?: () => void): Promise<InstanceDetail> {
     if (plan.fact.kind !== kind) throw new Error(`Node ${kind} returned fact for ${plan.fact.kind}`)
-    const fact = this.validateResult(row, nodeId, plan.fact)
-    const updated = await this.store.save({ ...row, executions: { ...row.executions, [nodeId]: fact } })
+    const fact = this.record(row, nodeId, this.validateResult(row, nodeId, plan.fact), plan.attempt)
+    let updated: StoredInstance
+    try { updated = await this.store.save({ ...row, executions: { ...row.executions, [nodeId]: fact } }) }
+    catch (error) { throw new WorkflowInstanceError('persistence-failed', `Node start record could not be saved: ${String(error)}`, this.detail(row)) }
+    this.persistenceErrors.delete(this.key(row.id, nodeId))
+    if (plan.rejection) { release?.(); throw new WorkflowInstanceError('node-input-invalid', plan.rejection, this.detail(updated)) }
     if (fact.status === 'succeeded') { try { return await this.submit(updated, nodeId, fact) } finally { release?.() } }
     if (plan.run) {
       const key = this.key(row.id, nodeId)
@@ -196,17 +205,37 @@ export class WorkflowEngine {
         await this.store.serial(async () => {
           const row = this.store.get(id)
           const previous = row?.executions?.[nodeId]
-          if (row && previous?.status === 'running') await this.store.save({ ...row, executions: { ...row.executions, [nodeId]: { ...previous, status: 'failed', error: error instanceof Error ? error.message : String(error) } } })
-        }).catch(error => { console.error('Node failure save failed:', String(error)) })
+          if (row && previous?.status === 'running') await this.store.save({ ...row, executions: { ...row.executions, [nodeId]: this.record(row, nodeId, { ...previous, status: 'failed', error: error instanceof Error ? error.message : String(error) }) } })
+        }).catch(error => { this.persistenceErrors.set(key, String(error)); console.error('Node failure save failed:', String(error)) })
         return
       }
       await this.store.serial(async () => {
         const row = this.store.get(id)
         if (!row || row.executions?.[nodeId]?.status !== 'running') return
-        const updated = await this.store.save({ ...row, executions: { ...row.executions, [nodeId]: fact } })
-        if (fact.status === 'succeeded') await this.submit(updated, nodeId, fact)
-      }).catch(error => { console.error('Node result save or submission failed:', String(error)) })
+        const updated = await this.store.save({ ...row, executions: { ...row.executions, [nodeId]: this.record(row, nodeId, fact) } })
+        if (fact.status === 'succeeded') await this.submit(updated, nodeId, updated.executions![nodeId]!).catch(error => { console.error('Node submission failed:', String(error)) })
+      }).catch(error => { this.persistenceErrors.set(key, String(error)); console.error('Node result save or submission failed:', String(error)) })
     } finally { this.active.delete(key) }
+  }
+  private record(row: StoredInstance, nodeId: string, fact: NodeFact, operation?: NodePlan['attempt']): NodeFact {
+    const previous = row.executions?.[nodeId]
+    const records = structuredClone(previous?.records ?? [])
+    const latest = records.at(-1)
+    if (operation) {
+      if (latest?.status === 'running') { latest.status = 'unknown'; latest.finishedAt = new Date().toISOString() }
+      const input = (row.snapshot as unknown as ExecutionSnapshot).instances.find(item => item.instanceId === nodeId)!.input as JsonObject
+      records.push({ id: randomUUID(), operation, status: fact.status, startedAt: new Date().toISOString(), input: structuredClone(input) })
+    }
+    if (operation || latest && ['running', 'waiting'].includes(latest.status)) {
+      const current = records.at(-1)!
+      current.status = fact.status
+      if (fact.output !== undefined) current.output = structuredClone(fact.output)
+      if (fact.error !== undefined) current.error = fact.error
+      const data = this.nodes.get(fact.kind)?.record?.(structuredClone(fact))
+      if (data !== undefined) current.data = structuredClone(data)
+      if (fact.status !== 'running' && !current.finishedAt) current.finishedAt = new Date().toISOString()
+    }
+    return { ...fact, ...(records.length ? { records } : {}) }
   }
   private validateResult(row: StoredInstance, nodeId: string, fact: NodeFact): NodeFact {
     if (fact.status !== 'succeeded') return fact
@@ -215,19 +244,51 @@ export class WorkflowEngine {
     const output = z.json().parse(copy(fact.output ?? {}, ready.definition.output_schema ?? {}, true, 'node-output', { instanceId: nodeId })) as JsonObject
     return { ...fact, output }
   }
-  private async submit(row: StoredInstance, nodeId: string, fact: NodeFact): Promise<InstanceDetail> {
-    let result: ReturnType<typeof executeWorkflowNode>
-    try { result = executeWorkflowNode(row.definition as DagDefinition, row.input as JsonObject, row.state as unknown as SavedExecution | undefined, nodeId, fact.output as JsonObject | undefined) }
-    catch (error) {
-      if (error instanceof SubmissionError) {
-        await this.store.save({ ...row, executions: { ...row.executions, [nodeId]: { ...fact, error: error.message } } })
-        throw new WorkflowInstanceError('submission-failed', error.message, this.detail(this.requireInstance(row.id)))
+  private dagRecords(row: StoredInstance, nodeId: string, startedAt: string, error?: unknown): NonNullable<StoredInstance['dagRecords']> {
+    const snapshot = row.snapshot as unknown as ExecutionSnapshot
+    const records = structuredClone(row.dagRecords ?? {})
+    const prior = Object.entries(records).filter(([, items]) => items.filter(item => item.submissionId === nodeId).at(-1)?.status === 'failed').map(([id]) => id)
+    let owner: string | undefined
+    if (error instanceof SubmissionError) {
+      const location = error.location
+      const instance = snapshot.instances.find(item => item.instanceId === location.instanceId)
+      owner = instance?.type === 'dag' && error.phase !== 'group-aggregation' ? instance.instanceId : location.parentInstanceId
+      // DAG-output errors name the DAG itself, including the root which has no parent.
+      if (instance?.type === 'dag' && error.phase.startsWith('dag-output')) owner = instance.instanceId
+    } else if (error !== undefined) owner = snapshot.instances.find(item => item.instanceId === nodeId)?.parentInstanceId ?? snapshot.rootInstanceId
+    if (error !== undefined && !owner) owner = snapshot.rootInstanceId
+    for (const dagId of new Set([...prior, ...(owner ? [owner] : [])])) {
+      const dag = snapshot.instances.find(item => item.instanceId === dagId && item.type === 'dag')!
+      const failed = dagId === owner
+      const diagnostic = error instanceof SubmissionError ? {
+        phase: error.phase, code: error.code, location: error.location,
+        ...(error.dataPath ? { dataPath: error.dataPath } : {}), ...(error.sources ? { sources: error.sources } : {}),
+        diagnostic: error.cause instanceof Error ? error.cause.stack ?? error.cause.message : String(error.cause ?? ''),
+      } : { phase: 'graph-save', code: 'GRAPH_SAVE_FAILED', location: { instanceId: dagId }, diagnostic: String(error) }
+      const record = { id: randomUUID(), submissionId: nodeId, operation: { namespace: 'dsh-workflow-studio', key: prior.includes(dagId) ? 'retryDelivery' : 'dagSubmission' },
+        startedAt, finishedAt: new Date().toISOString(), input: dag.input as JsonObject, status: failed ? 'failed' as const : 'succeeded' as const,
+        ...(failed ? { error: error instanceof Error ? error.message : String(error), data: z.json().parse(diagnostic) as JsonObject } : {}),
       }
+      records[dagId] = [...records[dagId] ?? [], record]
+    }
+    return records
+  }
+  private async submit(row: StoredInstance, nodeId: string, fact: NodeFact): Promise<InstanceDetail> {
+    const startedAt = new Date().toISOString()
+    try {
+      const result = executeWorkflowNode(row.definition as DagDefinition, row.input as JsonObject, row.state as unknown as SavedExecution | undefined, nodeId, fact.output as JsonObject | undefined)
+      if (!result) throw new WorkflowInstanceError('node-not-ready', 'Node is no longer ready', this.detail(row))
+      const { error: _error, ...accepted } = fact
+      const updated = await this.store.save({ ...row, executions: { ...row.executions, [nodeId]: accepted },
+        state: z.json().parse(result.state), snapshot: z.json().parse(result.snapshot), dagRecords: this.dagRecords(row, nodeId, startedAt) })
+      this.scheduleReady(row.id)
+      return this.detail(updated)
+    } catch (error) {
+      if (error instanceof WorkflowInstanceError) throw error
+      await this.store.save({ ...row, executions: { ...row.executions, [nodeId]: { ...fact, error: error instanceof Error ? error.message : String(error) } },
+        dagRecords: this.dagRecords(row, nodeId, startedAt, error) }).catch(saveError => { this.persistenceErrors.set(this.key(row.id, nodeId), String(saveError)); throw saveError })
+      if (error instanceof SubmissionError) throw new WorkflowInstanceError('submission-failed', error.message, this.detail(this.requireInstance(row.id)))
       throw error
     }
-    if (!result) throw new WorkflowInstanceError('node-not-ready', 'Node is no longer ready', this.detail(row))
-    const updated = await this.store.save({ ...row, state: z.json().parse(result.state), snapshot: z.json().parse(result.snapshot) })
-    this.scheduleReady(row.id)
-    return this.detail(updated)
   }
 }

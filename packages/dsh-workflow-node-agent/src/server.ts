@@ -10,7 +10,7 @@ import { assertObjectJsonSchema, type JsonSchemaNode, type ObjectJsonSchema } fr
 import type { SessionRequestId } from '@deepseek-ai/dsh-api-session-controller'
 import { WorkspaceId } from '@deepseek-ai/dsh-workspace'
 import type { Context } from '@deepseek-ai/cordis'
-import type { NodeContext, NodeData, NodeFact, NodePlan, NodeValue, ServerNode } from 'dsh-workflow-node/contract'
+import { NodePersistenceError, type NodeContext, NodeData, NodeFact, NodePlan, NodeValue, ServerNode } from 'dsh-workflow-node/contract'
 
 import type { AgentAttempt, AgentState } from './types.js'
 const state = (fact?: NodeFact): AgentState | undefined => fact?.business as AgentState | undefined
@@ -67,17 +67,17 @@ function startForeground(context: NodeContext): NodePlan {
 
 function attemptPlan(context: NodeContext, parentFor: () => Promise<Agent>): NodePlan {
   const isBackground = background(context)
-  const attempt: AgentAttempt = { id: randomUUID(), status: 'running' }
+  const prompt = isBackground ? renderTextTemplate(context.definition.prompt as string, context.input)
+    : '只整理并核验当前对话已完成任务的结果。可以读取相关产物，但不得补做任务或修改文件。材料缺失、读取失败或无法确定结果时明确报告失败，不猜测、不补造字段。通过 structured_output 提交已核验的结果。'
+  const attempt: AgentAttempt = { id: randomUUID(), status: 'running', prompt }
   const business: AgentState = { ...state(context.fact), mode: isBackground ? 'background' : 'foreground', attempts: [...state(context.fact)?.attempts ?? [], attempt] }
   delete business.pendingOutput
-  return { fact: { kind: 'agent', status: 'running', business }, run: async () => {
+  return { attempt: { namespace: name, key: isBackground ? 'executeNode' : 'extractResult' }, fact: { kind: 'agent', status: 'running', business }, run: async () => {
     let run: Awaited<ReturnType<typeof context.services.subagents.start>> | undefined
     try {
       const parent = await parentFor()
       if (isBackground) business.parentSessionId = parent.id
       const schema = Object.keys(context.definition.output_schema ?? {}).length ? outputSchema(context.definition.output_schema!) : undefined
-      const prompt = isBackground ? renderTextTemplate(context.definition.prompt as string, context.input)
-        : '只整理并核验当前对话已完成任务的结果。可以读取相关产物，但不得补做任务或修改文件。材料缺失、读取失败或无法确定结果时明确报告失败，不猜测、不补造字段。通过 structured_output 提交已核验的结果。'
       // Native fork synchronously snapshots the completed-turn prefix. Do not
       // await anything between this guard and start. Files are not snapshotted.
       if (!isBackground) { assertIdle(parent); assertForkContext(parent) }
@@ -94,6 +94,7 @@ function attemptPlan(context: NodeContext, parentFor: () => Promise<Agent>): Nod
       if (isBackground) return { kind: 'agent', status: 'waiting', business: { ...business, pendingOutput: output } } as NodeFact
       return { kind: 'agent', status: 'succeeded', business, output } as NodeFact
     } catch (error) {
+      if (error instanceof NodePersistenceError) throw error
       attempt.status = 'failed'; attempt.error = `Node ${context.definition.id}: ${isBackground ? 'prompt / execution' : 'execution'}: ${error instanceof Error ? error.message : String(error)}`
       return { kind: 'agent', status: 'failed', business, error: attempt.error } as NodeFact
     } finally { await run?.dispose() }
@@ -138,13 +139,14 @@ export function createAgentNode(host?: Context): ServerNode & { dispose(): Promi
       const live = business?.sessionId && host?.agents.get(SessionId(business.sessionId))
       const generating = live && (live.status !== 'idle' || live.inbox.nextTurn.length > 0 || live.inbox.nextStep.length > 0)
       const canComplete = isBackground ? business?.pendingOutput !== undefined || fact?.status === 'succeeded' : business?.sessionCreated
-      const records = business?.attempts?.some(attempt => Boolean(attempt.address?.parentSessionId && attempt.address.childSessionId))
+      const records = Boolean(business?.attempts?.length)
+      const latestAddress = business?.attempts?.at(-1)?.address
       const retry = isBackground && (fact?.status === 'failed' || fact?.status === 'unknown')
       return { actions: [
         ...(ready && !business?.sessionCreated && !records && !retry && business?.pendingOutput === undefined && fact?.status !== 'succeeded' ? [{ id: 'start', position: 1 as const, icon: 'execute' as const, label: { namespace: name, key: 'executeNode' }, target: { type: 'server' as const }, disabled: fact?.status === 'running' }] : []),
         ...(!isBackground && business?.sessionCreated ? [{ id: 'open', position: 1 as const, icon: 'conversation' as const, label: { namespace: name, key: 'openSession' }, target: { type: 'client' as const, handler: 'open-session' } }] : []),
-        ...(records ? [{ id: 'records', position: (isBackground ? 1 : 3) as 1 | 3, icon: 'record' as const, label: { namespace: name, key: 'openRecord' }, target: { type: 'client' as const, handler: 'records' } }] : []),
-        ...(ready ? [{ id: 'complete', position: 2 as const, icon: 'complete' as const, label: { namespace: name, key: 'completeSessionAgent' }, target: { type: 'server' as const }, disabled: !canComplete || fact?.status === 'running' || Boolean(generating) }] : []),
+        ...(records ? [{ id: 'records', position: (isBackground ? 1 : 3) as 1 | 3, icon: 'record' as const, label: { namespace: name, key: 'openRecord' }, target: { type: 'client' as const, handler: 'records' }, disabled: !latestAddress, ...(!latestAddress ? { disabledReason: { namespace: name, key: 'recordUnavailable' } } : {}) }] : []),
+        ...(ready ? [{ id: 'complete', position: 2 as const, icon: 'complete' as const, label: { namespace: name, key: fact?.status === 'succeeded' ? 'retryDelivery' : 'completeSessionAgent' }, target: { type: 'server' as const }, disabled: !canComplete || fact?.status === 'running' || fact?.status !== 'succeeded' && Boolean(generating) }] : []),
         ...(ready && retry ? [{ id: 'start', position: 3 as const, icon: 'retry' as const, label: { namespace: name, key: 'retryNavigation' }, target: { type: 'server' as const } }] : []),
       ] }
     },
@@ -179,7 +181,7 @@ export function createAgentNode(host?: Context): ServerNode & { dispose(): Promi
       if (!business.sessionCreated || !business.promptStarted) throw new Error('Conversation has not started')
       const live = context.services.agents.get(SessionId(business.sessionId!))
       if (live) assertIdle(live)
-      if (!Object.keys(context.definition.output_schema ?? {}).length) return { fact: { ...context.fact, status: 'succeeded', error: undefined, output: {} } }
+      if (!Object.keys(context.definition.output_schema ?? {}).length) return { attempt: { namespace: name, key: 'completeSessionAgent' }, fact: { ...context.fact, status: 'succeeded', error: undefined, output: {} } }
       return attemptPlan(context, async () => {
         const live = context.services.agents.get(SessionId(business.sessionId!))
         if (live) return live
@@ -195,6 +197,7 @@ export function createAgentNode(host?: Context): ServerNode & { dispose(): Promi
       return business.promptStarted ? { ...fact, status: 'waiting', error: undefined }
         : { ...fact, status: 'unknown', error: 'Previous agent start is incomplete; execute to resume.' }
     },
+    record(fact) { const attempt = state(fact)?.attempts?.at(-1); return attempt ? { ...(attempt.prompt === undefined ? {} : { prompt: attempt.prompt }), ...(attempt.address ? { address: attempt.address } : {}), ...(attempt.output ? { result: attempt.output } : {}) } : {} },
     project(fact) { return (fact.business ?? {}) as NodeData },
   }
 }

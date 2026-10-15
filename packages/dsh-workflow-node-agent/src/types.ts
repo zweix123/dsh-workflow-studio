@@ -2,6 +2,7 @@ import type { NodeData } from 'dsh-workflow-node/contract'
 
 export type AgentAttempt = {
   id: string
+  prompt?: string
   status: 'running' | 'succeeded' | 'failed' | 'unknown'
   address?: { kind: 'subagent'; parentSessionId: string; childSessionId: string; mode: 'one-shot' }
   output?: NodeData

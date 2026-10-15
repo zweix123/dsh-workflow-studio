@@ -1,6 +1,18 @@
 import type { zh } from './zh.js'
 
 export const en: Record<keyof typeof zh, string> = {
+  deliveryFailed: 'Business complete, delivery failed',
+  retryDelivery: 'Retry delivery',
+  dagSubmission: 'Result delivery',
+  runRecords: 'Run records',
+  noRunRecords: 'No run records yet',
+  recordrunning: 'Running',
+  recordwaiting: 'Awaiting confirmation',
+  recordsucceeded: 'Succeeded',
+  recordfailed: 'Failed',
+  recordunknown: 'Result unknown',
+  recordcancelled: 'Cancelled',
+  recordFinishedAt: 'Finished at',
   draftDiscarded: 'The node UI was unloaded or reloaded. Unsubmitted drafts were cleared.',
   nodeViewFailed: 'The node business view failed.',
   runningInformation: 'Running information',

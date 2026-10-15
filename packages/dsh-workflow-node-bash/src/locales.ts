@@ -1,5 +1,8 @@
 export const en = {
   command: 'Command',
+  rerunNode: 'Run again',
+  retryDelivery: 'Retry delivery',
+  logTruncated: 'Log truncated',
   commandOutput: 'Command log · stdout',
   commandError: 'Command log · stderr',
   executing: 'Executing…',
@@ -9,6 +12,9 @@ export const en = {
 
 export const zh = {
   command: '命令',
+  rerunNode: '重新执行',
+  retryDelivery: '重试交付',
+  logTruncated: '日志已截断',
   commandOutput: '命令日志 · stdout',
   commandError: '命令日志 · stderr',
   executing: '正在执行…',

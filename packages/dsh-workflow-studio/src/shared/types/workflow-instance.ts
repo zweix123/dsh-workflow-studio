@@ -35,6 +35,7 @@ export interface InstanceDetail extends InstanceSummary {
   drawerWidth?: number
   nodeViews?: Record<string, import('dsh-workflow-node/contract').NodePresentation & { source?: string; token?: string }>
   executions?: Record<string, NodeExecution>
+  dagRecords?: Record<string, import('dsh-workflow-node/contract').NodeRunRecord[]>
   incompatible?: string
 }
 
@@ -42,6 +43,7 @@ export interface NodeExecution {
   [key: string]: unknown
   kind: string
   status: 'running' | 'waiting' | 'succeeded' | 'failed' | 'unknown' | 'cancelled'
+  records?: import('dsh-workflow-node/contract').NodeRunRecord[]
   output?: JsonObject
   error?: string
 }
@@ -53,6 +55,7 @@ export interface CreateInstanceInput {
 }
 
 export type InstanceErrorCode =
+  | 'persistence-failed'
   | 'invalid-request'
   | 'invalid-name'
   | 'duplicate-name'

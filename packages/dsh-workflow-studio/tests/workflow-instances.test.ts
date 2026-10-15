@@ -584,6 +584,10 @@ test('independent automatic bash nodes run together, reject duplicate starts and
   const settled = await untilDetail(f.url(path), detail => detail.executions?.[leftId]?.status === 'succeeded' && detail.executions?.[rightId]?.status === 'failed' && detail.snapshot.instances.find((item: any) => item.instanceId === leftId).status === 'completed')
   assert.equal(settled.snapshot.instances.find((item: any) => item.instanceId === leftId).status, 'completed')
   assert.equal(settled.snapshot.instances.find((item: any) => item.instanceId === rightId).status, 'ready')
+  assert.equal(settled.executions[leftId].records.length, 1)
+  assert.equal(settled.executions[rightId].records.length, 1)
+  assert.equal(settled.executions[leftId].records[0].data.command, 'left')
+  assert.equal(settled.executions[rightId].records[0].data.stdout, 'right')
   assert.equal(settled.drawerWidth, 460)
   assert.equal(calls.length, 2)
   assert.equal((await postJson(f.url(`${path}/nodes/${rightId}/actions/start`), {})).status, 200)
@@ -1250,6 +1254,9 @@ test('bash validates complete stdout JSON before accepting a business result or 
     assert.match(failed.executions[node].error, result.error)
     assert.equal(failed.executions[node].stdout, stdout)
     assert.equal(failed.executions[node].stderr, 'diagnostic log')
+    assert.equal(failed.executions[node].records[0].data.stdoutTruncated, truncated)
+    assert.equal(failed.executions[node].records[0].data.command, 'original-command')
+    assert.equal(failed.executions[node].records[0].status, 'failed')
     assert.deepEqual(failed.snapshot, created.snapshot)
     assert.equal(failed.executions[node].output, undefined)
   }
@@ -1966,6 +1973,8 @@ test('recursive Bash calls share one saved template directory while agent keeps 
   const done = await untilDetail(f.url(path), d => d.snapshot.instances.filter((i: any) => i.definitionId === 'step' && i.status === 'completed').length === 3)
   assert.deepEqual(done.snapshot.instances.filter((i: any) => i.definitionId === 'step').map((i: any) => i.input.items), [['a', 'b'], ['b'], []])
   assert.equal(calls.length, 3); assert.ok(calls.every(c => c.dshEnv.DSH_TEMPLATE_DIR === directory))
+  assert.deepEqual(done.snapshot.instances.filter((i: any) => i.definitionId === 'step').map((i: any) => done.executions[i.instanceId].records[0].input.items), [['a', 'b'], ['b'], []])
+  assert.equal(new Set(done.snapshot.instances.filter((i: any) => i.definitionId === 'step').map((i: any) => done.executions[i.instanceId].records[0].id)).size, 3)
   assert.deepEqual(prompts, ['Original prompt'])
 })
 
@@ -1996,12 +2005,16 @@ test('台后保存有效结果后等待人工完成，真实存储重开不自�
   cleanups.push(reopened.close)
   const restored = await (await fetch(reopened.url(path))).json() as any
   assert.equal(restored.executions[task].status, 'waiting')
+  assert.equal(restored.executions[task].records[0].status, 'waiting')
+  assert.equal(restored.executions[task].records[0].data.prompt, 'Perform task')
   assert.equal(restored.snapshot.instances.find((item: any) => item.definitionId === 'after'), undefined)
   assert.deepEqual(restored.executions[task].pendingOutput, { result: 'real-result' })
   assert.equal((await postJson(reopened.url(`${path}/nodes/${task}/actions/complete`), {})).status, 200)
   const completed = await (await fetch(reopened.url(path))).json() as any
   assert.equal(completed.snapshot.instances.find((item: any) => item.definitionId === 'after').status, 'ready')
   assert.deepEqual(completed.executions[task].output, { result: 'real-result' })
+  assert.equal(completed.executions[task].records.length, 1)
+  assert.equal(completed.executions[task].records[0].status, 'succeeded')
   assert.equal(starts, 1)
 })
 
@@ -2068,6 +2081,7 @@ test('台后人工确认后的 DAG 写入失败保留获准结果，重开存储
   const approved = await (await fetch(f.url(path))).json() as any
   assert.equal(approved.executions[task].status, 'succeeded')
   assert.deepEqual(approved.executions[task].output, { result: 'accepted' })
+  assert.equal(approved.executions[task].records[0].status, 'succeeded')
   assert.equal(approved.executions[task].pendingOutput, undefined)
   assert.equal(approved.snapshot.instances.find((i: any) => i.instanceId === task).status, 'ready')
   await f.close()
@@ -2081,6 +2095,7 @@ test('台后人工确认后的 DAG 写入失败保留获准结果，重开存储
   assert.equal((await postJson(reopened.url(`${path}/nodes/${task}/actions/complete`), {})).status, 200)
   const completed = await (await fetch(reopened.url(path))).json() as any
   assert.equal(completed.snapshot.instances.find((i: any) => i.instanceId === task).status, 'completed')
+  assert.equal(completed.executions[task].records.length, 1)
   assert.equal(starts, 1)
 })
 
@@ -2116,4 +2131,233 @@ test('未保存 DAG 决策的恢复重提重新求值随机边，已保存 Bash 
   assert.equal(draws, 2)
   assert.equal(restored.snapshot.instances.find((item: any) => item.instanceId === id).status, 'completed')
   assert.deepEqual(restored.snapshot.instances.find((item: any) => item.definitionId === 'next').input, { text: 'accepted' })
+})
+
+test('运行记录：图保存失败与恢复交付保留 Bash 成功历史，重交不再次执行命令', async () => {
+  let calls = 0, rejectGraph = true
+  const f = await fixture({ shell: { sandboxMode: 'workspace-write', resolve: (request: unknown) => request,
+    execute: async () => { calls++; return { result: async () => ({ exitCode: 0, stdout: { text: '{"value":"accepted"}', truncated: false }, stderr: { text: '', truncated: false }, sandbox: { mode: 'workspace-write' } }) } },
+  } }, undefined, value => {
+    const row = value as any
+    if (rejectGraph && row.snapshot.instances.some((i: any) => i.type === 'node' && i.status === 'completed')) throw new Error('Temporary graph write failure')
+  })
+  await putTemplate(f.templateRoot, 'record-delivery', JSON.stringify({ id: 'root', type: 'dag', dag: [{ id: 'run', type: 'node', node_kind: 'bash', command: 'original command', output_schema: { value: 'string' } }] }))
+  const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Records', templateId: 'record-delivery' })).json() as any
+  const path = `${INSTANCES_PATH}/${created.id}`, id = created.snapshot.instances[1].instanceId, dag = created.snapshot.rootInstanceId
+  await postJson(f.url(`${path}/nodes/${id}/actions/start`), {})
+  const failed = await untilDetail(f.url(path), d => d.dagRecords?.[dag]?.length === 1)
+  assert.equal(failed.executions[id].records[0].status, 'succeeded')
+  assert.equal(failed.nodeViews[id].actions[0].label.key, 'retryDelivery')
+  assert.match(failed.dagRecords[dag][0].error, /Temporary graph write failure/)
+  assert.equal(failed.snapshot.instances[1].status, 'ready')
+  rejectGraph = false
+  assert.equal((await postJson(f.url(`${path}/nodes/${id}/actions/start`), {})).status, 200)
+  const done = await (await fetch(f.url(path))).json() as any
+  assert.equal(done.snapshot.instances[1].status, 'completed')
+  assert.equal(done.executions[id].records.length, 1)
+  assert.deepEqual(done.executions[id].records[0].output, { value: 'accepted' })
+  assert.deepEqual(done.dagRecords[dag].map((r: any) => r.status), ['failed', 'succeeded'])
+  assert.equal(calls, 1)
+})
+
+test('运行记录：Form 服务端拒绝正式提交仍可追溯，接受后仅重交且不可覆盖结果', async () => {
+  const f = await fixture()
+  await putTemplate(f.templateRoot, 'form-records', JSON.stringify({ id: 'root', type: 'dag', output_schema: { value: 'string' }, dag: [
+    { id: 'answer', type: 'node', node_kind: 'form', output_schema: { value: 'string' } },
+    { id: 'finish', type: 'node', node_kind: 'bash', command: '', output_schema: { value: 'string' } },
+    { type: 'edge', from: 'answer', to: 'finish', if: 'value == "never"' },
+  ] }))
+  const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Form records', templateId: 'form-records' })).json() as any
+  const path = `${INSTANCES_PATH}/${created.id}`, id = created.snapshot.instances[1].instanceId
+  assert.equal((await postJson(f.url(`${path}/nodes/${id}/actions/submit`), { value: 17 })).status, 422)
+  const rejected = await (await fetch(f.url(path))).json() as any
+  assert.equal(rejected.executions[id].records[0].data.submission.value, 17)
+  assert.match(rejected.executions[id].records[0].error, /form.value/)
+  assert.equal((await postJson(f.url(`${path}/nodes/${id}/actions/submit`), { value: 'accepted' })).status, 422)
+  assert.equal((await postJson(f.url(`${path}/nodes/${id}/actions/submit`), { value: 'changed' })).status, 409)
+  assert.equal((await postJson(f.url(`${path}/nodes/${id}/actions/retry`), {})).status, 422)
+  const accepted = await (await fetch(f.url(path))).json() as any
+  assert.deepEqual(accepted.executions[id].records.map((r: any) => r.status), ['failed', 'succeeded'])
+  assert.deepEqual(accepted.executions[id].output, { value: 'accepted' })
+  assert.equal(accepted.nodeViews[id].actions[0].label.key, 'formRetry')
+  assert.equal(accepted.dagRecords[created.snapshot.rootInstanceId].length, 2)
+})
+
+test('运行记录：最终结果和错误记录都保存失败时当前可见未知，重启不重跑，明确重试才增加副作用', async () => {
+  let calls = 0, broken = false
+  const services = { shell: { sandboxMode: 'workspace-write', resolve: (request: unknown) => request, execute: async () => {
+    calls++; broken = true
+    return { result: async () => ({ exitCode: 0, stdout: { text: '', truncated: false }, stderr: { text: '', truncated: false }, sandbox: { mode: 'workspace-write' } }) }
+  } } }
+  const f = await fixture(services, undefined, () => { if (broken) throw new Error('Result storage unavailable') })
+  await putTemplate(f.templateRoot, 'lost-result-record', 'id: root\ntype: dag\ndag:\n  - id: run\n    type: node\n    node_kind: bash\n    command: actual command\n')
+  const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Unknown records', templateId: 'lost-result-record' })).json() as any
+  const path = `${INSTANCES_PATH}/${created.id}`, id = created.snapshot.instances[1].instanceId
+  await postJson(f.url(`${path}/nodes/${id}/actions/start`), {})
+  const unknown = await untilDetail(f.url(path), d => d.executions?.[id]?.status === 'unknown').finally(() => { broken = false })
+  assert.match(unknown.executions[id].persistenceError, /Result storage unavailable/)
+  assert.equal(unknown.snapshot.instances[1].status, 'ready')
+  assert.equal(calls, 1)
+  broken = false
+  await f.close()
+  const reopened = await openHost(f.storageRoot, f.templateRoot, f.root, services)
+  cleanups.push(reopened.close)
+  const restored = await (await fetch(reopened.url(path))).json() as any
+  assert.equal(restored.executions[id].records[0].status, 'unknown')
+  assert.equal(restored.executions[id].records[0].data.command, 'actual command')
+  assert.equal(restored.executions[id].output, undefined)
+  assert.equal(calls, 1)
+  await postJson(reopened.url(`${path}/nodes/${id}/actions/start`), {})
+  const retried = await untilDetail(reopened.url(path), d => d.snapshot.instances[1].status === 'completed')
+  assert.deepEqual(retried.executions[id].records.map((r: any) => r.status), ['unknown', 'succeeded'])
+  assert.equal(calls, 2)
+})
+
+test('运行记录：开始保存失败不启动 Bash 或 Agent，也不伪造尝试历史', async () => {
+  let calls = 0, rejectStart = true
+  const f = await fixture({ shell: { sandboxMode: 'workspace-write', resolve: (r: unknown) => r, execute: async () => { calls++; throw new Error('Must never execute') } },
+    sessionController: {}, agents: { create: async () => { calls++; throw new Error('Must never create Agent') } },
+  }, undefined, value => { if (rejectStart && Object.values((value as any).executions ?? {}).some((fact: any) => fact.status === 'running')) throw new Error('Start storage unavailable') })
+  await putTemplate(f.templateRoot, 'start-records', JSON.stringify({ id: 'root', type: 'dag', dag: [
+    { id: 'bash', type: 'node', node_kind: 'bash', command: 'side effect' }, { id: 'agent', type: 'node', node_kind: 'agent', mode: 'background', prompt: 'Task' },
+  ] }))
+  const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'No side effects', templateId: 'start-records' })).json() as any
+  const path = `${INSTANCES_PATH}/${created.id}`
+  for (const item of created.snapshot.instances.filter((i: any) => i.type === 'node')) {
+    const result = await postJson(f.url(`${path}/nodes/${item.instanceId}/actions/start`), {})
+    assert.equal(result.status, 500)
+    assert.match((await result.json() as any).error.message, /start record could not be saved/)
+  }
+  assert.equal(calls, 0)
+  assert.equal((await (await fetch(f.url(path))).json() as any).executions, undefined)
+  rejectStart = false
+})
+
+test('运行记录：祖先 DAG 的未创建下游输入错误归祖先，业务成功不覆盖，确定性重交仍失败', async () => {
+  const f = await fixture()
+  await putTemplate(f.templateRoot, 'ancestor-records', JSON.stringify({ id: 'root', type: 'dag', dag: [
+    { id: 'nested', type: 'dag', dag: [{ id: 'leaf', type: 'node', node_kind: 'form', output_schema: { value: 'string' } }] },
+    { id: 'other', type: 'node', node_kind: 'form', output_schema: { value: 'string' } },
+    { id: 'downstream', type: 'node', node_kind: 'bash', command: '' },
+    { type: 'edge', from: 'nested', to: 'downstream' }, { type: 'edge', from: 'other', to: 'downstream' },
+  ] }))
+  const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Ancestor', templateId: 'ancestor-records' })).json() as any
+  const path = `${INSTANCES_PATH}/${created.id}`, find = (name: string) => created.snapshot.instances.find((i: any) => i.definitionId === name).instanceId
+  assert.equal((await postJson(f.url(`${path}/nodes/${find('other')}/actions/submit`), { value: 'second' })).status, 200)
+  assert.equal((await postJson(f.url(`${path}/nodes/${find('leaf')}/actions/submit`), { value: 'first' })).status, 422)
+  const rejected = await (await fetch(f.url(path))).json() as any
+  assert.equal(rejected.dagRecords[find('nested')], undefined)
+  const diagnostic = rejected.dagRecords[created.snapshot.rootInstanceId][0]
+  assert.equal(diagnostic.data.code, 'INPUT_KEY_CONFLICT')
+  assert.equal(diagnostic.data.location.definitionId, 'downstream')
+  assert.equal(diagnostic.data.location.instanceId, undefined)
+  assert.equal(rejected.executions[find('leaf')].records[0].status, 'succeeded')
+  assert.equal((await postJson(f.url(`${path}/nodes/${find('leaf')}/actions/retry`), {})).status, 422)
+  const retried = await (await fetch(f.url(path))).json() as any
+  assert.equal(retried.executions[find('leaf')].records.length, 1)
+  assert.equal(retried.dagRecords[created.snapshot.rootInstanceId].length, 2)
+})
+
+test('运行记录：同 DAG 的不同分支先后交付失败，各自重试仍保留恢复结果', async () => {
+  let broken = true
+  const f = await fixture({}, undefined, value => {
+    if (broken && (value as any).snapshot.instances.some((i: any) => i.type === 'node' && i.status === 'completed')) throw new Error('Graph temporarily unavailable')
+  })
+  await putTemplate(f.templateRoot, 'parallel-delivery-records', JSON.stringify({ id: 'root', type: 'dag', dag: ['a', 'b'].map(id => ({ id, type: 'node', node_kind: 'form' })) }))
+  const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Parallel delivery', templateId: 'parallel-delivery-records' })).json() as any
+  const path = `${INSTANCES_PATH}/${created.id}`, ids = created.snapshot.instances.filter((i: any) => i.type === 'node').map((i: any) => i.instanceId), dag = created.snapshot.rootInstanceId
+  for (const id of ids) assert.equal((await postJson(f.url(`${path}/nodes/${id}/actions/submit`), {})).status, 500)
+  broken = false
+  for (const id of ids) assert.equal((await postJson(f.url(`${path}/nodes/${id}/actions/retry`), {})).status, 200)
+  const done = await (await fetch(f.url(path))).json() as any
+  assert.deepEqual(done.dagRecords[dag].map((r: any) => r.status), ['failed', 'failed', 'succeeded', 'succeeded'])
+  for (const id of ids) assert.equal(done.executions[id].records.length, 1)
+})
+
+test('运行记录：台前接受提取结果后交付恢复不再 fork，主对话生成不阻止仅重交', async () => {
+  let forks = 0, broken = true, generating = false
+  const services = { sessionController: { create: async () => {}, prompt: async () => ({ accepted: true }) },
+    agents: { get: () => ({ id: 'main', status: generating ? 'running' : 'idle', inbox: { nextTurn: [], nextStep: [] } }) },
+    subagents: { start: async (mode: string) => { assert.equal(mode, 'fork'); forks++; return { id: 'handoff-child', result: Promise.resolve({ stopReason: 'completed', structured: { result: 'verified' } }), dispose: async () => {} } } },
+  }
+  const f = await fixture(services, undefined, value => { if (broken && (value as any).snapshot.instances.some((i: any) => i.type === 'node' && i.status === 'completed')) throw new Error('Handoff graph write failed') })
+  await putTemplate(f.templateRoot, 'foreground-delivery-records', JSON.stringify({ id: 'root', type: 'dag', dag: [{ id: 'task', type: 'node', node_kind: 'agent', prompt: 'Original task', output_schema: { result: 'string' } }] }))
+  const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Foreground delivery', templateId: 'foreground-delivery-records' })).json() as any
+  const path = `${INSTANCES_PATH}/${created.id}`, id = created.snapshot.instances[1].instanceId, dag = created.snapshot.rootInstanceId
+  await postJson(f.url(`${path}/nodes/${id}/actions/start`), {})
+  await untilDetail(f.url(path), d => d.executions?.[id]?.status === 'waiting')
+  await postJson(f.url(`${path}/nodes/${id}/actions/complete`), {})
+  const failed = await untilDetail(f.url(path), d => d.dagRecords?.[dag]?.length === 1)
+  assert.equal(failed.executions[id].records[0].status, 'succeeded')
+  assert.deepEqual(failed.executions[id].output, { result: 'verified' })
+  generating = true
+  const current = await (await fetch(f.url(path))).json() as any
+  assert.equal(current.nodeViews[id].actions.find((a: any) => a.id === 'complete').disabled, false)
+  broken = false
+  assert.equal((await postJson(f.url(`${path}/nodes/${id}/actions/complete`), {})).status, 200)
+  const done = await (await fetch(f.url(path))).json() as any
+  assert.equal(done.snapshot.instances[1].status, 'completed')
+  assert.equal(done.executions[id].records.length, 1)
+  assert.equal(done.executions[id].records[0].data.address.childSessionId, 'handoff-child')
+  assert.deepEqual(done.executions[id].output, { result: 'verified' })
+  assert.equal(forks, 1)
+})
+
+test('运行记录：Agent 最新尝试没有地址时不回退旧记录，重复在途操作不增加尝试', async () => {
+  let calls = 0, rejectStart!: (error: Error) => void
+  const f = await fixture({ sessionController: {},
+    agents: { create: async () => ({ agent: { id: 'parent', status: 'idle', inbox: { nextTurn: [], nextStep: [] } }, dispose: async () => {} }) },
+    subagents: { start: async () => {
+      calls++
+      if (calls === 2) return new Promise((_resolve, reject) => { rejectStart = reject })
+      return { id: 'old-child', result: Promise.resolve({ stopReason: 'error', diagnostic: 'First task failed' }), dispose: async () => {} }
+    } },
+  })
+  await putTemplate(f.templateRoot, 'latest-address-records', JSON.stringify({ id: 'root', type: 'dag', dag: [{ id: 'task', type: 'node', node_kind: 'agent', mode: 'background', prompt: 'Saved prompt' }] }))
+  const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Latest address', templateId: 'latest-address-records' })).json() as any
+  const path = `${INSTANCES_PATH}/${created.id}`, id = created.snapshot.instances[1].instanceId
+  await postJson(f.url(`${path}/nodes/${id}/actions/start`), {})
+  await untilDetail(f.url(path), d => d.executions?.[id]?.status === 'failed')
+  await postJson(f.url(`${path}/nodes/${id}/actions/start`), {})
+  const pending = await untilDetail(f.url(path), d => d.executions?.[id]?.status === 'running')
+  const recordAction = pending.nodeViews[id].actions.find((a: any) => a.id === 'records')
+  assert.equal(recordAction.disabled, true)
+  assert.equal(recordAction.disabledReason.key, 'recordUnavailable')
+  assert.equal(pending.executions[id].records[0].data.address.childSessionId, 'old-child')
+  assert.equal(pending.executions[id].records[1].data.address, undefined)
+  assert.equal((await postJson(f.url(`${path}/nodes/${id}/actions/start`), {})).status, 409)
+  rejectStart(new Error('Native execution could not be created'))
+  const failed = await untilDetail(f.url(path), d => d.executions?.[id]?.status === 'failed')
+  assert.equal(failed.executions[id].records.length, 2)
+  assert.match(failed.executions[id].records[1].error, /could not be created/)
+  assert.equal(failed.nodeViews[id].actions.find((a: any) => a.id === 'records').disabled, true)
+  assert.equal(calls, 2)
+})
+
+test('运行记录：Agent 进度保存失败停止收集结果，当前及重启均未知且不重跑', async () => {
+  let calls = 0, resultReads = 0, rejectProgress = true
+  const services = { sessionController: {},
+    agents: { create: async () => ({ agent: { id: 'parent', status: 'idle', inbox: { nextTurn: [], nextStep: [] } }, dispose: async () => {} }) },
+    subagents: { start: async () => { calls++; return { id: 'unsaved-child', get result() { resultReads++; return Promise.resolve({ stopReason: 'completed', structured: { result: 'unaccepted' } }) }, dispose: async () => {} } } },
+  }
+  const f = await fixture(services, undefined, value => {
+    if (rejectProgress && Object.values((value as any).executions ?? {}).some((fact: any) => fact.business?.attempts?.at(-1)?.address)) throw new Error('Progress storage unavailable')
+  })
+  await putTemplate(f.templateRoot, 'progress-records', JSON.stringify({ id: 'root', type: 'dag', dag: [{ id: 'task', type: 'node', node_kind: 'agent', mode: 'background', prompt: 'Real prompt', output_schema: { result: 'string' } }] }))
+  const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Progress fault', templateId: 'progress-records' })).json() as any
+  const path = `${INSTANCES_PATH}/${created.id}`, id = created.snapshot.instances[1].instanceId
+  await postJson(f.url(`${path}/nodes/${id}/actions/start`), {})
+  const unknown = await untilDetail(f.url(path), d => d.executions?.[id]?.status === 'unknown')
+  assert.match(unknown.executions[id].persistenceError, /Progress storage unavailable/)
+  assert.equal(unknown.executions[id].output, undefined)
+  assert.equal(resultReads, 0)
+  rejectProgress = false
+  await f.close()
+  const restarted = await openHost(f.storageRoot, f.templateRoot, f.root, services)
+  cleanups.push(restarted.close)
+  const restored = await (await fetch(restarted.url(path))).json() as any
+  assert.equal(restored.executions[id].records[0].status, 'unknown')
+  assert.equal(restored.executions[id].records[0].data.prompt, 'Real prompt')
+  assert.equal(restored.executions[id].output, undefined)
+  assert.equal(calls, 1)
 })

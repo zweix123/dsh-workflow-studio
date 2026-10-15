@@ -7,7 +7,7 @@ export const en = {
   formSubmitted: 'Submitted. The result is read-only.',
   formChoose: 'Choose',
   formPrefillInvalid: 'Upstream prefill has the wrong type',
-  formRetry: 'Retry result delivery',
+  formRetry: 'Retry delivery',
 }
 
 export const zh = {
@@ -19,7 +19,7 @@ export const zh = {
   formSubmitted: '已提交，结果只读。',
   formChoose: '请选择',
   formPrefillInvalid: '上游预填类型不匹配',
-  formRetry: '重试提交结果',
+  formRetry: '重试交付',
 }
 
 declare module '@deepseek-ai/dsh-client-ui-slots' { interface LocaleNamespaceMap { '@dsh-workflow/node-form': keyof typeof en } }

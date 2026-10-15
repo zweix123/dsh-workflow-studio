@@ -1,7 +1,7 @@
 import type {} from './browser.js'
 export type { BrowserNodeRegistry, NodeNavigation, NodeNavigationTarget } from './browser.js'
 import type { ComponentType } from 'react'
-import type { NodeData, NodeDefinition } from './index.js'
+import type { NodeData, NodeDefinition, NodeRunRecord } from './index.js'
 
 /** Read-only node details deliberately have no action or draft callbacks. */
 export interface NodeDetailsProps {
@@ -29,6 +29,7 @@ export interface ClientNode {
   kind: string
   Summary?: ComponentType<NodeDetailsProps>
   Panel?: ComponentType<NodeDetailsProps>
+  Record?: ComponentType<{ record: NodeRunRecord; t: (key: string) => string }>
   /** Mounted per node for the page lifetime; owns dialogs and temporary drafts. */
   interactions?: Record<string, ComponentType<NodeViewProps>>
   handlers?: Record<string, (props: NodeViewProps) => void | Promise<void>>

@@ -1,6 +1,7 @@
 import type { InstanceDetail, InstanceErrorCode } from '../../shared/types/workflow-instance.js'
 
 const errorStatuses: Record<InstanceErrorCode, number> = {
+  'persistence-failed': 500,
   'invalid-request': 400,
   'invalid-name': 400,
   'duplicate-name': 409,

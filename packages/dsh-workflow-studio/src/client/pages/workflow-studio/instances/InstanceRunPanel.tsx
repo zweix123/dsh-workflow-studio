@@ -7,6 +7,7 @@ import { buildPositionNodeId } from './build-canvas-graph.js'
 import { DefinitionDetails, DetailFields, definitionAt } from '../DefinitionDetails.js'
 import { inspectLayout } from '../../../../shared/layout.js'
 import { LayoutNotices } from '../LayoutNotices.js'
+import { RunRecords } from './RunRecords.js'
 import { DagCanvas } from './DagCanvas.js'
 import { useInspectorResize } from '../useInspectorResize.js'
 import { canvasStatusLabel } from '../canvas/CanvasElements.js'
@@ -160,13 +161,14 @@ export function InstanceRunPanel({ nodes = emptyNodeViews, detail, t, onUpdate, 
               ...(item ? [[t('nodeInput'), item.input] as [string, unknown]] : []),
               ...(output !== undefined ? [[t('nodeOutput'), output] as [string, unknown]] : []),
             ]} />
-            {execution?.error ? <p role="alert">{execution.error}</p> : null}
+            {typeof execution?.persistenceError === 'string' && <p role="alert">{execution.persistenceError}</p>}
+            {execution?.error && execution.status !== 'succeeded' ? <p role="alert">{execution.error}</p> : null}
             {item?.type === 'node' && definition?.type === 'node' && (() => {
               const view = detail.nodeViews?.[item.instanceId]
               const entry = nodes.get(String(definition.node_kind), view?.source)
               const Panel = entry?.node.Panel
               const props = propsFor(item.instanceId)!
-              const fallback = view?.data ?? Object.fromEntries(Object.entries(execution ?? {}).filter(([key]) => !['kind', 'status', 'error', 'output'].includes(key)))
+              const fallback = view?.data ?? Object.fromEntries(Object.entries(execution ?? {}).filter(([key]) => !['kind', 'status', 'error', 'output', 'records'].includes(key)))
               if (!Panel && !Object.keys(fallback).length) return null
               return <section className="dsh-workflow-plugin-details" aria-label={`${t('nodePluginDetails')} · ${definition.node_kind}`}>
                 <h4>{t('nodePluginDetails')} · {String(definition.node_kind)}</h4>
@@ -177,6 +179,9 @@ export function InstanceRunPanel({ nodes = emptyNodeViews, detail, t, onUpdate, 
               </section>
             })()}
           </section>
+            {item && <RunRecords records={(item.type === 'dag' ? detail.dagRecords?.[item.instanceId] : execution?.records) ?? []} text={value => nodes.text(value)} t={t}
+              Record={definition?.type === 'node' ? nodes.get(String(definition.node_kind), detail.nodeViews?.[item.instanceId]?.source)?.node.Record : undefined}
+              nodeTranslate={definition?.type === 'node' ? nodes.get(String(definition.node_kind), detail.nodeViews?.[item.instanceId]?.source)?.t : undefined} />}
         </div>
       </aside>}
     </div>

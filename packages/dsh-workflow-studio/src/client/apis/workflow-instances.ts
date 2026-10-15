@@ -23,6 +23,16 @@ function summary(value: unknown): value is InstanceSummary {
     && !Number.isNaN(Date.parse(value.createdAt as string))
 }
 
+function runRecords(value: unknown): boolean {
+  return Array.isArray(value) && value.every(record => object(record)
+    && typeof record.id === 'string' && typeof record.startedAt === 'string' && !Number.isNaN(Date.parse(record.startedAt))
+    && (record.finishedAt === undefined || typeof record.finishedAt === 'string' && !Number.isNaN(Date.parse(record.finishedAt)))
+    && ['running', 'waiting', 'succeeded', 'failed', 'unknown', 'cancelled'].includes(String(record.status))
+    && object(record.operation) && (typeof record.operation.text === 'string' || typeof record.operation.namespace === 'string' && typeof record.operation.key === 'string')
+    && object(record.input) && (record.output === undefined || object(record.output))
+    && (record.data === undefined || object(record.data)) && (record.error === undefined || typeof record.error === 'string'))
+}
+
 function detail(value: unknown): value is InstanceDetail {
   if (!summary(value)) return false
   const row = value as InstanceSummary & Record<string, unknown>
@@ -33,7 +43,9 @@ function detail(value: unknown): value is InstanceDetail {
   const snapshot = row.snapshot
   if (row.incompatible !== undefined && typeof row.incompatible !== 'string') return false
   if (row.executions !== undefined && (!object(row.executions) || Object.values(row.executions).some(item => !object(item)
+    || item.records !== undefined && !runRecords(item.records)
     || typeof item.kind !== 'string' || !['running', 'waiting', 'succeeded', 'failed', 'unknown', 'cancelled'].includes(String(item.status))))) return false
+  if (row.dagRecords !== undefined && (!object(row.dagRecords) || !Object.values(row.dagRecords).every(runRecords))) return false
   return typeof snapshot.rootInstanceId === 'string'
     && ['instances', 'waitingPositions', 'skippedPositions', 'edges'].every(key => Array.isArray(snapshot[key]))
 }

@@ -7,7 +7,7 @@ import type { CanvasNode, CanvasEdge, CanvasStatus } from './types.js'
 export const statusKeys = { ready: 'statusReady', completed: 'statusCompleted', running: 'statusRunning', waiting: 'statusWaiting', skipped: 'statusSkipped' } as const
 
 export function canvasStatusLabel(status: CanvasStatus, executionStatus: string | undefined, t: WorkflowTranslate): string {
-  return executionStatus === 'failed' ? t('executionError') : executionStatus === 'unknown' ? t('statusUnknown')
+  return executionStatus === 'succeeded' && status !== 'completed' ? t('deliveryFailed') : executionStatus === 'failed' ? t('executionError') : executionStatus === 'unknown' ? t('statusUnknown')
     : t(statusKeys[executionStatus === 'running' ? 'running' : status])
 }
 

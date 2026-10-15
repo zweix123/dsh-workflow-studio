@@ -47,3 +47,7 @@
       name: dsh-workflow-template
       config:
         directory: "@dsh-workflow/core-regression-fixture/templates/identifier-keys"
+    - id: regression-run-records
+      name: dsh-workflow-template
+      config:
+        directory: "@dsh-workflow/core-regression-fixture/templates/run-records"

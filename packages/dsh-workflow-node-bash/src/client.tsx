@@ -6,6 +6,13 @@ import type { ClientNode } from 'dsh-workflow-node/ui'
 
 export const bashClient: ClientNode = {
   kind: 'bash',
+  Record: ({ record, t }) => <>
+    <strong>{t('command')}</strong><pre>{String(record.data?.command ?? '')}</pre>
+    <strong>{t('commandOutput')}</strong><pre>{String(record.data?.stdout ?? '')}</pre>
+    <strong>{t('commandError')}</strong><pre>{String(record.data?.stderr ?? '')}</pre>
+    {(record.data?.stdoutTruncated || record.data?.stderrTruncated) && <p role="status">{t('logTruncated')}</p>}
+    <pre>{JSON.stringify(Object.fromEntries(Object.entries(record.data ?? {}).filter(([key]) => !['command', 'stdout', 'stderr'].includes(key))), null, 2)}</pre>
+  </>,
   Panel: ({ execution, t }) => <>
     {execution?.status === 'unknown' && <p>{t('resultUnknown')}</p>}
     {execution?.stdout && <><strong>{t('commandOutput')}</strong><pre>{String(execution.stdout)}</pre></>}

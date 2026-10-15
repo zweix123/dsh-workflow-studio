@@ -13,6 +13,20 @@ export interface NodeFact {
   business?: NodeValue
   output?: NodeData
   error?: string
+  records?: NodeRunRecord[]
+}
+
+/** Common envelope; the node owns the serializable, public data inside it. */
+export interface NodeRunRecord {
+  id: string
+  operation: NodeText
+  status: NodeStatus
+  startedAt: string
+  finishedAt?: string
+  input: NodeData
+  output?: NodeData
+  error?: string
+  data?: NodeData
 }
 
 export interface NodeContext {
@@ -30,6 +44,9 @@ export interface NodeContext {
 export interface NodePlan {
   fact: NodeFact
   run?: () => Promise<NodeFact>
+  attempt?: NodeText
+  /** A processed formal submission was rejected; persist its record before reporting it. */
+  rejection?: string
 }
 
 export type NodeText = { text: string } | { key: string; namespace: string }
@@ -41,6 +58,7 @@ export interface NodeAction {
   position: 1 | 2 | 3
   icon: NodeIcon
   disabled?: boolean
+  disabledReason?: NodeText
 }
 export interface NodePresentation { actions: NodeAction[]; data?: NodeData }
 export interface NodeDisplayContext { definition: NodeDefinition; input: NodeData; fact?: NodeFact; ready: boolean }
@@ -58,10 +76,13 @@ export interface ServerNode {
   action: (context: NodeContext, name: string, payload: unknown) => NodePlan
   recover: (fact: NodeFact) => NodeFact
   project: (fact: NodeFact) => NodeData
+  record?: (fact: NodeFact) => NodeData
   blocksDeletion?: (fact: NodeFact, active: boolean) => boolean
 }
 
 export class NodeInputError extends Error {}
+/** Progress could not be saved; callers must stop before further business work. */
+export class NodePersistenceError extends Error {}
 
 export interface NodeLookup {
   get(kind: string): ServerNode | undefined

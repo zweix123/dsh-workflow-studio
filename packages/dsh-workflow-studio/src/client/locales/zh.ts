@@ -1,4 +1,16 @@
 export const zh = {
+  deliveryFailed: '业务完成，交付失败',
+  retryDelivery: '重试交付',
+  dagSubmission: '结果交付',
+  runRecords: '运行记录',
+  noRunRecords: '暂无运行记录',
+  recordrunning: '进行中',
+  recordwaiting: '待确认',
+  recordsucceeded: '成功',
+  recordfailed: '失败',
+  recordunknown: '结果未知',
+  recordcancelled: '已中止',
+  recordFinishedAt: '结束时间',
   draftDiscarded: '节点界面已卸载或重载，未提交草稿已清除。',
   nodeViewFailed: '节点业务界面发生错误。',
 

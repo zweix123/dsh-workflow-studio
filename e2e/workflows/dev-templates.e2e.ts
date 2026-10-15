@@ -137,14 +137,14 @@ test('开发 Bash 重试专题两次失败不推进，第三次成功交付并�
   await createInstance(screen, dsh.workspaceName, 'dev-bash-retry.zh', 'dev-bash-retry-run')
   for (const expected of ['Command exited with code 7', 'INVALID_FIELD_TYPE']) {
     await inspectNode(screen, '失败后重试')
-    await screen.getByRole('button', '执行 失败后重试', { exact: true }).tap()
+    await screen.getByRole('button', `${expected === 'Command exited with code 7' ? '执行' : '重新执行'} 失败后重试`, { exact: true }).tap()
     await expect(detailField(browser, '失败后重试', '状态')).toHaveText('执行异常')
     await expect(screen.getByRole('complementary', '详情 失败后重试', { exact: true })).toContainText(expected)
     await inspectNode(screen, '核对重试结果')
     await expect(detailField(browser, '核对重试结果', '状态')).toHaveText('等待')
   }
   await inspectNode(screen, '失败后重试')
-  await screen.getByRole('button', '执行 失败后重试', { exact: true }).tap()
+  await screen.getByRole('button', '重新执行 失败后重试', { exact: true }).tap()
   await expect(detailField(browser, '失败后重试', '状态')).toHaveText('已完成')
   await expect.poll(() => readFile(join(dsh.workspace, '.dsh-dev-bash-retry.json'), 'utf8')).toBe('3')
   await screen.getByRole('button', '填写 核对重试结果', { exact: true }).tap()

@@ -179,6 +179,7 @@ function FormInteraction(props: NodeViewProps) {
 
 export const formClient: ClientNode = {
   kind: 'form',
+  Record: ({ record, t }) => <><strong>{t('formSubmit')}</strong><pre>{JSON.stringify(record.data?.submission, null, 2)}</pre></>,
   interactions: { fill: FormInteraction },
 }
 
