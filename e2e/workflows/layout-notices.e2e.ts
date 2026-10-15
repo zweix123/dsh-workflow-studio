@@ -65,6 +65,14 @@ test('无效排布在四个页面保留非阻断 WARN，详情可用键盘展开
   await expect(browser.locator(`${item} [data-level="warn"]`)).toContainText('仍可打开模板')
   await expect(browser.locator(`${item} [data-level="info"]`)).toHaveCount(0)
   await screen.getByRole('button', '打开模板 Layout warning only', { exact: true }).tap()
+  // Opening a detail tab restores focus asynchronously; settle that navigation
+  // before testing keyboard activation inside its panel.
+  await expect.poll(() => browser.evaluate(() => {
+    const active = document.activeElement
+    return active?.getAttribute('role') === 'tab' && active.getAttribute('aria-selected') === 'true'
+      && active.textContent === 'Layout warning only'
+  })).toBe(true)
+  await expect(screen.getByRole('button', '根 DAG 详情', { exact: true })).toBeEnabled()
   const warning = browser.locator('.dsh-workflow-studio-panel:not([hidden]) [data-level="warn"]')
   await expect(warning).toContainText('WARN (1)')
   await expect(warning).toContainText('仍可打开模板')

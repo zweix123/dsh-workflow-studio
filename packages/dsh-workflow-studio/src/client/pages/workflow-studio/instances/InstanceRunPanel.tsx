@@ -1,5 +1,6 @@
 import type { CanvasReadingState } from '../../../studio-client.js'
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { Button, IconCloseOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InstanceDetail, InstanceNavigationTarget } from '../../../../shared/types/workflow-instance.js'
 import { getInstance, nodeAction, setDrawerWidth, WorkflowInstanceApiError } from '../../../apis/workflow-instances.js'
 import type { WorkflowKey, WorkflowTranslate } from '../../../locales/index.js'
@@ -133,7 +134,7 @@ export function InstanceRunPanel({ nodes = emptyNodeViews, detail, t, onUpdate, 
   const inspectionStatus = canvasStatusLabel(inspection?.status ?? 'waiting', execution?.status, t)
   const layoutReport = useMemo(() => inspectLayout(detail.definition), [detail.definition])
   return <section className="dsh-workflow-detail" aria-label={detail.name}>
-    <header className="dsh-workflow-detail-header"><div><h2>{detail.name}</h2><p>{detail.definition.name ?? detail.definition.id}</p></div><button type="button" className="dsh-workflow-button" onClick={() => setSelected(detail.snapshot.rootInstanceId)}>{t('rootDagDetails')}</button></header>
+    <header className="dsh-workflow-detail-header"><div><h2>{detail.name}</h2><p>{detail.definition.name ?? detail.definition.id}</p></div><Button variant="outline" size="sm" className="dsh-workflow-button" onClick={() => setSelected(detail.snapshot.rootInstanceId)}>{t('rootDagDetails')}</Button></header>
     {error && <p className="dsh-workflow-run-error" role="alert">{t(error.key)} {error.message}</p>}
     {draftDiscarded && <p role="alert">{t('draftDiscarded')}</p>}
     {detail.incompatible && <p className="dsh-workflow-run-error" role="alert">{t('instanceIncompatible')} {detail.incompatible}</p>}
@@ -147,7 +148,7 @@ export function InstanceRunPanel({ nodes = emptyNodeViews, detail, t, onUpdate, 
       <DagCanvas nodes={nodes} reading={reading} detail={detail} t={t} onAction={(id, name) => void invoke(id, name)} onInspect={setSelected} pending={pending} active={active} inspectorWidth={inspection ? width : 0} />
       {inspection && <aside className="dsh-workflow-inspector" aria-label={`${t('nodeDetails')} ${definition?.name ?? inspection.definitionId}`} style={{ width: `${width}px` }}>
         <div className="dsh-workflow-inspector-resize" aria-label={t('resizeNodeDetails')} {...resizeHandle} />
-        <header><div><h3>{definition?.name ?? inspection.definitionId}</h3><p>{inspectionStatus}</p></div><button type="button" aria-label={t('closeNodeDetails')} onClick={() => setSelected(null)}>×</button></header>
+        <header><div><h3>{definition?.name ?? inspection.definitionId}</h3><p>{inspectionStatus}</p></div><Button size="sm" className="dsh-workflow-inspector-close" aria-label={t('closeNodeDetails')} onClick={() => setSelected(null)}><IconCloseOutlineRegular size={14} /></Button></header>
         <div className="dsh-workflow-inspector-body">
           <section aria-label={t('definitionDetails')}>
             {definition ? <DefinitionDetails definition={definition} /> : <p role="status">{t('definitionMissing')}</p>}

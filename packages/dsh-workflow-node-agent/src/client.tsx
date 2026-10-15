@@ -5,6 +5,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import React from 'react'
+import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { Context } from '@deepseek-ai/cordis'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { en, zh } from './locales.js'
@@ -30,7 +31,7 @@ function AgentRecord({ record, t, openRecord }: { record: import('dsh-workflow-n
   return <>
     <strong>{t('actualPrompt')}</strong><pre>{String(record.data?.prompt ?? '')}</pre>
     {record.data?.result !== undefined && record.output === undefined && <pre>{JSON.stringify(record.data.result, null, 2)}</pre>}
-    {address && openRecord ? <button type="button" className="dsh-workflow-button" onClick={navigate}>{t('key' in record.operation && record.operation.key === 'extractResult' ? 'openHandoffRecord' : 'openRecord')}</button> : <p>{t('recordUnavailable')}</p>}
+    {address && openRecord ? <Button size="sm" variant="outline" onClick={navigate}>{t('key' in record.operation && record.operation.key === 'extractResult' ? 'openHandoffRecord' : 'openRecord')}</Button> : <p>{t('recordUnavailable')}</p>}
     {error && <p role="alert">{error}</p>}
   </>
 }

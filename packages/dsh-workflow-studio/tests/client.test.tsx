@@ -365,14 +365,14 @@ test('instance cards and creation dialog preserve drafts, then open details only
     assert.match(more.getAttribute('aria-label')!, /已有实例/)
     await act(async () => more.click())
     assert.equal(container.querySelectorAll('[role="tab"]').length, 3)
-    assert.equal(oldItem.querySelectorAll('[role="menuitem"]').length, 1)
-    await act(async () => oldItem.querySelector<HTMLButtonElement>('[role="menuitem"]')!.click())
+    assert.equal(dom.window.document.querySelectorAll('.dsh-workflow-instance-menu [role="menuitem"]').length, 1)
+    await act(async () => dom.window.document.querySelector<HTMLButtonElement>('.dsh-workflow-instance-menu [role="menuitem"]')!.click())
     assert.equal(dom.window.document.querySelector('[role="alertdialog"]')?.textContent?.includes('已有实例'), true)
     await act(async () => dom.window.document.querySelector<HTMLButtonElement>('.dsh-workflow-delete-actions button')!.click())
     assert.ok(oldRow.isConnected)
     assert.equal(deleteAttempts, 0)
     await act(async () => more.click())
-    await act(async () => oldItem.querySelector<HTMLButtonElement>('[role="menuitem"]')!.click())
+    await act(async () => dom.window.document.querySelector<HTMLButtonElement>('.dsh-workflow-instance-menu [role="menuitem"]')!.click())
     await act(async () => dom.window.document.querySelector<HTMLButtonElement>('.dsh-workflow-delete-confirm')!.click())
     assert.equal(dom.window.document.querySelector('.dsh-workflow-delete-dialog [role="alert"]')?.textContent, '操作失败，请重试。 try again')
     assert.ok(oldRow.isConnected)
@@ -384,7 +384,7 @@ test('instance cards and creation dialog preserve drafts, then open details only
     const orphanItem = [...container.querySelectorAll<HTMLElement>('.dsh-workflow-instance-item')]
       .find(item => item.textContent?.includes('保留实例'))!
     await act(async () => orphanItem.querySelector<HTMLButtonElement>('.dsh-workflow-instance-more')!.click())
-    await act(async () => orphanItem.querySelector<HTMLButtonElement>('[role="menuitem"]')!.click())
+    await act(async () => dom.window.document.querySelector<HTMLButtonElement>('.dsh-workflow-instance-menu [role="menuitem"]')!.click())
     await act(async () => dom.window.document.querySelector<HTMLButtonElement>('.dsh-workflow-delete-confirm')!.click())
     assert.equal(container.querySelectorAll('.dsh-workflow-workspace').length, 2)
   } finally {

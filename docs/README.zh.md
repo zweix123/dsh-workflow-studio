@@ -43,3 +43,9 @@ Agent 台前卡片保留对话与完成，台后卡片只提供业务交互；�
 [文本插值与表达式求值](./specs/text-expressions.zh.md)已实施并通过项目自动化和真实宿主回归；覆盖与未验证范围见[验收记录](./acceptance/text-expressions.zh.md)，用户写法见整体 DAG 语法和节点文档。
 
 Form 填写浮窗的宿主样式与布局要求见[规格](./specs/form-dialog.zh.md)，实际验证见[验收记录](./acceptance/form-dialog.zh.md)。
+
+插件各界面的边界、配色和宿主风格一致性见 [UI 风格审查](./acceptance/ui-style-review.zh.md)，包含已确认差异、实测值与未覆盖范围。
+
+新建实例与删除确认的弹窗外壳已对齐宿主设置浮窗，验证范围见[验收记录](./acceptance/instance-dialog-style.zh.md)。
+
+字段控件、删除菜单、警告色及节点插件按钮样式隔离的后续修复见 [UI 复核验收](./acceptance/ui-style-review.zh.md#复核与修复验收2026-10-15)。

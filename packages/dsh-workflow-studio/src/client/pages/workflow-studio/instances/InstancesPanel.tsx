@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { Button, IconCloseOutlineRegular, IconPlusOutlineRegular, Input, Menu } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { WorkspaceSnapshot } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import { createInstance, deleteInstance, getInstance, listInstances, listTemplates, WorkflowInstanceApiError } from '../../../apis/workflow-instances.js'
@@ -47,7 +48,6 @@ function InstanceItem({ row, onOpen, onDeleted, t }: { row: InstanceSummary; onO
   const [mode, setMode] = useState<'closed' | 'menu' | 'confirm'>('closed')
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string>()
-  const item = useRef<HTMLLIElement>(null)
   const trigger = useRef<HTMLButtonElement>(null)
   const dialog = useRef<HTMLDivElement>(null)
   const busy = useRef(false)
@@ -55,12 +55,8 @@ function InstanceItem({ row, onOpen, onDeleted, t }: { row: InstanceSummary; onO
   useEffect(() => { if (pending) dialog.current?.focus() }, [pending])
 
   useEffect(() => {
-    if (mode === 'closed') return
-    if (mode === 'menu') item.current?.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus()
-    else dialog.current?.querySelector<HTMLButtonElement>('button')?.focus()
-    const onPointerDown = (event: PointerEvent) => {
-      if (mode === 'menu' && !item.current?.contains(event.target as Node)) setMode('closed')
-    }
+    if (mode !== 'confirm') return
+    dialog.current?.querySelector<HTMLButtonElement>('button')?.focus()
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault()
@@ -70,7 +66,7 @@ function InstanceItem({ row, onOpen, onDeleted, t }: { row: InstanceSummary; onO
           trigger.current?.focus()
         }
       }
-      if (mode !== 'confirm' || event.key !== 'Tab' || !dialog.current) return
+      if (event.key !== 'Tab' || !dialog.current) return
       const buttons = [...dialog.current.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')]
       if (!buttons.length) {
         event.preventDefault()
@@ -85,10 +81,8 @@ function InstanceItem({ row, onOpen, onDeleted, t }: { row: InstanceSummary; onO
         buttons[0].focus()
       }
     }
-    document.addEventListener('pointerdown', onPointerDown)
     document.addEventListener('keydown', onKeyDown, true)
     return () => {
-      document.removeEventListener('pointerdown', onPointerDown)
       document.removeEventListener('keydown', onKeyDown, true)
     }
   }, [mode])
@@ -108,22 +102,22 @@ function InstanceItem({ row, onOpen, onDeleted, t }: { row: InstanceSummary; onO
     }
   }
 
-  return <li ref={item} className="dsh-workflow-instance-item" data-menu-open={mode === 'menu'}>
+  return <li className="dsh-workflow-instance-item" data-menu-open={mode === 'menu'}>
     <button type="button" className="dsh-workflow-instance-row" onClick={() => { setMode('closed'); onOpen() }}>
       <strong>{row.name}</strong><span>{row.templateName}</span>
     </button>
-    <button ref={trigger} type="button" className="dsh-workflow-instance-more" aria-label={`${t('instanceActions')} ${row.name}`} aria-haspopup="menu" aria-expanded={mode === 'menu'} onClick={() => setMode(current => current === 'menu' ? 'closed' : 'menu')}>⋯</button>
-    {mode === 'menu' && <div className="dsh-workflow-instance-menu" role="menu" aria-label={row.name}>
-      <button type="button" role="menuitem" onClick={() => setMode('confirm')}>{t('deleteInstance')}</button>
-    </div>}
+    <Menu open={mode === 'menu'} autoFocus align="end" portal className="dsh-workflow-instance-actions" listClassName="dsh-workflow-instance-menu"
+      anchor={<button ref={trigger} type="button" className="dsh-workflow-instance-more" aria-label={`${t('instanceActions')} ${row.name}`} aria-haspopup="menu" aria-expanded={mode === 'menu'} onClick={() => setMode(current => current === 'menu' ? 'closed' : 'menu')}>⋯</button>}
+      items={[{ id: 'delete', label: t('deleteInstance'), danger: true }]}
+      onSelect={() => setMode('confirm')} onClose={() => setMode(current => current === 'menu' ? 'closed' : current)} />
     {mode === 'confirm' && createPortal(<div className="dsh-workflow-create-overlay">
       <div className="dsh-workflow-create-mask" />
       <div ref={dialog} className="dsh-workflow-delete-dialog" role="alertdialog" aria-modal="true" aria-label={t('deleteInstance')} tabIndex={-1}>
         <h2>{t('deleteInstance')}</h2><p className="dsh-workflow-delete-name">{row.name}</p><p>{t('deleteWarning')}</p>
         {error && <p className="dsh-workflow-error" role="alert">{error}</p>}
         <div className="dsh-workflow-delete-actions">
-          <button type="button" className="dsh-workflow-button" disabled={pending} onClick={() => { setMode('closed'); trigger.current?.focus() }}>{t('cancel')}</button>
-          <button type="button" className="dsh-workflow-button dsh-workflow-delete-confirm" disabled={pending} onClick={() => void confirmDelete()}>{t(pending ? 'deleting' : 'deleteInstance')}</button>
+          <Button disabled={pending} onClick={() => { setMode('closed'); trigger.current?.focus() }}>{t('cancel')}</Button>
+          <Button variant="outline" className="dsh-workflow-delete-confirm" disabled={pending} onClick={() => void confirmDelete()}>{t(pending ? 'deleting' : 'deleteInstance')}</Button>
         </div>
       </div>
     </div>, document.body)}
@@ -146,6 +140,8 @@ function CreateInstanceForm({ workspaceId, workspaceTitle, trigger, rows, onClos
   const [error, setError] = useState<string>()
   const [pending, setPending] = useState(false)
   const dialog = useRef<HTMLDivElement>(null)
+  const templateFieldId = useId()
+  const nameFieldId = useId()
 
   useEffect(() => {
     dialog.current?.querySelector<HTMLButtonElement>('.dsh-workflow-create-close')?.focus()
@@ -212,12 +208,12 @@ function CreateInstanceForm({ workspaceId, workspaceTitle, trigger, rows, onClos
     <form className="dsh-workflow-create" onSubmit={event => { event.preventDefault(); void submit() }}>
       <div className="dsh-workflow-create-heading">
         <div><h2>{t('createInstance')}</h2><p>{workspaceTitle} · {t('createHint')}</p></div>
-        <button type="button" className="dsh-workflow-create-close" aria-label={t('closeCreateForm')} onClick={onClose}>×</button>
+        <Button size="sm" className="dsh-workflow-create-close" aria-label={t('closeCreateForm')} onClick={onClose}><IconCloseOutlineRegular size={14} /></Button>
       </div>
       <div className="dsh-workflow-create-fields">
       {catalogError ? <p role="alert">{t('templatesLoadFailed')}</p> : !catalog ? <p role="status">{t('templatesLoading')}</p> : <>
-      <label>{t('chooseTemplate')}
-        <select value={templateId} disabled={pending || validTemplates.length === 0} onChange={event => {
+      <div className="dsh-workflow-create-field"><label htmlFor={templateFieldId}>{t('chooseTemplate')}</label>
+        <select id={templateFieldId} value={templateId} disabled={pending || validTemplates.length === 0} onChange={event => {
           setTemplateId(event.target.value)
           setName(defaultName(catalog.templates.find(row => row.id === event.target.value)!.name!))
         }}>
@@ -225,17 +221,17 @@ function CreateInstanceForm({ workspaceId, workspaceTitle, trigger, rows, onClos
             {row.error ? `${row.name ?? row.source} — ${t('templateInvalid')}: ${row.error}` : row.name}
           </option>)}
         </select>
-      </label>
+      </div>
       <LayoutNotices key={templateId} report={catalog.templates.find(row => row.id === templateId)?.layout} t={t} surface="create" />
       {validTemplates.length === 0 && <div className="dsh-workflow-template-empty">
         <strong>{t('noTemplates')}</strong>
       </div>}
-      <label>{t('instanceName')}<input name="instanceName" value={name} disabled={pending} autoComplete="off" onChange={event => setName(event.target.value)} /></label>
+      <div className="dsh-workflow-create-field"><label htmlFor={nameFieldId}>{t('instanceName')}</label><Input id={nameFieldId} className="dsh-workflow-create-input" name="instanceName" value={name} disabled={pending} autoComplete="off" onChange={event => setName(event.target.value)} /></div>
       {error && <p className="dsh-workflow-error" role="alert">{error}</p>}
       </>}
       </div>
       <div className="dsh-workflow-form-actions">
-        <button type="submit" className="dsh-workflow-button dsh-workflow-button-primary" disabled={pending || validTemplates.length === 0}>{t(pending ? 'creating' : 'create')}</button>
+        <Button variant="primary" type="submit" disabled={pending || validTemplates.length === 0}>{t(pending ? 'creating' : 'create')}</Button>
       </div>
     </form>
     </div>
@@ -287,7 +283,7 @@ export function InstancesPanel({ t, useWorkspaces, onSelect, onOpenExisting, onD
       {phase === 'error' && <p role="alert" className="dsh-workflow-notice">{t('instancesLoadFailed')}</p>}
       <div className="dsh-workflow-card-grid">
       {groups.map(group => <section className="dsh-workflow-workspace" key={group.id || 'ungrouped'}>
-        <header><div><h3 title={group.title}>{group.title}</h3><p>{t('instances')}: {group.rows.length}</p></div>{group.id && <button type="button" className="dsh-workflow-button dsh-workflow-add" aria-label={`${t('createInstance')} ${group.title}`} aria-haspopup="dialog" aria-expanded={creating?.id === group.id} disabled={phase !== 'ready'} onClick={event => { setCreating({ id: group.id, title: group.title, trigger: event.currentTarget }); setDetailError(undefined) }}>+ {t('newInstance')}</button>}</header>
+        <header><div><h3 title={group.title}>{group.title}</h3><p>{t('instances')}: {group.rows.length}</p></div>{group.id && <Button variant="outline" size="sm" icon={<IconPlusOutlineRegular size={14} />} className="dsh-workflow-add" aria-label={`${t('createInstance')} ${group.title}`} aria-haspopup="dialog" aria-expanded={creating?.id === group.id} disabled={phase !== 'ready'} onClick={event => { setCreating({ id: group.id, title: group.title, trigger: event.currentTarget }); setDetailError(undefined) }}>{t('newInstance')}</Button>}</header>
         {group.rows.length ? <ul>{group.rows.map(row => <InstanceItem key={row.id} row={row} onOpen={() => void open(row)} onDeleted={id => { setRows(current => current.filter(item => item.id !== id)); onDeleted(id) }} t={t} />)}</ul> : <p className="dsh-workflow-empty">{t('noInstances')}</p>}
       </section>)}
       </div>

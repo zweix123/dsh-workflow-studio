@@ -52,6 +52,9 @@ npm run test:e2e -- e2e/form-handoff.e2e.ts
 
 - [identifiers.e2e.ts](./workflows/identifiers.e2e.ts)：中文名称与 ID 回退、同名节点独立操作、布局和具名边、嵌套及递归名称、非法 key 提交回滚、实际宿主重启、源模板改名后实例名称快照，以及中英文、浅深主题、窄屏和长名称。
 - [instances.e2e.ts](./workflows/instances.e2e.ts)：名称为空与重复校验、表单保留、详情 Tab 去重、重启恢复、取消及永久删除、列表计数与详情 Tab 清理。
+- [instance-dialogs.e2e.ts](./workflows/instance-dialogs.e2e.ts)：新建与删除确认的背景、圆角、描边、阴影及遮罩对照宿主设置；中英文、浅深主题、桌面与 390px 窄屏、外侧留白、底部操作及关闭后焦点与页面保留。
+- [control-styles.e2e.ts](./workflows/control-styles.e2e.ts)：中英文、浅深主题及窄屏下，对照 Form 字段与主按钮、宿主设置菜单；验证删除菜单材质及危险 hover、确认按钮尺寸和取消保留实例。
+- [layout-warning-color.e2e.ts](./workflows/layout-warning-color.e2e.ts)：真实警告使用有效宿主语义变量，边线、徽标及展开动作正确着色，中英文、浅深主题及窄屏下可展开阅读。
 - [templates.e2e.ts](./workflows/templates.e2e.ts)：默认 bundle 从独立模板包根目录加载两份中文模板、来源准确显示包名、浏览模板详情、创建实例及真实宿主重启后的可用性。
 - [openspec-change.e2e.ts](./workflows/openspec-change.e2e.ts)：默认 OpenSpec 四阶段模板的需求表单、方案会话结构化名称交付、手动推进及重启后同名恢复；使用确定性模型夹具，不执行实际 OpenSpec 技能。
 - [serial-chain-layout.e2e.ts](./workflows/serial-chain-layout.e2e.ts)：使用独立串行链夹具验证模板预览与实例的四阶段对齐、全部依赖可见、跨节点边避开卡片、提交后位置稳定，以及中英文、浅深主题和窄屏下的排布与详情操作。

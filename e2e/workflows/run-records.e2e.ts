@@ -52,6 +52,11 @@ test('台后 Agent 金刚位仅业务交互，最新与旧执行记录均从详�
   await expect(browser.locator(`${history} details`)).toHaveCount(2)
   await expect(screen.getByRole('button', '执行记录 retry', { exact: true })).toHaveCount(0)
   await expect(browser.locator('[data-graph-node][data-definition-id="retry"] [data-action-position="1"] button')).toHaveCount(0)
+  expect(await browser.evaluate(selector => {
+    const button = document.querySelector(`${selector} details:first-child button`)!
+    const style = getComputedStyle(button)
+    return { radius: style.borderRadius, height: button.getBoundingClientRect().height, paddingTop: style.paddingTop }
+  }, history)).toEqual({ radius: '8px', height: 28, paddingTop: '0px' })
   await browser.locator(`${history} details:first-child button`).press('Enter')
   await expect(browser.locator('body')).toContainText('一次性子智能体记录')
   await expect(screen.getByRole('dialog', '历次尝试', { exact: true })).toHaveCount(0)
