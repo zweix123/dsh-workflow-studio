@@ -84,3 +84,5 @@ Codex 内置浏览器继续用于探索新场景、人工检查界面和故障�
 Agent 结果交付新增 [agent-host.e2e.ts](./workflows/agent-host.e2e.ts) 与 [agent-handoff.e2e.ts](./workflows/agent-handoff.e2e.ts)，使用[确定性模型边界夹具](./fixtures/agent-host/README.md)驱动真实 rc.1 宿主，覆盖父会话隐藏、原生 fork/structured_output、子记录重启、台前补充重试、台后待确认恢复、失败/中断、双工作区自动任务实际写读产物和语言主题窄屏。原 [session-agent.e2e.ts](./workflows/session-agent.e2e.ts) 已切换为 agent 类型并保留对话关联回归。模型夹具不代表真实模型交付质量，范围见[验收记录](../docs/acceptance/agent-result-handoff.zh.md)。
 
 节点操作位与输入浮窗的独立回归见 `workflows/node-actions.e2e.ts`：固定第 1/3 位及键盘、原生 Form Modal 的校验/关闭/成功交付、中英文主题窄屏、草稿隔离与重启、已接受结果交付失败重试。Agent 单条直达、多条最新优先选择及失败恢复见 `workflows/agent-handoff.e2e.ts`。卡片业务入口已从详情抽屉迁出，`inspectNode` 仅负责只读检查。运行真实宿主时不要并行重建插件输出，以免触发宿主热重载而销毁当前页面。
+
+[`forms/dialog.e2e.ts`](./forms/dialog.e2e.ts) 对照宿主设置浮窗验证面板主题，覆盖长表单独立滚动、固定标题和提交区、可见校验错误、390px 窄屏、键盘关闭返回焦点和草稿重开。规格与实际结果见 [Form 浮窗](../docs/specs/form-dialog.zh.md)。

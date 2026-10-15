@@ -34,3 +34,5 @@ Agent 与 Bash 共用的 `{{ }}` 规则见[输入引用](./nodes/input-reference
 ## 规格与维护记录
 
 [产品规格](./specs/)定义需求和验收预期，[验收记录](./acceptance/)记录实际验证范围，[架构决策](./adrs/)说明长期设计选择。[CONTEXT.md](../CONTEXT.md)维护领域词汇，[AGENTS.md](../AGENTS.md)维护仓库约定。
+
+Form 填写浮窗的宿主样式与布局要求见[规格](./specs/form-dialog.zh.md)，实际验证见[验收记录](./acceptance/form-dialog.zh.md)。
