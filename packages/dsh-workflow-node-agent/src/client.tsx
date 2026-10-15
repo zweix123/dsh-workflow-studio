@@ -30,7 +30,7 @@ function AgentRecord({ record, t, openRecord }: { record: import('dsh-workflow-n
   return <>
     <strong>{t('actualPrompt')}</strong><pre>{String(record.data?.prompt ?? '')}</pre>
     {record.data?.result !== undefined && record.output === undefined && <pre>{JSON.stringify(record.data.result, null, 2)}</pre>}
-    {address && openRecord ? <button type="button" className="dsh-workflow-button" onClick={navigate}>{t('openRecord')}</button> : <p>{t('recordUnavailable')}</p>}
+    {address && openRecord ? <button type="button" className="dsh-workflow-button" onClick={navigate}>{t('key' in record.operation && record.operation.key === 'extractResult' ? 'openHandoffRecord' : 'openRecord')}</button> : <p>{t('recordUnavailable')}</p>}
     {error && <p role="alert">{error}</p>}
   </>
 }

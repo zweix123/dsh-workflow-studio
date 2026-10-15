@@ -33,7 +33,8 @@ test('OpenSpec 四阶段从方案会话交付名称，重启后实施与归档�
   await expect(detailField(browser, '澄清需求与生成方案', '状态')).toHaveText('已完成')
   const change = { change_name: 'fix-login-redirect-loop' }
   expect(JSON.parse((await detailField(browser, '澄清需求与生成方案', '输出').textContent())!)).toEqual(change)
-  await expect(screen.getByRole('button', '记录 澄清需求与生成方案', { exact: true })).toBeEnabled()
+  await expect(screen.getByRole('button', '记录 澄清需求与生成方案', { exact: true })).toHaveCount(0)
+  await expect(proposal.getByRole('button', '交付记录', { exact: true })).toBeEnabled()
 
   await dsh.restart(browser)
   await app.open('/')

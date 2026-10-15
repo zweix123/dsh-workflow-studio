@@ -1536,6 +1536,59 @@ test('conversation ownership resolves the full instance and node identity withou
 })
 
 
+test('Agent 主对话及各次交付和执行记录准确返回节点，持久化重开与删除不依赖父链或导航副作用', async () => {
+  const calls = { fork: 0, spawn: 0 }
+  let sessions = 0
+  const services = {
+    sessionController: { create: async () => { sessions++ }, prompt: async () => ({ accepted: true }) },
+    agents: {
+      get: (id: string) => ({ id, status: 'idle', inbox: { nextTurn: [], nextStep: [] } }),
+      create: async () => ({ agent: { id: 'hidden-parent' }, dispose: async () => {} }),
+    },
+    subagents: { start: async (provider: 'fork' | 'spawn') => {
+      const count = ++calls[provider]
+      return { id: `${provider}-${count}`, result: Promise.resolve(count === 1
+        ? { stopReason: 'error', diagnostic: 'First attempt failed' }
+        : { stopReason: 'completed', structured: { [provider === 'fork' ? 'result' : 'summary']: 'accepted' } }), dispose: async () => {} }
+    } },
+  }
+  const f = await fixture(services)
+  await putTemplate(f.templateRoot, 'record-navigation', JSON.stringify({ id: 'root', type: 'dag', dag: [
+    { id: 'foreground', type: 'node', node_kind: 'agent', prompt: 'Foreground task', output_schema: { result: 'string' } },
+    { id: 'background', type: 'node', node_kind: 'agent', mode: 'background', prompt: 'Background task', output_schema: { summary: 'string' } },
+  ] }))
+  const created = await (await postJson(f.url(INSTANCES_PATH), { workspaceId: 'workspace-a', name: 'Record navigation', templateId: 'record-navigation' })).json() as any
+  assert.ok(created.snapshot, JSON.stringify(created))
+  const path = `${INSTANCES_PATH}/${created.id}`
+  const identities: Array<[string, string]> = []
+  const lookup = async (host: Pick<typeof f, 'url'>, session: string) => (await fetch(host.url(`/api/dsh-workflow-studio/conversations/${session}/instance`))).json()
+  for (const mode of ['foreground', 'background']) {
+    const id = created.snapshot.instances.find((item: any) => item.definitionId === mode).instanceId
+    await postJson(f.url(`${path}/nodes/${id}/actions/start`), {})
+    await untilDetail(f.url(path), d => d.executions?.[id]?.status === (mode === 'foreground' ? 'waiting' : 'failed'))
+    if (mode === 'foreground') await postJson(f.url(`${path}/nodes/${id}/actions/complete`), {})
+    await untilDetail(f.url(path), d => d.executions?.[id]?.status === 'failed')
+    const action = mode === 'foreground' ? 'complete' : 'start'
+    await postJson(f.url(`${path}/nodes/${id}/actions/${action}`), {})
+    const done = await untilDetail(f.url(path), d => d.executions?.[id]?.status === (mode === 'foreground' ? 'succeeded' : 'waiting'))
+    const business = done.executions[id]
+    if (mode === 'foreground') identities.push([business.sessionId, id])
+    identities.push(...business.attempts.map((attempt: any): [string, string] => [attempt.address.childSessionId, id]))
+  }
+  const before = await (await fetch(f.url(path))).json()
+  for (const [session, nodeId] of identities) assert.deepEqual(await lookup(f, session), { target: { instanceId: created.id, nodeInstanceId: nodeId } })
+  for (const session of ['hidden-parent', 'ordinary-session', 'user-fork-child']) assert.deepEqual(await lookup(f, session), { target: null })
+  assert.deepEqual(await (await fetch(f.url(path))).json(), before)
+  await f.close()
+  const restarted = await openHost(f.storageRoot, f.templateRoot, f.root, services)
+  cleanups.push(restarted.close)
+  for (const [session, nodeId] of identities) assert.deepEqual(await lookup(restarted, session), { target: { instanceId: created.id, nodeInstanceId: nodeId } })
+  await fetch(restarted.url(path), { method: 'DELETE' })
+  for (const [session] of identities) assert.deepEqual(await lookup(restarted, session), { target: null })
+  assert.deepEqual(calls, { fork: 2, spawn: 2 })
+  assert.equal(sessions, 1)
+})
+
 test('a missing type anywhere in the snapshot pauses new calls while an in-flight result is saved and submitted', async () => {
   const f = await fixture()
   let finish!: () => void

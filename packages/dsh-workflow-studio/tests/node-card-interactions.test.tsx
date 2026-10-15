@@ -1206,7 +1206,7 @@ test('Agent record navigation reports host failures and remains retryable, and a
   const container = dom.window.document.getElementById('root')!
   const root = createRoot(container)
   const render = () => act(async () => root.render(<InstanceRunPanel nodes={registry} detail={withNodeViews(detail)} t={key => zh[key]} onUpdate={() => {}} onWidthUpdate={() => {}} />))
-  const records = () => container.querySelector<HTMLButtonElement>('[aria-label="记录 task"]')!
+  const records = () => container.querySelector<HTMLButtonElement>('[aria-label="执行记录 task"]')!
   const previousError = console.error; console.error = () => {}
   try {
     await render()

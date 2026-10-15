@@ -71,6 +71,11 @@ test('built-in actions declare stable positions through failures and accepted re
   const background: any = { ...context.definition, mode: 'background' }
   assert.deepEqual(actions(agentNode, { kind: 'agent', status: 'waiting', business: { mode: 'background', pendingOutput: {} } }, background).map(a => [a.id, a.position]), [['complete', 2]])
   const failure = { kind: 'agent', status: 'failed', business: { mode: 'background', attempts: [{ id: 'a', status: 'failed', address: { parentSessionId: 'p', childSessionId: 'c', mode: 'one-shot' } }] } }
+  for (const status of ['running', 'failed', 'unknown', 'succeeded']) {
+    const fact = { ...failure, status, business: { ...failure.business, mode: 'foreground', sessionId: 'p', sessionCreated: true } }
+    assert.deepEqual(actions(agentNode, fact).map(a => [a.id, a.position]), [['open', 1], ['complete', 2]])
+    assert.deepEqual(agentNode.describe!({ ...context, fact, ready: false }).actions.map(a => [a.id, a.position]), [['open', 1]])
+  }
   assert.deepEqual(actions(agentNode, failure, background).map(a => [a.id, a.position, Boolean(a.disabled)]), [['records', 1, false], ['complete', 2, true], ['start', 3, false]])
   assert.deepEqual(actions(agentNode, { ...failure, status: 'succeeded', output: {} }, background).map(a => [a.id, a.position, Boolean(a.disabled)]), [['records', 1, false], ['complete', 2, false]])
 })

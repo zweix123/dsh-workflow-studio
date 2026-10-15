@@ -145,7 +145,7 @@ export function createAgentNode(host?: Context): ServerNode & { dispose(): Promi
       return { actions: [
         ...(ready && !business?.sessionCreated && !records && !retry && business?.pendingOutput === undefined && fact?.status !== 'succeeded' ? [{ id: 'start', position: 1 as const, icon: 'execute' as const, label: { namespace: name, key: 'executeNode' }, target: { type: 'server' as const }, disabled: fact?.status === 'running' }] : []),
         ...(!isBackground && business?.sessionCreated ? [{ id: 'open', position: 1 as const, icon: 'conversation' as const, label: { namespace: name, key: 'openSession' }, target: { type: 'client' as const, handler: 'open-session' } }] : []),
-        ...(records ? [{ id: 'records', position: (isBackground ? 1 : 3) as 1 | 3, icon: 'record' as const, label: { namespace: name, key: 'openRecord' }, target: { type: 'client' as const, handler: 'records' }, disabled: !latestAddress, ...(!latestAddress ? { disabledReason: { namespace: name, key: 'recordUnavailable' } } : {}) }] : []),
+        ...(isBackground && records ? [{ id: 'records', position: 1 as const, icon: 'record' as const, label: { namespace: name, key: 'openRecord' }, target: { type: 'client' as const, handler: 'records' }, disabled: !latestAddress, ...(!latestAddress ? { disabledReason: { namespace: name, key: 'recordUnavailable' } } : {}) }] : []),
         ...(ready ? [{ id: 'complete', position: 2 as const, icon: 'complete' as const, label: { namespace: name, key: fact?.status === 'succeeded' ? 'retryDelivery' : 'completeSessionAgent' }, target: { type: 'server' as const }, disabled: !canComplete || fact?.status === 'running' || fact?.status !== 'succeeded' && Boolean(generating) }] : []),
         ...(ready && retry ? [{ id: 'start', position: 3 as const, icon: 'retry' as const, label: { namespace: name, key: 'retryNavigation' }, target: { type: 'server' as const } }] : []),
       ] }
@@ -203,11 +203,13 @@ export function createAgentNode(host?: Context): ServerNode & { dispose(): Promi
 }
 export const agentNode = createAgentNode()
 
-/** Only a successfully created foreground conversation is a navigation association. */
-export function associatedSession(fact: NodeFact): string | undefined {
+/** Match saved identities only; arbitrary forks and hidden background parents do not inherit ownership. */
+function ownsSession(fact: NodeFact, sessionId: string): boolean {
   const business = state(fact)
-  return fact.kind === 'agent' && business?.mode !== 'background' && business?.sessionCreated === true
-    && typeof business.sessionId === 'string' && business.sessionId ? business.sessionId : undefined
+  return fact.kind === 'agent' && Boolean(
+    business?.mode !== 'background' && business?.sessionCreated === true && business.sessionId === sessionId
+    || business?.attempts?.some(attempt => attempt.address?.childSessionId === sessionId),
+  )
 }
 
 export const name = '@dsh-workflow/node-agent'
@@ -224,7 +226,7 @@ export function apply(ctx: Context): void {
     else {
       try {
         const sessionId = decodeURIComponent(match[1]!)
-        const record = ctx.workflowNodes.records('agent').find(record => associatedSession(record.fact) === sessionId)
+        const record = ctx.workflowNodes.records('agent').find(record => ownsSession(record.fact, sessionId))
         if (record) result = { target: { instanceId: record.instanceId, nodeInstanceId: record.nodeInstanceId } }
       } catch { status = 400 }
     }
