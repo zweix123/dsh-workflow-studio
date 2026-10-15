@@ -39,3 +39,11 @@
       name: dsh-workflow-template
       config:
         directory: "@dsh-workflow/core-regression-fixture/templates/text-expressions"
+    - id: regression-identifiers
+      name: dsh-workflow-template
+      config:
+        directory: "@dsh-workflow/core-regression-fixture/templates/identifiers"
+    - id: regression-identifier-keys
+      name: dsh-workflow-template
+      config:
+        directory: "@dsh-workflow/core-regression-fixture/templates/identifier-keys"

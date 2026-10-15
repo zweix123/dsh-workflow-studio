@@ -2,7 +2,7 @@ import { copy } from '../dag/data.js'
 import type { Context } from '@deepseek-ai/cordis'
 import { z } from 'zod'
 import { compile, SubmissionError, type DagDefinition, type ExecutionSnapshot, type JsonObject, type SavedExecution } from '../dag/index.js'
-import { NodeInputError, type NodeContext, type NodeFact, type NodePlan, type NodeLookup } from 'dsh-workflow-node/contract'
+import { isIdentifier, hasValidActionIdentifiers, NodeInputError, type NodeContext, type NodeFact, type NodePlan, type NodeLookup } from 'dsh-workflow-node/contract'
 import type { InstanceDetail, NodeExecution } from '../../shared/types/workflow-instance.js'
 import { WorkflowInstanceStore, type StoredInstance } from '../storage/workflow-instance-store.js'
 import { executeWorkflowNode } from './dag.js'
@@ -37,6 +37,7 @@ export class WorkflowEngine {
 
   actionNode(id: string, nodeId: string, name: string, payload: unknown, token?: string): Promise<InstanceDetail> {
     return this.store.serial(async () => {
+      if (!isIdentifier(name)) throw new WorkflowInstanceError('node-kind-invalid', 'Invalid node action identifier')
       const row = this.requireInstance(id)
       this.assertCompatible(row)
       const ready = this.frontier(row).find(item => item.instanceId === nodeId)
@@ -123,11 +124,11 @@ export class WorkflowEngine {
       const identity = this.nodes.identify?.(kind)
       let presentation = { actions: [] } as import('dsh-workflow-node/contract').NodePresentation
       try { if (node && definition) presentation = node.describe?.(structuredClone({ definition, input: item.input as import('dsh-workflow-node/contract').NodeData, fact: row.executions?.[item.instanceId], ready: item.status === 'ready' })) ?? presentation } catch { /* Local presentation failure never hides public details. */ }
-      return [item.instanceId, { ...presentation, ...identity }]
+      return [item.instanceId, { ...presentation, actions: presentation.actions.filter(hasValidActionIdentifiers), ...identity }]
     }))
     return {
       nodeViews,
-      id: row.id, workspaceId: row.workspaceId, name: row.name, templateId: row.templateId, templateName: (row.definition as DagDefinition).name as string, createdAt: row.createdAt,
+      id: row.id, workspaceId: row.workspaceId, name: row.name, templateId: row.templateId, templateName: ((row.definition as DagDefinition).name ?? (row.definition as DagDefinition).id), createdAt: row.createdAt,
       revision: row.revision ?? 0, definition: row.definition as DagDefinition, input: row.input as JsonObject,
       snapshot: row.snapshot as unknown as ExecutionSnapshot,
       ...(Object.keys(executions).length ? { executions } : {}), ...(incompatible ? { incompatible } : {}),

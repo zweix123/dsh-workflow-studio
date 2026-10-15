@@ -24,4 +24,4 @@
 
 2026-10-13：已收敛为四阶段，方案节点直接交付名称。完整检查 163 项通过；新增真实宿主浏览器用例 1 条、受影响既有回归 7 条通过（确定性模型夹具，实际 OpenSpec 技能业务未验证）。详细结果见[验收记录](../acceptance/openspec-change-template.zh.md)。
 
-2026-10-15：目录和包名改为 `dsh-workflow-template-openspec-change`、`@dsh-workflow/template-openspec-change`，展示名改为“OpenSpec 变更工作流”；模板 ID 及加载器 ID 分别统一为 `openspec-change.zh`、`workflow-template-openspec-change.zh`。模板登记增加 ID 格式限制，节点中文 ID 保持可用。验证结果详见[改名复验记录](../acceptance/openspec-change-template.zh.md#2026-10-15-模板改名复验)。
+2026-10-15：目录和包名改为 `dsh-workflow-template-openspec-change`、`@dsh-workflow/template-openspec-change`，展示名改为“OpenSpec 变更工作流”；模板 ID 及加载器 ID 分别统一为 `openspec-change.zh`、`workflow-template-openspec-change.zh`。当时模板登记增加 ID 格式限制，节点中文 ID 保持可用；此旧规则已由[统一标识与定义名称](./identifiers-and-data-references.zh.md)取代，中文业务文案迁移至 name。验证结果详见[改名复验记录](../acceptance/openspec-change-template.zh.md#2026-10-15-模板改名复验)。

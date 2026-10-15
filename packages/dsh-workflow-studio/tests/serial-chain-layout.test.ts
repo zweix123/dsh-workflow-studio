@@ -10,6 +10,7 @@ import type { CanvasGraph } from '../src/client/pages/workflow-studio/canvas/typ
 import type { InstanceDetail } from '../src/shared/types/workflow-instance.js'
 
 const serialChain: DagDefinition = parse(readFileSync(new URL('../../../e2e/fixtures/core-regression/templates/serial-chain/workflow.yaml', import.meta.url), 'utf8'))
+const ids = ['collect-request', 'plan-change', 'implement-verify', 'sync-archive']
 const names = ['填写需求', '澄清需求与生成方案', '实施与验证', '同步规格与归档']
 
 function detail(definition: DagDefinition): InstanceDetail {
@@ -54,11 +55,11 @@ test('Serial preview and runtime align four stages, retain every dependency and 
   const ready = buildCanvasGraph(run)
   assertChain(ready)
   assert.deepEqual(ready.nodes.map(node => [node.data.label, node.position]), initial.nodes.map(node => [node.data.label, node.position]))
-  const archive = run.snapshot.waitingPositions.find(position => position.definitionId === names[3])
+  const archive = run.snapshot.waitingPositions.find(position => position.definitionId === ids[3])
   assert.ok(archive, 'archive still waits for implementation')
   const build = execution.getFrontier()[0]!
   execution.submit(build.instanceId, {})
-  assert.equal(execution.getFrontier()[0]!.definition.id, names[3])
+  assert.equal(execution.getFrontier()[0]!.definition.id, ids[3])
   assert.deepEqual(execution.getFrontier()[0]!.input, { change_name: 'fix-layout' })
 })
 
@@ -66,7 +67,7 @@ test('explicit directions and multiple bypasses use separate outer lanes in both
   for (const vertical of [false, true]) {
     const definition = structuredClone(serialChain)
     definition.layout = { direction: vertical ? 'vertical' : 'horizontal' }
-    definition.dag.push({ type: 'edge', from: names[0]!, to: names[2]! })
+    definition.dag.push({ type: 'edge', from: ids[0]!, to: ids[2]! })
     assertChain(buildTemplateGraph(definition), vertical, 2)
     assertChain(buildCanvasGraph(detail(definition)), vertical, 2)
   }
@@ -79,7 +80,7 @@ test('nested chain lanes stay inside their group, below its heading and left of 
     const definition: DagDefinition = { id: 'root', type: 'dag', dag: [inner] }
     for (const graph of [buildTemplateGraph(definition), buildCanvasGraph(detail(definition))]) {
       assertChain(graph, vertical)
-      const group = graph.nodes.find(node => node.data.label === inner.id)!
+      const group = graph.nodes.find(node => node.data.source !== 'aggregate' && node.data.definitionId === inner.id)!
       const route = graph.edges.find(edge => edge.data.perimeter)!.data.perimeter!
       assert.ok(route.coordinate >= group.position[route.axis] + (vertical ? 28 : 40))
       for (const node of graph.nodes.filter(node => node.parentId === group.id)) {
@@ -108,7 +109,7 @@ test('real parallel branches are not flattened into a serial chain', () => {
 
 test('duplicate nested bypass definitions keep independent route objects and their original expressions', () => {
   const inner = structuredClone(serialChain)
-  inner.dag.push({ type: 'edge', from: names[1]!, to: names[3]!, if: 'enabled' })
+  inner.dag.push({ type: 'edge', from: ids[1]!, to: ids[3]!, if: 'enabled' })
   const graph = buildTemplateGraph({ id: 'root', type: 'dag', dag: [inner] })
   const routes = graph.edges.filter(edge => edge.data.perimeter)
   assert.equal(routes.length, 2)

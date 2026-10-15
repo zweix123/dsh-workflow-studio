@@ -22,7 +22,7 @@ test('有效排布在模板列表、预览、创建和实例中静默生效，�
     await expect(browser.locator(`${panel} .dsh-workflow-layout-notices`)).toHaveCount(0)
     await expect.poll(() => browser.evaluate(() => {
       const panel = document.querySelector('.dsh-workflow-studio-panel:not([hidden])')!
-      const positions = ['填写命令输入', '手动命令', '自动命令', '核对命令结果', '无输出命令'].map(id => {
+      const positions = ['collect-command-input', 'manual-command', 'auto-command', 'review-command-result', 'empty-command'].map(id => {
         const card = panel.querySelector(`[data-graph-node][data-definition-id="${id}"]`)!
         const node = card.closest('.react-flow__node')!
         const position = new DOMMatrix(getComputedStyle(node).transform)

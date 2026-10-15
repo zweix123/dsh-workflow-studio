@@ -38,7 +38,7 @@ export function workCandidates(detail: InstanceDetail, nodes: CanvasNode[]): Wor
     let current = node.parentId && byId.get(node.parentId)
     while (current) { parents.unshift(String(current.data.label)); current = current.parentId && byId.get(current.parentId) }
     const at = canvasPosition(node, byId)
-    candidates.push({ id: node.id, label: instance.definitionId, status, path: parents.join(' / '),
+    candidates.push({ id: node.id, label: node.data.label, status, path: parents.join(' / '),
       ...(instance.forItem && { item: `${instance.forItem.key} #${instance.forItem.index + 1}` }), ...at })
   }
   const priority = { error: 0, unknown: 0, ready: 1, running: 2 }

@@ -62,7 +62,7 @@ export class WorkflowInstanceService {
 
   listInstances(): InstanceSummary[] {
     return [...this.store.entries()]
-      .map(([, row]) => ({ id: row.id, workspaceId: row.workspaceId, name: row.name, templateId: row.templateId, templateName: (row.definition as DagDefinition).name as string, createdAt: row.createdAt }))
+      .map(([, row]) => ({ id: row.id, workspaceId: row.workspaceId, name: row.name, templateId: row.templateId, templateName: ((row.definition as DagDefinition).name ?? (row.definition as DagDefinition).id), createdAt: row.createdAt }))
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt) || left.id.localeCompare(right.id))
   }
 

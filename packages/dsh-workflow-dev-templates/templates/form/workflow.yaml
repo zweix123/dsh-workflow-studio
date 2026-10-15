@@ -22,7 +22,8 @@ output_schema: &fields
     type: array
     items: string
 dag:
-  - id: 填写资料
+  - id: collect-profile
+    name: 填写资料
     type: node
     node_kind: form
     description: 修改说明、优先级和任务，增删数组项并选择标签。提交前可以关闭重开保留当前页面草稿；提交后结果只读。
@@ -80,7 +81,8 @@ dag:
       tags:
         ui:widget: checkboxes
         ui:enumNames: [文档, 代码, 测试]
-  - id: 核对预填
+  - id: review-prefill
+    name: 核对预填
     type: node
     node_kind: form
     description: 所有同名字段来自上一张表单；这里的备用默认值不覆盖预填。修改后正式提交，根 DAG 得到最后的结果。
@@ -121,5 +123,5 @@ dag:
             enum: [docs, code, test]
     uiSchema: *widgets
   - type: edge
-    from: 填写资料
-    to: 核对预填
+    from: collect-profile
+    to: review-prefill

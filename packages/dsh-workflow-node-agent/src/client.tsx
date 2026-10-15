@@ -42,7 +42,7 @@ function AgentRecords({ execution, t, request, active, reportError, error, openR
   }, [request, records, openRecord, reportError])
   return <Modal open={open && active} title={t('attempts')} closeLabel={t('closeRecords')} onClose={() => setOpen(false)}><>{error && <p role="alert">{error}</p>}<ol>{records.map(attempt => <li key={attempt.id}><button type="button" onClick={() => navigate(attempt.address!)}>{t('openRecord')} {attempt.number} · {t(`attempt${attempt.status[0]!.toUpperCase()}${attempt.status.slice(1)}`)}</button></li>)}</ol></></Modal>
 }
-export const agentClient: ClientNode = { kind: 'agent', Panel: AgentPanel, handlers: { openSession: () => {} } }
+export const agentClient: ClientNode = { kind: 'agent', Panel: AgentPanel, handlers: { 'open-session': () => {} } }
 
 export const name = '@dsh-workflow/node-agent'
 export const inject = ['workflowNodeViews', 'workflowNavigation', 'locale', 'slots', 'uiWorkspace', 'layout']
@@ -50,7 +50,7 @@ export function apply(ctx: Context): void {
   ctx.effect(() => ctx.locale.register(name, { en, zh }))
   const node: ClientNode = {
     ...agentClient,
-    handlers: { openSession: props => {
+    handlers: { 'open-session': props => {
       if (typeof props.execution?.sessionId === 'string' && props.execution.sessionCreated === true) ctx.uiWorkspace.openSession(props.execution.sessionId as SessionId)
     } },
     interactions: { records: props => <AgentRecords {...props} openRecord={address => ctx.uiWorkspace.openSession({ parentSessionId: address.parentSessionId as SessionId, childSessionId: address.childSessionId as SessionId, mode: address.mode })} /> },

@@ -2,7 +2,8 @@ id: regression-serial-chain
 name: 串行链跨节点依赖回归
 type: dag
 dag:
-  - id: 填写需求
+  - id: collect-request
+    name: 填写需求
     type: node
     node_kind: form
     output_schema:
@@ -14,7 +15,8 @@ dag:
     uiSchema:
       request:
         ui:widget: textarea
-  - id: 澄清需求与生成方案
+  - id: plan-change
+    name: 澄清需求与生成方案
     type: node
     node_kind: bash
     input_schema:
@@ -22,19 +24,21 @@ dag:
     output_schema:
       change_name: string
     command: printf '{"change_name":"fix-layout"}'
-  - id: 实施与验证
+  - id: implement-verify
+    name: 实施与验证
     type: node
     node_kind: bash
     input_schema:
       change_name: string
     command: ""
-  - id: 同步规格与归档
+  - id: sync-archive
+    name: 同步规格与归档
     type: node
     node_kind: bash
     input_schema:
       change_name: string
     command: ""
-  - { type: edge, from: 填写需求, to: 澄清需求与生成方案 }
-  - { type: edge, from: 澄清需求与生成方案, to: 实施与验证 }
-  - { type: edge, from: 实施与验证, to: 同步规格与归档 }
-  - { type: edge, from: 澄清需求与生成方案, to: 同步规格与归档 }
+  - { type: edge, from: collect-request, to: plan-change }
+  - { type: edge, from: plan-change, to: implement-verify }
+  - { type: edge, from: implement-verify, to: sync-archive }
+  - { type: edge, from: plan-change, to: sync-archive }

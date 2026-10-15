@@ -41,7 +41,7 @@ function testDom(onResize?: (callback: ResizeObserverCallback) => void) {
   testLanguage = zh
   const context = new Context()
   testNodes = new BrowserNodeRegistry((_namespace, key) => testLanguage[key as keyof typeof zh] ?? key)
-  for (const [source, node] of [['bash', bashClient], ['form', formClient], ['agent', { ...agentClient, handlers: { openSession: (props: any) => testOpenSession?.(props.execution.sessionId) } }]] as const) testNodes.register(context, `@dsh-workflow/node-${source}`, node)
+  for (const [source, node] of [['bash', bashClient], ['form', formClient], ['agent', { ...agentClient, handlers: { 'open-session': (props: any) => testOpenSession?.(props.execution.sessionId) } }]] as const) testNodes.register(context, `@dsh-workflow/node-${source}`, node)
   const dom = new JSDOM('<!doctype html><div id="root"></div>')
   const names = ['window', 'document', 'IS_REACT_ACT_ENVIRONMENT', 'fetch', 'requestAnimationFrame', 'cancelAnimationFrame', 'ResizeObserver'] as const
   const previous = names.map(name => [name, Object.getOwnPropertyDescriptor(globalThis, name)] as const)

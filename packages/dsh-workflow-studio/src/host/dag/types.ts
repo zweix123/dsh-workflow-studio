@@ -17,6 +17,7 @@ export type TypeDescriptor =
 
 export type NodeDefinition = {
   id: string;
+  name?: string;
   type: "node";
   input_schema?: Schema;
   output_schema?: Schema;
@@ -24,6 +25,7 @@ export type NodeDefinition = {
 
 export type DagDefinition = {
   id: string;
+  name?: string;
   type: "dag";
   dag: EntityDefinition[];
   input_schema?: Schema;
@@ -32,6 +34,7 @@ export type DagDefinition = {
 
 export type EdgeDefinition = {
   id?: string;
+  name?: string;
   type: "edge";
   from: string;
   to: string;

@@ -25,7 +25,7 @@ test('条件边按真实布尔结果激活，关闭分支跳过且汇合继续�
   await expect(detailField(browser, 'join', '状态')).toHaveText('已完成')
   expect(await access(join(dsh.workspace, 'closed-runs.txt')).then(() => true, () => false)).toBe(false)
   await screen.getByRole('button', '根 DAG 详情', { exact: true }).tap()
-  await expect(detailField(browser, 'regression-branches', '状态')).toHaveText('已完成')
+  await expect(detailField(browser, '条件分支回归', '状态')).toHaveText('已完成')
 })
 
 test('for 项身份独立，部分完成后重启只恢复未完成项并按源顺序聚合', async ({ app, screen, browser, dsh }) => {
@@ -68,7 +68,7 @@ test('for 项身份独立，部分完成后重启只恢复未完成项并按源�
   await screen.getByRole('button', '执行 finish', { exact: true }).tap()
   await expect(detailField(browser, 'finish', '状态')).toHaveText('已完成')
   await screen.getByRole('button', '根 DAG 详情', { exact: true }).tap()
-  await expect(detailField(browser, 'regression-loop', '状态')).toHaveText('已完成')
+  await expect(detailField(browser, '逐项展开与汇合回归', '状态')).toHaveText('已完成')
 })
 
 test('for 空数组不生成虚构项，下游跳过且根 DAG 完成', async ({ app, screen, browser, dsh }) => {
@@ -88,5 +88,5 @@ test('for 空数组不生成虚构项，下游跳过且根 DAG 完成', async ({
   await expect(detailField(browser, 'finish', '状态')).toHaveText('已跳过')
   expect(await access(join(dsh.workspace, 'each-runs.txt')).then(() => true, () => false)).toBe(false)
   await screen.getByRole('button', '根 DAG 详情', { exact: true }).tap()
-  await expect(detailField(browser, 'regression-loop', '状态')).toHaveText('已完成')
+  await expect(detailField(browser, '逐项展开与汇合回归', '状态')).toHaveText('已完成')
 })

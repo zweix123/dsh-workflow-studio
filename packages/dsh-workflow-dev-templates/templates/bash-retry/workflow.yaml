@@ -5,14 +5,16 @@ description: 使用独立体验工作区。依次点击执行三次：非零退�
 output_schema:
   result: string
 dag:
-  - id: 失败后重试
+  - id: retry-command
+    name: 失败后重试
     type: node
     node_kind: bash
     description: 首次退出码 7；第二次返回错误类型；第三次返回有效字符串。失败不推进下游。重新从首次体验前，删除体验工作区中的计数文件。
     command: node "$DSH_TEMPLATE_DIR/retry.mjs"
     output_schema:
       result: string
-  - id: 核对重试结果
+  - id: review-retry-result
+    name: 核对重试结果
     type: node
     node_kind: form
     input_schema:
@@ -24,5 +26,5 @@ dag:
         result:
           title: 重试结果
   - type: edge
-    from: 失败后重试
-    to: 核对重试结果
+    from: retry-command
+    to: review-retry-result

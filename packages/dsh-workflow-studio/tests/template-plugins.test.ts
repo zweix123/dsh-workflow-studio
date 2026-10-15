@@ -65,19 +65,19 @@ test('template identity and display name come from loaded YAML across workspaces
 })
 
 
-test('template IDs allow dotted lowercase segments and reject malformed values without changing nested IDs', async () => {
+test('template IDs share definition rules and optional names fall back to identity', async () => {
   const h = await host()
   try {
-    for (const id of ['a', '0', 'review-2.zh', 'release.v2']) {
-      await h.declare(`@acme/workflows/templates/valid-${id}`, `id: ${JSON.stringify(id)}\nname: 中文名称\ntype: dag\ndag:\n  - { id: 中文子流程, type: dag, dag: [] }\n`)
+    for (const id of ['a', '0', 'review-2.zh', 'release.v2', 'review_task']) {
+      await h.declare(`@acme/workflows/templates/valid-${id}`, `id: ${JSON.stringify(id)}\nname: 中文名称\ntype: dag\ndag:\n  - { id: nested, name: 中文子流程, type: dag, dag: [] }\n`)
       const detail = await h.request(`${TEMPLATES_PATH}/${id}`)
       assert.equal(detail.status, 200, id)
-      assert.equal((await detail.json()).definition.dag[0].id, '中文子流程')
+      assert.equal((await detail.json()).definition.dag[0].name, '中文子流程')
       const created = await h.request(INSTANCES_PATH, { workspaceId: 'a', name: id, templateId: id })
       assert.equal(created.status, 201, id)
       assert.equal((await created.json()).templateId, id)
     }
-    const invalid = ['', ' ', 'Review', '中文模板', 'review_task', 'review/task', '../review',
+    const invalid = ['', ' ', 'Review', '中文模板', 'review/task', '../review',
       '.review', 'review.', '-review', 'review-', 'review..zh', 'review--task', 'review-.zh',
       'review.-zh', ' review', 'review ', 'review task', 'review\n', 'review\r', 'review\t', 'review\u2028', 'review?x', 'review#x', 'review%2ftask']
     for (const [index, id] of invalid.entries()) {
@@ -86,7 +86,7 @@ test('template IDs allow dotted lowercase segments and reject malformed values w
       const rows = (await (await h.request(TEMPLATES_PATH)).json()).templates
       const row = rows.find((row: any) => row.source === source)
       assert.equal(row.id, id)
-      assert.match(row.error, /Template root id must use lowercase ASCII/, JSON.stringify(id))
+      assert.match(row.error, /id must use lowercase ASCII/, JSON.stringify(id))
       assert.notEqual((await h.request(INSTANCES_PATH, { workspaceId: 'a', name: `invalid-${index}`, templateId: id })).status, 201, JSON.stringify(id))
     }
     assert.equal((await h.request(`${TEMPLATES_PATH}/review-2.zh`)).status, 200)
@@ -197,8 +197,8 @@ test('load errors stay visible, metadata is required, and reload failures do not
     ]) await h.declare(`@acme/workflows/templates/${label}`, yaml)
     const rows = (await (await h.request(TEMPLATES_PATH)).json()).templates
     assert.equal(rows.length, 7)
-    assert.ok(rows.every((row: any) => row.error && row.source))
-    assert.equal(rows.find((row: any) => row.source.endsWith('name-missing')).name, undefined)
+    assert.ok(rows.filter((row: any) => !row.source.endsWith('name-missing')).every((row: any) => row.error && row.source))
+    assert.equal(rows.find((row: any) => row.source.endsWith('name-missing')).name, 'unnamed')
     assert.match(rows.find((row: any) => row.source.endsWith('absent')).error, /ENOENT/)
   } finally { await h.close() }
 })
@@ -270,12 +270,12 @@ test('the development Bash template preserves form input through real manual and
       assert.equal(node!.definition.id, id)
       execution.submit(node!.instanceId, output)
     }
-    submit('填写命令输入', { request })
-    for (const id of ['手动命令', '自动命令']) {
+    submit('collect-command-input', { request })
+    for (const id of ['manual-command', 'auto-command']) {
       const [node] = execution.getFrontier()
       assert.equal(node!.definition.id, id)
-      assert.equal(node!.definition.is_auto_start === true, id === '自动命令')
-      assert.deepEqual(node!.input, id === '手动命令' ? { request } : { prepared_request: request })
+      assert.equal(node!.definition.is_auto_start === true, id === 'auto-command')
+      assert.deepEqual(node!.input, id === 'manual-command' ? { request } : { prepared_request: request })
       const command = renderTextTemplate(node!.definition.command as string, node!.input, true)
       const output = JSON.parse(execFileSync('/bin/sh', ['-c', command], {
         cwd: root, encoding: 'utf8', env: { ...process.env, DSH_TEMPLATE_DIR: fileURLToPath(new URL('.', file)) },
@@ -284,12 +284,12 @@ test('the development Bash template preserves form input through real manual and
       submit(id, output)
     }
     assert.deepEqual(execution.getFrontier()[0]!.input, { prepared_request: request })
-    submit('核对命令结果', { prepared_request: request })
+    submit('review-command-result', { prepared_request: request })
     const [last] = execution.getFrontier()
-    assert.equal(last!.definition.id, '无输出命令')
+    assert.equal(last!.definition.id, 'empty-command')
     assert.deepEqual(last!.input, { prepared_request: request })
     execFileSync('/bin/sh', ['-c', last!.definition.command as string], { cwd: root })
-    submit('无输出命令', {})
+    submit('empty-command', {})
     assert.deepEqual(execution.getResult(), { status: 'completed', output: {} })
   } finally { await rm(root, { recursive: true, force: true }) }
 })
@@ -303,19 +303,19 @@ test('the development Agent template passes real input into prompts and nested c
     execution.submit(node!.instanceId, output)
   }
   const request = '中文、"引号"和换行\n需要保留。'
-  submit('填写讨论需求', { request })
+  submit('collect-discussion', { request })
   const [foreground] = execution.getFrontier()
   assert.equal(foreground!.definition.mode, 'foreground')
   assert.notEqual(foreground!.definition.is_auto_start, true)
   assert.deepEqual(foreground!.input, { request })
   assert.ok(renderTextTemplate(foreground!.definition.prompt as string, foreground!.input).includes(request))
-  submit('台前讨论', { summary: request })
+  submit('discuss', { summary: request })
   const [background] = execution.getFrontier()
   assert.equal(background!.definition.mode, 'background')
   assert.equal(background!.definition.is_auto_start, true)
   assert.deepEqual(background!.input, { summary: request })
   assert.ok(renderTextTemplate(background!.definition.prompt as string, background!.input).includes(request))
-  submit('台后整理', { report: '已确认的报告' })
+  submit('summarize', { report: '已确认的报告' })
   assert.deepEqual(execution.getResult(), { status: 'completed', output: { report: '已确认的报告' } })
 })
 
@@ -377,18 +377,18 @@ test('the OpenSpec template hands the proposed change name to implementation and
     const request = '修复登录重定向循环。\n复现：登录后返回原页面。保留中文、"引号"和 <标记>。'
     const change_name = 'fix-login-redirect-loop'
     assert.deepEqual(definition.dag.filter((item: any) => item.type === 'node').map((node: any) => node.id),
-      ['填写需求', '澄清需求与生成方案', '实施与验证', '同步规格与归档'])
-    submit('填写需求', { request })
+      ['collect-request', 'plan-change', 'implement-verify', 'sync-archive'])
+    submit('collect-request', { request })
     const [proposal] = execution.getFrontier()
-    assert.equal(proposal!.definition.id, '澄清需求与生成方案')
+    assert.equal(proposal!.definition.id, 'plan-change')
     assert.deepEqual(proposal!.input, { request })
     assert.deepEqual(proposal!.definition.output_schema, { change_name: 'string' })
     assert.notEqual(proposal!.definition.is_auto_start, true)
     const proposalPrompt = renderTextTemplate(proposal!.definition.prompt as string, proposal!.input)
     assert.ok(proposalPrompt.includes(request))
     assert.ok(!proposalPrompt.includes('{{'))
-    submit('澄清需求与生成方案', { change_name })
-    for (const id of ['实施与验证', '同步规格与归档']) {
+    submit('plan-change', { change_name })
+    for (const id of ['implement-verify', 'sync-archive']) {
       const [node] = execution.getFrontier()
       assert.equal(node!.definition.id, id)
       assert.deepEqual(node!.input, { change_name })
@@ -531,5 +531,50 @@ test('the public kind query exposes saved identities as copies that cannot modif
     assert.equal(visible.executions[echo.instanceId].status, 'succeeded')
     assert.deepEqual(visible.executions[echo.instanceId].output, { message: 'loaded joint message' })
     assert.deepEqual(h.ctx.workflowNodes.records('joint_echo')[0].fact.output, { message: 'loaded joint message' })
+  } finally { await h.close() }
+})
+
+
+test('template names are optional, duplicate display names retain separate identities and snapshots', async () => {
+  const h = await host()
+  try {
+    await h.declare('@acme/no-name', 'id: no_name\ntype: dag\ndag: []\n')
+    await h.declare('@acme/first', 'id: first\nname: 同名\ntype: dag\ndag: []\n')
+    await h.declare('@acme/second', 'id: second\nname: 同名\ntype: dag\ndag: []\n')
+    for (const [id, name] of [['no_name', 'no_name'], ['first', '同名'], ['second', '同名']]) {
+      const detail = await h.request(`${TEMPLATES_PATH}/${id}`)
+      assert.equal(detail.status, 200)
+      const created = await h.request(INSTANCES_PATH, { workspaceId: 'a', name: id, templateId: id })
+      assert.equal(created.status, 201)
+      const result = await created.json()
+      assert.equal(result.templateId, id)
+      assert.equal(result.templateName, name)
+    }
+    for (const [index, value] of ['', '  ', null, 0, false].entries()) {
+      await h.declare(`@acme/invalid-name-${index}`, `id: invalid-name-${index}\nname: ${JSON.stringify(value)}\ntype: dag\ndag: []\n`)
+      assert.equal((await h.request(`${TEMPLATES_PATH}/invalid-name-${index}`)).status, 422)
+    }
+  } finally { await h.close() }
+})
+
+test('invalid action identities cannot be displayed or dispatched through the workflow API', async () => {
+  const h = await host()
+  try {
+    let calls = 0
+    const node: ServerNode = { ...external, describe() { return { actions: [
+      { id: '中文', label: { text: 'bad id' }, position: 1, icon: 'execute', target: { type: 'server' } },
+      { id: 'valid', label: { text: 'bad handler' }, position: 2, icon: 'edit', target: { type: 'client', handler: 'Bad' } },
+      { id: '0_review.zh-step', label: { text: 'valid' }, position: 3, icon: 'execute', target: { type: 'server' } },
+    ] } }, action() { calls++; return { fact: { kind: 'external', status: 'succeeded', output: {} } } } }
+    await h.ctx.plugin({ name: 'action-test', inject: ['workflowNodes'], apply(owner: Context) { owner.workflowNodes.register(owner, 'action-test', node) } })
+    await h.declare('@acme/action-test', 'id: action-test\ntype: dag\ndag:\n  - { id: task, type: node, node_kind: external }\n')
+    const detail = await (await h.request(INSTANCES_PATH, { workspaceId: 'a', name: 'actions', templateId: 'action-test' })).json()
+    const task = detail.snapshot.instances.find((item: any) => item.type === 'node')
+    assert.deepEqual(detail.nodeViews[task.instanceId].actions.map((action: any) => action.id), ['0_review.zh-step'])
+    const path = `${INSTANCES_PATH}/${detail.id}/nodes/${task.instanceId}/actions`
+    for (const id of ['中文', 'Start', 'start\n', 'start..again']) assert.equal((await h.request(`${path}/${encodeURIComponent(id)}`, {})).status, 409)
+    assert.equal(calls, 0)
+    assert.equal((await h.request(`${path}/0_review.zh-step`, {})).status, 200)
+    assert.equal(calls, 1)
   } finally { await h.close() }
 })

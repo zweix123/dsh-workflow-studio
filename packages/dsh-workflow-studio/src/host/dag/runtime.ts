@@ -1,3 +1,4 @@
+import { isIdentifier } from 'dsh-workflow-node/contract';
 import type { DataMap, Schema, InstanceId, ForItemIdentity, ErrorLocation, ErrorSource, ExecutionPhase, Program, Execution, FrontierItem, ExecutionSnapshot, ExecutionResult, SavedExecution } from './types.js';
 import type { Vertex, Plan, Edge } from './compiler.js';
 import { cloneDefinition } from './compiler.js';
@@ -127,7 +128,7 @@ function edgeValue(frame: Frame, edge: Edge, state: EdgeState): void {
       if (item === null || typeof item !== 'object' || Array.isArray(item)) fail('INVALID_FOR_VALUE', 'for-expansion', forLoc, path ? [...path, index] : undefined);
       const properties = container(item, false, 'for-expansion', forLoc, [...(path ?? []), index]);
       const key = Object.hasOwn(properties, 'key') ? properties.key!.value : undefined;
-      if (typeof key !== 'string' || key.length === 0) fail('INVALID_FOR_KEY', 'for-expansion', forLoc, path ? [...path, index, 'key'] : undefined);
+      if (!isIdentifier(key)) fail('INVALID_FOR_KEY', 'for-expansion', forLoc, path ? [...path, index, 'key'] : undefined);
       const identity = { key, index };
       if (keys.has(key)) fail('DUPLICATE_FOR_KEY', 'for-expansion', { ...forLoc, forItem: identity }, path ? [...path, index, 'key'] : undefined);
       keys.add(key);

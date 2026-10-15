@@ -1,3 +1,4 @@
+import { isIdentifier } from 'dsh-workflow-node/contract';
 import { types } from 'node:util';
 import type { CompileIssue, CompileIssueCode, DefinitionPath, DagDefinition, NodeDefinition, EdgeDefinition, Schema, TypeDescriptor } from './types.js';
 import { CompileError } from './errors.js';
@@ -85,6 +86,8 @@ export function compilePlan(source: unknown, rootProvider?: Schema): Vertex {
       else if (typeof (v as Record<string, unknown>)[key] !== kind) { issue('INVALID_STANDARD_FIELD', [...path, key], `${key} must be ${kind}`); valid = false; }
     }
     standard('id', 'string', v.type !== 'edge');
+    if (Object.hasOwn(v, 'id') && !isIdentifier(v.id)) { issue('INVALID_STANDARD_FIELD', [...path, 'id'], 'id must use lowercase ASCII letters or digits separated by single dot, underscore or hyphen'); valid = false; }
+    if (Object.hasOwn(v, 'name') && (typeof v.name !== 'string' || !v.name.trim())) { issue('INVALID_STANDARD_FIELD', [...path, 'name'], 'name must be a nonblank string'); valid = false; }
     if (typeof v.id === 'string') {
       if (ids.has(v.id)) issue('DUPLICATE_ID', [...path, 'id'], `Duplicate ID ${v.id}`);
       else ids.set(v.id, path);

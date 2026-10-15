@@ -1,3 +1,4 @@
+import { isIdentifier } from 'dsh-workflow-node/contract'
 import type { DagDefinition, NodeDefinition } from '../dag/index.js'
 import type { NodeLookup } from 'dsh-workflow-node/contract'
 
@@ -9,7 +10,7 @@ export function validateWorkflowNodes(definition: DagDefinition, nodes: NodeLook
       if (entry.type === 'dag') { visit(entry); continue }
       if (entry.type !== 'node') continue
       const kind = entry.node_kind
-      if (typeof kind !== 'string' || !nodes.has(kind)) throw new Error(`Node ${entry.id}: unavailable node_kind ${String(kind)} ${JSON.stringify(nodes.diagnose?.(String(kind)) ?? {})}`)
+      if (!isIdentifier(kind) || !nodes.has(kind)) throw new Error(`Node ${entry.id}: unavailable node_kind ${String(kind)} ${JSON.stringify(nodes.diagnose?.(String(kind)) ?? {})}`)
       nodes.get(kind)!.validate(structuredClone(entry))
     }
   }

@@ -1,0 +1,30 @@
+id: regression-identifier-keys
+name: 非法逐项标识回滚
+type: dag
+dag:
+  - id: source
+    name: 产生非法 key
+    type: node
+    node_kind: bash
+    command: printf '{"jobs":[{"key":"valid","value":1},{"key":"中文/业务号","value":2}]}'
+    output_schema:
+      jobs:
+        type: array
+        items:
+          type: object
+          properties:
+            key: string
+            value: number
+  - id: worker
+    name: 处理项
+    type: node
+    node_kind: bash
+    command: ''
+    input_schema:
+      value: number
+  - id: expand
+    name: 展开数据
+    type: edge
+    from: source
+    to: worker
+    for: jobs

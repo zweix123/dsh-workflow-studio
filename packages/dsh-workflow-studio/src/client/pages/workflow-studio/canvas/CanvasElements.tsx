@@ -15,7 +15,7 @@ const WorkflowNode = memo(function WorkflowNode({ data }: NodeProps<CanvasNode>)
   if (data.source === 'aggregate' || !data.view) return null
   const view = data.view
   const forItem = data.source === 'instance' ? data.forItem : undefined
-  return <div className="dsh-workflow-node" role="button" tabIndex={0} aria-label={`${view.detailsLabel} ${data.label}${forItem ? ` ${forItem.key}` : ''}`} onClick={event => { event.stopPropagation(); view.onInspect() }} onKeyDown={event => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); event.stopPropagation(); view.onInspect() } }} data-graph-node data-definition-id={data.label} data-status={view.displayStatus ?? (data.source === 'template' ? undefined : data.status)}>
+  return <div className="dsh-workflow-node" role="button" tabIndex={0} aria-label={`${view.detailsLabel} ${data.label}${forItem ? ` ${forItem.key}` : ''}`} onClick={event => { event.stopPropagation(); view.onInspect() }} onKeyDown={event => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); event.stopPropagation(); view.onInspect() } }} data-graph-node data-definition-id={data.definitionId} data-status={view.displayStatus ?? (data.source === 'template' ? undefined : data.status)}>
     <Handle id="left" type="target" position={Position.Left} /><Handle id="top" type="target" position={Position.Top} />
     <div className="dsh-workflow-node-top"><span className="dsh-workflow-node-kind">{view.kindLabel}</span>{data.source !== 'template' && <span className="dsh-workflow-node-status"><i aria-hidden="true" />{view.statusLabel}</span>}</div>
     <strong title={data.label}>{data.label}</strong>
@@ -32,7 +32,7 @@ const WorkflowNode = memo(function WorkflowNode({ data }: NodeProps<CanvasNode>)
 const DagGroupNode = memo(function DagGroupNode({ data }: NodeProps<CanvasNode>) {
   if (data.source === 'aggregate' || !data.view) return null
   const view = data.view
-  return <div className="dsh-workflow-dag-group" data-graph-node data-definition-id={data.label} data-status={data.source === 'template' ? undefined : data.status}>
+  return <div className="dsh-workflow-dag-group" data-graph-node data-definition-id={data.definitionId} data-status={data.source === 'template' ? undefined : data.status}>
     <Handle id="left" type="target" position={Position.Left} /><Handle id="top" type="target" position={Position.Top} />
     <div className="dsh-workflow-dag-heading" role="button" tabIndex={0} aria-label={`${view.detailsLabel} ${data.label}`} onClick={event => { event.stopPropagation(); view.onInspect() }} onKeyDown={event => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); event.stopPropagation(); view.onInspect() } }}>
       <strong title={data.label}>{data.label}</strong>
@@ -68,9 +68,9 @@ function ExpressionEdge(props: EdgeProps<CanvasEdge>) {
     : data.routeY === undefined ? smoothX : data.routeX ?? (props.sourceX + props.targetX) / 2
   const y = perimeter ? horizontal ? perimeter.coordinate : (props.sourceY + props.targetY) / 2
     : data.routeY === undefined ? smoothY : data.routeY
-  const label = [data.condition && data.conditionLabel, data.each && data.eachLabel].filter(Boolean).join(' / ')
-  return <><BaseEdge path={path} markerEnd={props.markerEnd} />{label && <EdgeLabelRenderer><button type="button" className="dsh-workflow-edge-label nodrag nopan" style={{ transform: `translate(-50%, -50%) translate(${x}px, ${y}px)` }}
-    aria-label={`${label}: ${[data.condition, data.each].filter(Boolean).join('; ')}`} onFocus={() => data.open?.(props.id, data)} onClick={() => data.open?.(props.id, data)}>{label}</button></EdgeLabelRenderer>}</>
+  const label = data.label ?? [data.condition && data.conditionLabel, data.each && data.eachLabel].filter(Boolean).join(' / ')
+  return <><BaseEdge path={path} markerEnd={props.markerEnd} />{label && <EdgeLabelRenderer>{!data.condition && !data.each ? <span className="dsh-workflow-edge-label" style={{ transform: `translate(-50%, -50%) translate(${x}px, ${y}px)` }}>{label}</span> : <button type="button" className="dsh-workflow-edge-label nodrag nopan" style={{ transform: `translate(-50%, -50%) translate(${x}px, ${y}px)` }}
+    aria-label={`${label}: ${[data.condition, data.each].filter(Boolean).join('; ')}`} onFocus={() => data.open?.(props.id, data)} onClick={() => data.open?.(props.id, data)}>{label}</button>}</EdgeLabelRenderer>}</>
 }
 export const nodeTypes = { workflow: WorkflowNode, dagGroup: DagGroupNode, aggregate: AggregateNode }
 export const edgeTypes = { expression: ExpressionEdge }

@@ -33,9 +33,9 @@ export function TemplateDetailPanel({ template, t, active, reading, onUpdate }: 
     <LayoutNotices report={template.layout} t={t} surface="template" />
     <div ref={runArea} className="dsh-workflow-run">
       <TemplateCanvas reading={reading} definition={template.definition} t={t} onInspect={setSelected} active={active} inspectorWidth={definition ? width : 0} />
-      {definition && <aside className="dsh-workflow-inspector dsh-workflow-template-inspector" aria-label={`${t('nodeDetails')} ${definition.id ?? template.definition.id}`} style={{ width: `${width}px` }}>
+      {definition && <aside className="dsh-workflow-inspector dsh-workflow-template-inspector" aria-label={`${t('nodeDetails')} ${definition.name ?? definition.id ?? template.definition.id}`} style={{ width: `${width}px` }}>
         <div className="dsh-workflow-inspector-resize" aria-label={t('resizeNodeDetails')} {...resizeHandle} />
-        <header><div><h3>{definition.id ?? template.definition.id}</h3></div><button type="button" aria-label={t('closeNodeDetails')} onClick={() => setSelected(null)}>×</button></header>
+        <header><div><h3>{definition.name ?? definition.id ?? template.definition.id}</h3></div><button type="button" aria-label={t('closeNodeDetails')} onClick={() => setSelected(null)}>×</button></header>
         <div className="dsh-workflow-inspector-body">
           <section aria-label={t('definitionDetails')}>
             <DefinitionDetails definition={definition} />

@@ -34,6 +34,8 @@ Agent 与 Bash 共用的 `{{ }}` 规则见[输入引用](./nodes/input-reference
 
 [产品规格](./specs/)定义需求和验收预期，[验收记录](./acceptance/)记录实际验证范围，[架构决策](./adrs/)说明长期设计选择。[CONTEXT.md](../CONTEXT.md)维护领域词汇，[AGENTS.md](../AGENTS.md)维护仓库约定。
 
+[标识符字符规则与定义名称](./specs/identifiers-and-data-references.zh.md)已实施统一 ID 与逐项 key 字符规则、JSON 业务字段名及可选 name 展示；实际自动化与宿主验证范围见[验收记录](./acceptance/identifiers-and-data-references.zh.md)。
+
 [文本插值与表达式求值](./specs/text-expressions.zh.md)已实施并通过项目自动化和真实宿主回归；覆盖与未验证范围见[验收记录](./acceptance/text-expressions.zh.md)，用户写法见整体 DAG 语法和节点文档。
 
 Form 填写浮窗的宿主样式与布局要求见[规格](./specs/form-dialog.zh.md)，实际验证见[验收记录](./acceptance/form-dialog.zh.md)。

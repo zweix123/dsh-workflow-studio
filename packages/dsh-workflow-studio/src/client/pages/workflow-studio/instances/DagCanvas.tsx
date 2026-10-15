@@ -34,7 +34,7 @@ export function DagCanvas({ nodes: nodeViews = emptyNodeViews, detail, t, onActi
         const view = detail.nodeViews?.[node.id]
         const entry = nodeViews.get(String(definition?.node_kind), view?.source)
         const Summary = entry?.node.Summary
-        return Summary && entry && item && definition?.type === 'node' ? <NodeBoundary key={entry.generation} message={t('nodeViewFailed')}><Summary label={item.definitionId} definition={definition as NodeDefinition} input={item.input as NodeData} output={item.status === 'completed' ? item.output as NodeData : undefined} execution={execution as NodeCardProps['execution']} data={view?.data} t={entry.t} /></NodeBoundary> : null
+        return Summary && entry && item && definition?.type === 'node' ? <NodeBoundary key={entry.generation} message={t('nodeViewFailed')}><Summary label={node.data.label} definition={definition as NodeDefinition} input={item.input as NodeData} output={item.status === 'completed' ? item.output as NodeData : undefined} execution={execution as NodeCardProps['execution']} data={view?.data} t={entry.t} /></NodeBoundary> : null
       })(),
       control: (() => {
         const item = detail.snapshot.instances.find(row => row.instanceId === node.id)
@@ -67,6 +67,7 @@ export function DagCanvas({ nodes: nodeViews = emptyNodeViews, detail, t, onActi
       <CanvasNavigation restored={Boolean(reading?.viewport)} nodes={nodes} edges={edges} candidates={candidates} active={active} ready={ready} inspectorWidth={inspectorWidth} t={t} />
     </ReactFlow>
     {currentExpression && <aside className="dsh-workflow-expression" role="dialog" aria-label={t('fullExpression')}><header><strong>{t('fullExpression')}</strong><button type="button" aria-label={t('closeExpression')} onClick={() => setExpression(null)}>×</button></header>
+      {currentExpression.label && <><strong>{currentExpression.label}</strong><code>{currentExpression.definitionId}</code></>}
       {currentExpression.condition && <><span>{t('conditionMark')} · if</span><pre>{currentExpression.condition}</pre></>}
       {currentExpression.each && <><span>{t('eachMark')} · for</span><pre>{currentExpression.each}</pre></>}
     </aside>}

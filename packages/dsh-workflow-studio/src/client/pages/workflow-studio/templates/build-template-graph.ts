@@ -27,17 +27,17 @@ export function buildTemplateGraph(root: DagDefinition): CanvasGraph {
       const size = item.type === 'dag' ? visit(item, childPath, [...names, item.id]) : { width: WIDTH, height: HEIGHT }
       items.push({
         id: idAt(childPath), type: item.type === 'dag' ? 'dagGroup' : 'workflow',
-        data: { source: 'template', label: item.id, kind: item.type, definitionPath: childPath.flatMap(index => ['dag', index]) }, position: { x: 0, y: 0 },
+        data: { source: 'template', label: item.name ?? item.id, definitionId: item.id, kind: item.type, definitionPath: childPath.flatMap(index => ['dag', index]) }, position: { x: 0, y: 0 },
         style: item.type === 'dag' ? { width: size.width + PADDING * 2, height: size.height + HEADER + PADDING } : { width: WIDTH, height: HEIGHT },
         ...(path.length && { parentId: parent }), draggable: false, selectable: false, connectable: false,
       })
     }
     if (self) items.push({
-      id: `${parent}/recursive`, type: 'workflow', data: { source: 'template', label: dag.id, kind: 'recursive', definitionPath: path.flatMap(index => ['dag', index]) },
+      id: `${parent}/recursive`, type: 'workflow', data: { source: 'template', label: dag.name ?? dag.id, definitionId: dag.id, kind: 'recursive', definitionPath: path.flatMap(index => ['dag', index]) },
       position: { x: 0, y: 0 }, style: { width: WIDTH, height: HEIGHT },
       ...(path.length && { parentId: parent }), draggable: false, selectable: false, connectable: false,
     })
-    const byName = new Map(items.map(item => [item.data.label, item]))
+    const byDefinition = new Map(items.map(item => [item.data.definitionId, item]))
     const layout = layers.get(names.join('\0'))
     const valid = layout && layout.issues.length === 0
     const segments: Array<{ direction: LayoutDirection; ids: string[] }> = valid
@@ -47,7 +47,7 @@ export function buildTemplateGraph(root: DagDefinition): CanvasGraph {
     let segment = 0
     for (const name of valid ? layout.order : vertices.map(row => row.item.id)) {
       segment = starts.get(name) ?? segment
-      if (byName.has(name) && name !== dag.id) segments[segment]!.ids.push(name)
+      if (byDefinition.has(name) && name !== dag.id) segments[segment]!.ids.push(name)
     }
     let width = 0
     let height = 0
@@ -57,7 +57,7 @@ export function buildTemplateGraph(root: DagDefinition): CanvasGraph {
       graph.setGraph({ rankdir: part.direction === 'vertical' ? 'TB' : 'LR', ranksep: 88, nodesep: 36, marginx: 0, marginy: 0 })
       graph.setDefaultEdgeLabel(() => ({}))
       for (const name of part.ids) {
-        const node = byName.get(name)!
+        const node = byDefinition.get(name)!
         graph.setNode(name, { width: Number(node.style?.width), height: Number(node.style?.height) })
       }
       for (const item of dag.dag) if (item.type === 'edge' && part.ids.includes(item.from) && part.ids.includes(item.to)) graph.setEdge(item.from, item.to)
@@ -71,7 +71,7 @@ export function buildTemplateGraph(root: DagDefinition): CanvasGraph {
           : (rowHeight - part.height) / 2 + (path.length ? HEADER : 0)),
       })
       for (const name of part.ids) {
-        const node = byName.get(name)!
+        const node = byDefinition.get(name)!
         const box = part.graph.node(name) as { x: number; y: number; width: number; height: number }
         node.position = { x: width + box.x - box.width / 2, y: (rowHeight - part.height) / 2 + box.y - box.height / 2 }
         node.data.direction = part.direction
@@ -81,7 +81,7 @@ export function buildTemplateGraph(root: DagDefinition): CanvasGraph {
     width = Math.max(WIDTH, width - (placed.length ? 140 : 0))
     height = rowHeight
     if (self) {
-      const marker = byName.get(dag.id)!
+      const marker = byDefinition.get(dag.id)!
       marker.position = { x: 0, y: height + 36 }
       height += HEIGHT + 36
     }
@@ -89,8 +89,8 @@ export function buildTemplateGraph(root: DagDefinition): CanvasGraph {
     nodes.push(...items)
     for (const [index, item] of dag.dag.entries()) {
       if (item.type !== 'edge') continue
-      const source = byName.get(item.from)
-      const target = byName.get(item.to)
+      const source = byDefinition.get(item.from)
+      const target = byDefinition.get(item.to)
       if (!source || !target) continue
       const perimeter = perimeterRoutes.get(edgeKey(item.from, item.to))
       const sourceDirection = source.data.direction ?? 'horizontal'
@@ -99,7 +99,7 @@ export function buildTemplateGraph(root: DagDefinition): CanvasGraph {
         id: `${parent}/edge/${index}`, source: source.id, target: target.id,
         sourceHandle: perimeter ? perimeter.axis === 'x' ? 'left' : 'top' : sourceDirection === 'vertical' ? 'bottom' : 'right',
         targetHandle: perimeter ? perimeter.axis === 'x' ? 'left' : 'top' : targetDirection === 'vertical' ? 'top' : 'left',
-        type: 'expression', data: { source: 'template', definitionPath: [...path, index].flatMap(index => ['dag', index]), ...(item.id && { definitionId: item.id }), ...(item.if && { condition: item.if }), ...(item.for && { each: item.for }), ...(perimeter && { perimeter: { ...perimeter } }) },
+        type: 'expression', data: { source: 'template', definitionPath: [...path, index].flatMap(index => ['dag', index]), ...(item.id && { definitionId: item.id, label: item.name ?? item.id }), ...(item.if && { condition: item.if }), ...(item.for && { each: item.for }), ...(perimeter && { perimeter: { ...perimeter } }) },
         markerEnd: { type: MarkerType.ArrowClosed, color: 'var(--dsw-alias-label-secondary)' }, selectable: false,
       })
     }

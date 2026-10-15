@@ -4,7 +4,7 @@ import type { Context } from '@deepseek-ai/cordis'
 
 export type NodeValue = null | boolean | number | string | NodeValue[] | { [key: string]: NodeValue }
 export type NodeData = { [key: string]: NodeValue }
-export type NodeDefinition = { id: string; type: 'node'; node_kind?: NodeValue; input_schema?: NodeData; output_schema?: NodeData } & NodeData
+export type NodeDefinition = { id: string; name?: string; type: 'node'; node_kind?: NodeValue; input_schema?: NodeData; output_schema?: NodeData } & NodeData
 export type NodeStatus = 'running' | 'waiting' | 'succeeded' | 'failed' | 'unknown' | 'cancelled'
 
 export interface NodeFact {
@@ -72,3 +72,8 @@ export interface NodeLookup {
   acquire?(kind: string): (() => void) | undefined
   subscribe?(listener: () => void): () => void
 }
+
+/** Author-provided identity; the final assertion rejects even trailing newlines. */
+export const isIdentifier = (value: unknown): value is string => typeof value === 'string' && /^[a-z0-9]+(?:[._-][a-z0-9]+)*$(?![\s\S])/.test(value)
+
+export const hasValidActionIdentifiers = (action: NodeAction): boolean => isIdentifier(action.id) && (action.target.type !== 'client' || isIdentifier(action.target.handler))

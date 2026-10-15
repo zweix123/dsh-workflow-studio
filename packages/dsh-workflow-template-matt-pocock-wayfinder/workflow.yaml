@@ -11,7 +11,8 @@ dag:
     output_schema:
       request: string
     description: 填写本次工作流的真实需求。
-  - id: 绘制-Wayfinder-地图
+  - id: draw-wayfinder
+    name: 绘制-Wayfinder-地图
     type: dag
     input_schema: &a1
       request: string
@@ -19,7 +20,8 @@ dag:
       map_reference: string
       requires_wayfinding: boolean
     dag:
-      - id: 绘制-Wayfinder-地图-session
+      - id: draw-wayfinder-session
+        name: 绘制-Wayfinder-地图-session
         type: node
         node_kind: agent
         input_schema: *a1
@@ -38,7 +40,8 @@ dag:
           完成任务后在会话中说明已核验的结果和相关产物。用户点击“完成”后，由交付子 Agent 根据本次对话与实际产物整理符合
           output_schema 的结构化结果；材料缺失时保留对话供补充。
         output_schema: *a2
-  - id: 选择全部决策票
+  - id: select-decisions
+    name: 选择全部决策票
     type: dag
     input_schema: &a3
       map_reference: string
@@ -53,7 +56,8 @@ dag:
             map_reference: string
             ticket_reference: string
     dag:
-      - id: 选择全部决策票-session
+      - id: select-decisions-session
+        name: 选择全部决策票-session
         type: node
         node_kind: agent
         input_schema: *a3
@@ -65,14 +69,15 @@ dag:
 
           调用 $.wayfinder，读取 map_reference 指向的完整地图，一次返回当前全部开放 decision
           tickets，不在此处按 blocker 过滤。当前 map 只由本 workflow 创建和处理，不需要 claim、assignee
-          或跨 workflow 并发控制。tickets 中每一项使用稳定且唯一的 key，并携带 map_reference 和
+          或跨 workflow 并发控制。tickets 中每一项显式提供稳定且同批唯一的 key，值须符合 ^[a-z0-9]+(?:[._-][a-z0-9]+)*$，不得直接使用带大写或斜杠的 tracker 编号，并携带 map_reference 和
           ticket_reference。只返回严格符合 output_schema 的结果，不要开始讨论任何 ticket。
 
 
           完成任务后在会话中说明已核验的结果和相关产物。用户点击“完成”后，由交付子 Agent 根据本次对话与实际产物整理符合
           output_schema 的结构化结果；材料缺失时保留对话供补充。
         output_schema: *a4
-  - id: 决策票递归树
+  - id: decision-tree
+    name: 决策票递归树
     type: dag
     input_schema:
       map_reference: string
@@ -81,7 +86,8 @@ dag:
     description: 处理一个 decision ticket；发现新的前置决策时，递归分裂出 blocker tickets 和当前 ticket 的
       continuation。
     dag:
-      - id: 处理单个决策票
+      - id: process-decision
+        name: 处理单个决策票
         type: dag
         input_schema: &a5
           map_reference: string
@@ -97,7 +103,8 @@ dag:
                 map_reference: string
                 ticket_reference: string
         dag:
-          - id: 处理单个决策票-session
+          - id: process-decision-session
+            name: 处理单个决策票-session
             type: node
             node_kind: agent
             input_schema: *a5
@@ -118,27 +125,30 @@ dag:
               map，并返回 next_tickets=[] 和 continue_decision=false。若讨论发现新的前置决策，创建新的
               blocker tickets 并写入 tracker，同时保持当前 ticket open；返回的 next_tickets
               必须包含每个新 blocker，还必须包含一个指向当前 ticket 的 continuation 项，并返回
-              continue_decision=true。continuation 使用新的唯一 key，但 ticket_reference
+              continue_decision=true。next_tickets 的每项 key 同样须符合上述小写 ASCII 标识规则；continuation 使用新的唯一 key，但 ticket_reference
               仍指向当前 ticket；它启动后应按照前述规则等待 blocker 完成。不得实现 destination 本身。
 
 
               完成任务后在会话中说明已核验的结果和相关产物。用户点击“完成”后，由交付子 Agent 根据本次对话与实际产物整理符合
               output_schema 的结构化结果；材料缺失时保留对话供补充。
             output_schema: *a6
-      - id: 分裂决策票
+      - id: split-decision
+        name: 分裂决策票
         type: edge
-        from: 处理单个决策票
-        to: 决策票递归树
+        from: process-decision
+        to: decision-tree
         if: continue_decision
         for: next_tickets
-  - id: 发布规格
+  - id: publish-spec
+    name: 发布规格
     type: dag
     input_schema: &a7
       map_reference: string
     output_schema: &a8
       spec_reference: string
     dag:
-      - id: 发布规格-session
+      - id: publish-spec-session
+        name: 发布规格-session
         type: node
         node_kind: agent
         input_schema: *a7
@@ -156,14 +166,16 @@ dag:
           完成任务后在会话中说明已核验的结果和相关产物。用户点击“完成”后，由交付子 Agent 根据本次对话与实际产物整理符合
           output_schema 的结构化结果；材料缺失时保留对话供补充。
         output_schema: *a8
-  - id: 发布实现票
+  - id: publish-tickets
+    name: 发布实现票
     type: dag
     input_schema: &a9
       spec_reference: string
     output_schema: &a10
       ticket_set_reference: string
     dag:
-      - id: 发布实现票-session
+      - id: publish-tickets-session
+        name: 发布实现票-session
         type: node
         node_kind: agent
         input_schema: *a9
@@ -181,13 +193,15 @@ dag:
           完成任务后在会话中说明已核验的结果和相关产物。用户点击“完成”后，由交付子 Agent 根据本次对话与实际产物整理符合
           output_schema 的结构化结果；材料缺失时保留对话供补充。
         output_schema: *a10
-  - id: 实现循环
+  - id: implementation-loop
+    name: 实现循环
     type: dag
     input_schema:
       ticket_set_reference: string
     output_schema: {}
     dag:
-      - id: 实现下一张票
+      - id: implement-next
+        name: 实现下一张票
         type: dag
         input_schema: &a11
           ticket_set_reference: string
@@ -195,7 +209,8 @@ dag:
           ticket_set_reference: string
           continue_implementation: boolean
         dag:
-          - id: 实现下一张票-session
+          - id: implement-next-session
+            name: 实现下一张票-session
             type: node
             node_kind: agent
             input_schema: *a11
@@ -215,37 +230,44 @@ dag:
               完成任务后在会话中说明已核验的结果和相关产物。用户点击“完成”后，由交付子 Agent 根据本次对话与实际产物整理符合
               output_schema 的结构化结果；材料缺失时保留对话供补充。
             output_schema: *a12
-      - id: 继续实现循环
+      - id: continue-implementation
+        name: 继续实现循环
         type: edge
-        from: 实现下一张票
-        to: 实现循环
+        from: implement-next
+        to: implementation-loop
         if: continue_implementation
-  - id: 开始选择决策票
+  - id: start-decisions
+    name: 开始选择决策票
     type: edge
-    from: 绘制-Wayfinder-地图
-    to: 选择全部决策票
+    from: draw-wayfinder
+    to: select-decisions
     if: requires_wayfinding
-  - id: 分发全部决策票
+  - id: dispatch-decisions
+    name: 分发全部决策票
     type: edge
-    from: 选择全部决策票
-    to: 决策票递归树
+    from: select-decisions
+    to: decision-tree
     for: tickets
-  - id: 规划上下文进入规格
+  - id: planning-to-spec
+    name: 规划上下文进入规格
     type: edge
-    from: 绘制-Wayfinder-地图
-    to: 发布规格
-  - id: 等待决策森林
+    from: draw-wayfinder
+    to: publish-spec
+  - id: await-decisions
+    name: 等待决策森林
     type: edge
-    from: 决策票递归树
-    to: 发布规格
-  - id: 规格转实现票
+    from: decision-tree
+    to: publish-spec
+  - id: spec-to-tickets
+    name: 规格转实现票
     type: edge
-    from: 发布规格
-    to: 发布实现票
-  - id: 实现票转实现循环
+    from: publish-spec
+    to: publish-tickets
+  - id: tickets-to-loop
+    name: 实现票转实现循环
     type: edge
-    from: 发布实现票
-    to: 实现循环
+    from: publish-tickets
+    to: implementation-loop
   - type: edge
     from: collect-workflow-input
-    to: 绘制-Wayfinder-地图
+    to: draw-wayfinder

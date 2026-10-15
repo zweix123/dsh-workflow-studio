@@ -83,7 +83,7 @@ function attemptPlan(context: NodeContext, parentFor: () => Promise<Agent>): Nod
       if (!isBackground) { assertIdle(parent); assertForkContext(parent) }
       const pending = context.services.subagents.start(isBackground ? 'spawn' : 'fork', { parent, signal: new AbortController().signal,
         ...(isBackground ? { agentOptions: context.services.agentDefaultModel.currentSelection() } : {}),
-        label: isBackground ? context.definition.id : 'Workflow result handoff', prompt: [{ type: 'text', text: prompt }], ...(schema ? { outputSchema: schema } : {}) })
+        label: isBackground ? context.definition.name ?? context.definition.id : 'Workflow result handoff', prompt: [{ type: 'text', text: prompt }], ...(schema ? { outputSchema: schema } : {}) })
       run = await pending
       attempt.address = { kind: 'subagent', parentSessionId: parent.id, childSessionId: run.id, mode: 'one-shot' }
       await context.save({ kind: 'agent', status: 'running', business: structuredClone(business) })
@@ -142,7 +142,7 @@ export function createAgentNode(host?: Context): ServerNode & { dispose(): Promi
       const retry = isBackground && (fact?.status === 'failed' || fact?.status === 'unknown')
       return { actions: [
         ...(ready && !business?.sessionCreated && !records && !retry && business?.pendingOutput === undefined && fact?.status !== 'succeeded' ? [{ id: 'start', position: 1 as const, icon: 'execute' as const, label: { namespace: name, key: 'executeNode' }, target: { type: 'server' as const }, disabled: fact?.status === 'running' }] : []),
-        ...(!isBackground && business?.sessionCreated ? [{ id: 'open', position: 1 as const, icon: 'conversation' as const, label: { namespace: name, key: 'openSession' }, target: { type: 'client' as const, handler: 'openSession' } }] : []),
+        ...(!isBackground && business?.sessionCreated ? [{ id: 'open', position: 1 as const, icon: 'conversation' as const, label: { namespace: name, key: 'openSession' }, target: { type: 'client' as const, handler: 'open-session' } }] : []),
         ...(records ? [{ id: 'records', position: (isBackground ? 1 : 3) as 1 | 3, icon: 'record' as const, label: { namespace: name, key: 'openRecord' }, target: { type: 'client' as const, handler: 'records' } }] : []),
         ...(ready ? [{ id: 'complete', position: 2 as const, icon: 'complete' as const, label: { namespace: name, key: 'completeSessionAgent' }, target: { type: 'server' as const }, disabled: !canComplete || fact?.status === 'running' || Boolean(generating) }] : []),
         ...(ready && retry ? [{ id: 'start', position: 3 as const, icon: 'retry' as const, label: { namespace: name, key: 'retryNavigation' }, target: { type: 'server' as const } }] : []),

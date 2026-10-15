@@ -5,7 +5,8 @@ description: 需要宿主已配置模型。提交需求，手动启动台前对�
 output_schema:
   report: string
 dag:
-  - id: 填写讨论需求
+  - id: collect-discussion
+    name: 填写讨论需求
     type: node
     node_kind: form
     output_schema:
@@ -18,7 +19,8 @@ dag:
     uiSchema:
       request:
         ui:widget: textarea
-  - id: 台前讨论
+  - id: discuss
+    name: 台前讨论
     type: node
     node_kind: agent
     mode: foreground
@@ -34,7 +36,8 @@ dag:
       请用中文给出简短的三步方案，无须修改文件或运行命令。
       用户可以继续讨论；确认后提醒用户返回工坊点击完成。
       summary 是最终方案的简短摘要。
-  - id: 台后整理组
+  - id: background-group
+    name: 台后整理组
     type: dag
     description: 接收台前摘要。内部台后节点就绪后自动执行，产出结果仍须人工确认，确认后才向根 DAG 交付 report。
     input_schema:
@@ -42,7 +45,8 @@ dag:
     output_schema:
       report: string
     dag:
-      - id: 台后整理
+      - id: summarize
+        name: 台后整理
         type: node
         node_kind: agent
         mode: background
@@ -59,8 +63,8 @@ dag:
           整理为简短的中文执行清单，不增加任务，不修改文件或运行命令。
           使用 structured_output 提交 report 字符串。
   - type: edge
-    from: 填写讨论需求
-    to: 台前讨论
+    from: collect-discussion
+    to: discuss
   - type: edge
-    from: 台前讨论
-    to: 台后整理组
+    from: discuss
+    to: background-group

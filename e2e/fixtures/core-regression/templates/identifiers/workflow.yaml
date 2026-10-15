@@ -1,0 +1,52 @@
+id: regression-identifiers
+type: dag
+layout:
+  direction: horizontal
+  segments:
+    - start_at: nested
+      direction: vertical
+dag:
+  - id: first
+    name: 同名任务
+    type: node
+    node_kind: bash
+    command: ''
+  - id: second
+    name: 同名任务
+    type: node
+    node_kind: bash
+    command: ''
+  - id: fallback
+    type: node
+    node_kind: bash
+    command: ''
+  - id: nested
+    name: 中文递归流程
+    type: dag
+    dag:
+      - id: step
+        name: 一个用于验证窄屏和长名称显示的中文处理任务
+        type: node
+        node_kind: bash
+        output_schema:
+          again: boolean
+        command: |
+          if [ -f recursed.txt ]; then printf '{"again":false}'; else touch recursed.txt; printf '{"again":true}'; fi
+      - id: repeat
+        name: 继续处理
+        type: edge
+        from: step
+        to: nested
+        if: again
+  - id: named-edge
+    name: 中文依赖
+    type: edge
+    from: first
+    to: second
+    if: 'true'
+  - type: edge
+    from: second
+    to: fallback
+  - type: edge
+    from: fallback
+    to: nested

@@ -17,10 +17,10 @@ export interface CanvasNodeView {
 }
 type NodeData = { label: string; direction?: LayoutDirection; segment?: number }
 export type TemplateNodeData = NodeData & DefinitionRef & {
-  source: 'template'; kind: 'node' | 'dag' | 'recursive'; view?: CanvasNodeView
+  source: 'template'; definitionId: string; kind: 'node' | 'dag' | 'recursive'; view?: CanvasNodeView
 }
 export type InstanceNodeData = NodeData & DefinitionRef & {
-  source: 'instance'; kind: 'node' | 'dag'; instanceId: string; status: CanvasStatus
+  source: 'instance'; definitionId: string; kind: 'node' | 'dag'; instanceId: string; status: CanvasStatus
   forItem?: ForItemIdentity; view?: CanvasNodeView
 }
 export type PositionNodeData = NodeData & DefinitionRef & {
@@ -33,7 +33,7 @@ export type CanvasNode = Node<CanvasNodeData, 'workflow' | 'dagGroup' | 'aggrega
 export type RuntimeCanvasNode = Node<InstanceNodeData | PositionNodeData, 'workflow' | 'dagGroup'>
 export type TemplateCanvasNode = Node<TemplateNodeData, 'workflow' | 'dagGroup'>
 
-export type Expression = { condition?: string; each?: string }
+export type Expression = { label?: string; definitionId?: string; condition?: string; each?: string }
 type EdgeData = Expression & {
   conditionLabel?: string; eachLabel?: string
   open?: (id: string, expression: Expression) => void

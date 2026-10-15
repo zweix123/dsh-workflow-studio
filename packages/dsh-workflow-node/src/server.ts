@@ -2,7 +2,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
 import type {} from '@deepseek-ai/dsh-app-boot'
 import { randomUUID } from 'node:crypto'
-import { nodeService, type ServerNode, type NodeRecord } from './index.js'
+import { isIdentifier, nodeService, type ServerNode, type NodeRecord } from './index.js'
 
 declare module '@deepseek-ai/cordis' { interface Context { workflowNodes: NodeRegistry } }
 
@@ -19,7 +19,7 @@ export class NodeRegistry {
   private readers = new Set<(kind: string) => NodeRecord[]>()
   constructor(private readonly ctx: Context) {}
   register(owner: Context, source: string, node: ServerNode, resources: { dispose?: () => void | Promise<void> } = {}): void {
-    if (!node.kind.trim() || !source.trim()) throw new Error('Node kind and source must be nonempty')
+    if (!isIdentifier(node.kind) || !source.trim()) throw new Error('Node kind must be a valid identifier and source must be nonempty')
     const entry = owner.fiber.entry
     const actual = entry && owner.get('pluginPackages')?.packageOf(entry.options.name, entry.parent.tree.ctx.baseUrl ?? owner.baseUrl ?? '')
     const runtimeName = owner.fiber.runtime?.name

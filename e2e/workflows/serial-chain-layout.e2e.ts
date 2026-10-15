@@ -19,7 +19,7 @@ test('串行链模板预览与实例四阶段对齐，跨节点边绕行且主�
     })).toBe(true)
     const geometry = await browser.evaluate(() => {
       const panel = document.querySelector('.dsh-workflow-studio-panel:not([hidden])')!
-      const cards = ['填写需求', '澄清需求与生成方案', '实施与验证', '同步规格与归档'].map(name => {
+      const cards = ['collect-request', 'plan-change', 'implement-verify', 'sync-archive'].map(name => {
         const card = panel.querySelector(`[data-graph-node][data-definition-id="${name}"]`)!
         const node = card.closest('.react-flow__node') as HTMLElement
         const position = new DOMMatrix(getComputedStyle(node).transform)

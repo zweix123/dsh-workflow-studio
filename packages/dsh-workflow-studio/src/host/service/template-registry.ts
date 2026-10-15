@@ -22,9 +22,8 @@ export class TemplateRegistry {
       const raw = structuredClone(value.definition) as Record<string, unknown> | null
       if (raw && typeof raw.id === 'string') row.id = raw.id
       if (raw && typeof raw.name === 'string' && raw.name.trim()) row.name = raw.name
-      if (!/^[a-z0-9]+(?:[.-][a-z0-9]+)*$/.test(row.id) || row.id !== row.id.trim()) throw new Error('Template root id must use lowercase ASCII letters or digits separated by single "-" or "." characters')
-      if (!row.name) throw new Error('Template root name must be a nonempty string')
       row.definition = compile(raw, {}).getDefinition()
+      row.name = row.definition.name ?? row.definition.id
       row.templateDirectory = value.templateDirectory
       const layout = inspectLayout(row.definition)
       if (layout.layers.length) row.layout = layout

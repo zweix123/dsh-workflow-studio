@@ -34,6 +34,8 @@ npm run test:e2e -- e2e/workflows/templates.e2e.ts e2e/workflows/agent-handoff.e
 
 ## 2026-10-15 模板改名复验
 
+以下为统一标识规则实施前的历史结果（基线 `c6163c9`）。中文定义 ID 和禁止下划线的旧规则已由[标识与名称验收](./identifiers-and-data-references.zh.md)取代。
+
 依据：[模板规格](../specs/openspec-change-template.zh.md)、[模板分发规格](../specs/template-plugin-distribution.zh.md#模板身份与展示名称)。被测范围：模板目录、npm 包、默认 bundle 依赖与加载地址、中文展示名称及对应引用。目录改为 `packages/dsh-workflow-template-openspec-change/`，包名为 `@dsh-workflow/template-openspec-change`，展示名为“OpenSpec 变更工作流”；模板 ID 和加载器 ID 分别统一为 `openspec-change.zh`、`workflow-template-openspec-change.zh`，测试与规格文件名同步统一；模板登记增加 ID 格式校验。
 
 环境为已安装的 dsh `0.2.0-rc.1`、Node `26.7.0`、npm `11.19.0`、pnpm `11.25.0` 和无界面 Chromium。复用隔离宿主夹具，每条用例独立准备环境并验证真实宿主重启。

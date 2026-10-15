@@ -4,7 +4,8 @@ type: dag
 output_schema: {}
 description: 把需求整理成可审阅的方案，按方案实施并验证，最后同步规格、归档变更。
 dag:
-  - id: 填写需求
+  - id: collect-request
+    name: 填写需求
     type: node
     node_kind: form
     output_schema:
@@ -18,7 +19,8 @@ dag:
       request:
         ui:widget: textarea
 
-  - id: 澄清需求与生成方案
+  - id: plan-change
+    name: 澄清需求与生成方案
     type: node
     node_kind: agent
     input_schema:
@@ -38,7 +40,8 @@ dag:
       提醒用户确认方案后在工坊点击“完成”，再手动启动“实施与验证”。
       完成时通过已有结构化结果交付输出 change_name，其值必须是实际创建的 change 名称，不是候选名称。
 
-  - id: 实施与验证
+  - id: implement-verify
+    name: 实施与验证
     type: node
     node_kind: agent
     input_schema:
@@ -57,7 +60,8 @@ dag:
       所有实施任务及必要验证完成后，提醒用户在工坊点击“完成”，再手动启动“同步规格与归档”。
       本节点完成仅提交空对象。
 
-  - id: 同步规格与归档
+  - id: sync-archive
+    name: 同步规格与归档
     type: node
     node_kind: agent
     input_schema:
@@ -75,15 +79,15 @@ dag:
       本节点完成仅提交空对象。
 
   - type: edge
-    from: 填写需求
-    to: 澄清需求与生成方案
+    from: collect-request
+    to: plan-change
   - type: edge
-    from: 澄清需求与生成方案
-    to: 实施与验证
+    from: plan-change
+    to: implement-verify
   - type: edge
-    from: 实施与验证
-    to: 同步规格与归档
+    from: implement-verify
+    to: sync-archive
   # 实施节点输出为空，归档所需的名称直接来自生成方案节点。
   - type: edge
-    from: 澄清需求与生成方案
-    to: 同步规格与归档
+    from: plan-change
+    to: sync-archive

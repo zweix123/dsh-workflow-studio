@@ -74,3 +74,24 @@ test('built-in actions declare stable positions through failures and accepted re
   assert.deepEqual(actions(agentNode, failure, background).map(a => [a.id, a.position, Boolean(a.disabled)]), [['records', 1, false], ['complete', 2, true], ['start', 3, false]])
   assert.deepEqual(actions(agentNode, { ...failure, status: 'succeeded', output: {} }, background).map(a => [a.id, a.position, Boolean(a.disabled)]), [['records', 1, false], ['complete', 2, false]])
 })
+
+test('server and browser registries reject invalid contract identities without normalizing them', async () => {
+  const { BrowserNodeRegistry } = await import('../../dsh-workflow-node/src/browser.js')
+  const ctx = new Context()
+  try {
+    await ctx.plugin(registryPlugin)
+    const browser = new BrowserNodeRegistry()
+    for (const kind of ['0', 'review_v2', 'review.zh', 'review-step']) {
+      ctx.workflowNodes.register(ctx, 'test-package', { ...echo, kind })
+      browser.register(ctx, 'test-package', { kind })
+      assert.equal(ctx.workflowNodes.get(kind)?.kind, kind)
+      assert.equal(browser.get(kind, 'test-package')?.node.kind, kind)
+    }
+    for (const invalid of ['', 'Review', '中文', '_review', 'review_', 'review..zh', 'review-_task', 'review\n', 'review\0']) {
+      assert.throws(() => ctx.workflowNodes.register(ctx, 'test-package', { ...echo, kind: invalid }), /kind/)
+      assert.throws(() => browser.register(ctx, 'test-package', { kind: invalid }), /kind/)
+      assert.throws(() => browser.register(ctx, 'test-package', { kind: 'echo', handlers: { [invalid]: () => {} } }), /handler/)
+      assert.throws(() => browser.register(ctx, 'test-package', { kind: 'echo', interactions: { [invalid]: () => null } }), /handler/)
+    }
+  } finally { await ctx.fiber.dispose() }
+})

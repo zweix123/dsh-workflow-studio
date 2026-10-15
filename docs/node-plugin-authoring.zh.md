@@ -13,6 +13,12 @@
 - [Form 浏览器入口](../packages/dsh-workflow-node-form/src/client.tsx)及[包声明](../packages/dsh-workflow-node-form/package.json)：可选浏览器贡献、交互和语言登记。
 - [默认装配](../packages/dsh-workflow-bundle/cordis.patch.yml)及[开发体验模板](../packages/dsh-workflow-dev-templates/README.zh.md)：实际插件装配与节点功能体验。
 
+## 标识、名称与业务字段
+
+`node_kind`、动作 `id`、客户端 `handlers` / `interactions` 的名称和动作目标 `handler` 均遵循[统一标识规则](./dag-syntax.zh.md#31-工作流模板与节点类型)。服务端与浏览器登记拒绝非法 kind，浏览器登记拒绝非法 handler；展示时隐藏非法动作 ID/handler，服务端调用也拒绝非法动作 ID。各自的登记、冲突与唯一性范围保持不变，不建立跨插件动作名称空间。插件包名与 locale 的 key 不属于该身份字符规则。
+
+公共定义 `name` 由 DAG 校验，节点不得覆盖其语义。`NodeDetailsProps.label` / `NodeViewProps.label` 采用定义名称或 ID 回退，动作自身仍使用 `NodeText label`。业务数据字段遵循 JSON 字符串键规则；引用和执行请使用定义或实例身份，不以 label 定位。
+
 ## 服务端登记
 
 仅依赖 `dsh-workflow-node/contract` 的 `ServerNode`、`NodeContext`、`NodeFact` 等公共类型。插件导出 `name`，与自己的 `package.json.name` 一致，声明 `inject: ['workflowNodes', ...node.requires]`，在 `apply(ctx)` 中调用：

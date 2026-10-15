@@ -102,7 +102,7 @@ export function InstanceRunPanel({ nodes = emptyNodeViews, detail, t, onUpdate, 
     if (!item || definition?.type !== 'node') return
     const entry = nodes.get(String(definition.node_kind), detail.nodeViews?.[id]?.source)
     const execution = detail.executions?.[id]
-    return { data: detail.nodeViews?.[id]?.data, instanceId: detail.id, nodeInstanceId: id, label: item.definitionId, definition: definition as NodeDefinition, input: item.input as NodeData,
+    return { data: detail.nodeViews?.[id]?.data, instanceId: detail.id, nodeInstanceId: id, label: definition.name ?? item.definitionId, definition: definition as NodeDefinition, input: item.input as NodeData,
       output: (item.status === 'completed' ? item.output : execution?.status === 'succeeded' ? execution.output : undefined) as NodeData | undefined,
       execution: execution as NodeViewProps['execution'], ready: item.status === 'ready', pending: Boolean(detail.incompatible) || pending.includes(id),
       t: entry?.t ?? (key => key), action: (name, payload) => run(id, name, payload), active, request: requestOwners.current.get(id) === entry?.generation ? requests[id] : undefined, reportError: failure => setError({ key: 'requestFailed', message: failure instanceof Error ? failure.message : String(failure), nodeId: id }), error: error?.nodeId === id ? `${t(error.key)} ${error.message ?? ''}` : undefined,
@@ -132,7 +132,7 @@ export function InstanceRunPanel({ nodes = emptyNodeViews, detail, t, onUpdate, 
   const inspectionStatus = canvasStatusLabel(inspection?.status ?? 'waiting', execution?.status, t)
   const layoutReport = useMemo(() => inspectLayout(detail.definition), [detail.definition])
   return <section className="dsh-workflow-detail" aria-label={detail.name}>
-    <header className="dsh-workflow-detail-header"><div><h2>{detail.name}</h2><p>{detail.definition.name as string}</p></div><button type="button" className="dsh-workflow-button" onClick={() => setSelected(detail.snapshot.rootInstanceId)}>{t('rootDagDetails')}</button></header>
+    <header className="dsh-workflow-detail-header"><div><h2>{detail.name}</h2><p>{detail.definition.name ?? detail.definition.id}</p></div><button type="button" className="dsh-workflow-button" onClick={() => setSelected(detail.snapshot.rootInstanceId)}>{t('rootDagDetails')}</button></header>
     {error && <p className="dsh-workflow-run-error" role="alert">{t(error.key)} {error.message}</p>}
     {draftDiscarded && <p role="alert">{t('draftDiscarded')}</p>}
     {detail.incompatible && <p className="dsh-workflow-run-error" role="alert">{t('instanceIncompatible')} {detail.incompatible}</p>}
@@ -144,9 +144,9 @@ export function InstanceRunPanel({ nodes = emptyNodeViews, detail, t, onUpdate, 
     })}
     <div ref={runArea} className="dsh-workflow-run">
       <DagCanvas nodes={nodes} reading={reading} detail={detail} t={t} onAction={(id, name) => void invoke(id, name)} onInspect={setSelected} pending={pending} active={active} inspectorWidth={inspection ? width : 0} />
-      {inspection && <aside className="dsh-workflow-inspector" aria-label={`${t('nodeDetails')} ${inspection.definitionId}`} style={{ width: `${width}px` }}>
+      {inspection && <aside className="dsh-workflow-inspector" aria-label={`${t('nodeDetails')} ${definition?.name ?? inspection.definitionId}`} style={{ width: `${width}px` }}>
         <div className="dsh-workflow-inspector-resize" aria-label={t('resizeNodeDetails')} {...resizeHandle} />
-        <header><div><h3>{inspection.definitionId}</h3><p>{inspectionStatus}</p></div><button type="button" aria-label={t('closeNodeDetails')} onClick={() => setSelected(null)}>×</button></header>
+        <header><div><h3>{definition?.name ?? inspection.definitionId}</h3><p>{inspectionStatus}</p></div><button type="button" aria-label={t('closeNodeDetails')} onClick={() => setSelected(null)}>×</button></header>
         <div className="dsh-workflow-inspector-body">
           <section aria-label={t('definitionDetails')}>
             {definition ? <DefinitionDetails definition={definition} /> : <p role="status">{t('definitionMissing')}</p>}

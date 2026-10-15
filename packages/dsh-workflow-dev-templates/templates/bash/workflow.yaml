@@ -4,7 +4,8 @@ type: dag
 layout: { direction: vertical }
 description: 填写输入后手动执行命令，再观察下游自动执行；演示输入转义、模板附属脚本、stderr 日志、stdout JSON 和无输出命令。
 dag:
-  - id: 填写命令输入
+  - id: collect-command-input
+    name: 填写命令输入
     type: node
     node_kind: form
     output_schema:
@@ -17,7 +18,8 @@ dag:
     uiSchema:
       request:
         ui:widget: textarea
-  - id: 手动命令
+  - id: manual-command
+    name: 手动命令
     type: node
     node_kind: bash
     description: 点击执行。脚本从一个完整 Shell 参数读取输入，日志写 stderr，stdout 仅交付一个 JSON 对象；不修改工作区文件。
@@ -26,7 +28,8 @@ dag:
     output_schema:
       prepared_request: string
     command: node "$DSH_TEMPLATE_DIR/prepare.mjs" {{ request }}
-  - id: 自动命令
+  - id: auto-command
+    name: 自动命令
     type: node
     node_kind: bash
     description: 上游成功后自动执行一次，将相同内容交给核对表单；自动启动不表示自动重试。
@@ -37,7 +40,8 @@ dag:
       prepared_request: string
     command: >-
       node -e 'console.error("自动命令日志"); console.log(JSON.stringify({prepared_request: process.argv[1]}))' {{ prepared_request }}
-  - id: 核对命令结果
+  - id: review-command-result
+    name: 核对命令结果
     type: node
     node_kind: form
     description: 查看真实命令输出预填，确认后提交，使最后的无输出命令就绪。
@@ -52,7 +56,8 @@ dag:
     uiSchema:
       prepared_request:
         ui:widget: textarea
-  - id: 无输出命令
+  - id: empty-command
+    name: 无输出命令
     type: node
     node_kind: bash
     description: 点击执行。未声明输出时 stdout 只是日志，节点以空对象完成，根 DAG 完成。
@@ -60,14 +65,14 @@ dag:
       prepared_request: string
     command: node -e 'console.log("这段 stdout 是日志，不作为业务输出")'
   - type: edge
-    from: 填写命令输入
-    to: 手动命令
+    from: collect-command-input
+    to: manual-command
   - type: edge
-    from: 手动命令
-    to: 自动命令
+    from: manual-command
+    to: auto-command
   - type: edge
-    from: 自动命令
-    to: 核对命令结果
+    from: auto-command
+    to: review-command-result
   - type: edge
-    from: 核对命令结果
-    to: 无输出命令
+    from: review-command-result
+    to: empty-command

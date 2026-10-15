@@ -37,6 +37,7 @@ export function TemplateCanvas({ definition, t, onInspect, active, inspectorWidt
       <CanvasNavigation restored={Boolean(reading?.viewport)} nodes={nodes} edges={edges} candidates={[]} active={active} ready={ready} inspectorWidth={inspectorWidth} t={t} template />
     </ReactFlow>
     {expression && <aside className="dsh-workflow-expression" role="dialog" aria-label={t('fullExpression')}><header><strong>{t('fullExpression')}</strong><button type="button" aria-label={t('closeExpression')} onClick={() => setExpression(undefined)}>×</button></header>
+      {expression.value.label && <><strong>{expression.value.label}</strong><code>{expression.value.definitionId}</code></>}
       {expression.value.condition && <><span>{t('conditionMark')} · if</span><pre>{expression.value.condition}</pre></>}
       {expression.value.each && <><span>{t('eachMark')} · for</span><pre>{expression.value.each}</pre></>}
     </aside>}

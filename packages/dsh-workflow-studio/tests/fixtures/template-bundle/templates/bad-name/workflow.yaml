@@ -1,3 +1,4 @@
 id: missing-name
+name: ""
 type: dag
 dag: []

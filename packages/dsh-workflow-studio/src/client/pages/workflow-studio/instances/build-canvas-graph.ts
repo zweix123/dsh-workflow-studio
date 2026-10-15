@@ -6,7 +6,7 @@ import { inspectLayout, type LayoutDirection } from '../../../../shared/layout.j
 import { canvasPosition } from '../canvas/navigation.js'
 import { edgeKey, layoutGraph, type PerimeterRoute } from '../canvas/layout-graph.js'
 import { definitionAt } from '../DefinitionDetails.js'
-import type { CanvasGraph, CanvasNode, CanvasEdge, RuntimeCanvasNode } from '../canvas/types.js'
+import type { Expression, CanvasGraph, CanvasNode, CanvasEdge, RuntimeCanvasNode } from '../canvas/types.js'
 
 const NODE_WIDTH = 184
 const NODE_HEIGHT = 112
@@ -20,11 +20,10 @@ const positionKey = (parent: string, definition: string) => `${parent}\u0000${de
 export const buildPositionNodeId = (position: Pick<PositionSnapshot, 'parentInstanceId' | 'definitionId'>, status: 'waiting' | 'skipped') =>
   `${status}:${positionKey(position.parentInstanceId, position.definitionId)}`
 
-function edgeExpressions(root: InstanceDetail['definition'], edge: RuntimeEdgeSnapshot): { condition?: string; each?: string } | undefined {
+function edgeExpressions(root: InstanceDetail['definition'], edge: RuntimeEdgeSnapshot): Expression | undefined {
   const definition = definitionAt(root, edge.definitionPath)
   if (definition?.type !== 'edge') return
-  if (!definition.if && !definition.for) return
-  return { ...(definition.if && { condition: definition.if }), ...(definition.for && { each: definition.for }) }
+  return { ...(definition.id && { definitionId: definition.id, label: definition.name ?? definition.id }), ...(definition.if && { condition: definition.if }), ...(definition.for && { each: definition.for }) }
 }
 
 export function buildCanvasGraph(detail: InstanceDetail): CanvasGraph {
@@ -57,12 +56,12 @@ export function buildCanvasGraph(detail: InstanceDetail): CanvasGraph {
   for (const instance of snapshot.instances) {
     if (instance.parentInstanceId === null) continue
     add(instance.instanceId, instance.type === 'dag' ? 'dagGroup' : 'workflow',
-      { source: 'instance', instanceId: instance.instanceId, definitionPath: instance.definitionPath, label: instance.definitionId, status: instance.status, kind: instance.type, ...(instance.forItem && { forItem: instance.forItem }) },
+      { source: 'instance', instanceId: instance.instanceId, definitionPath: instance.definitionPath, definitionId: instance.definitionId, label: definitionAt(detail.definition, instance.definitionPath)?.name ?? instance.definitionId, status: instance.status, kind: instance.type, ...(instance.forItem && { forItem: instance.forItem }) },
       instance.parentInstanceId, instance.definitionId)
   }
   const placeholder = (position: PositionSnapshot, status: 'waiting' | 'skipped') => add(
     buildPositionNodeId(position, status), 'workflow',
-    { source: 'position', definitionPath: position.definitionPath, parentInstanceId: position.parentInstanceId, definitionId: position.definitionId, label: position.definitionId, status, kind: 'position' }, position.parentInstanceId, position.definitionId)
+    { source: 'position', definitionPath: position.definitionPath, parentInstanceId: position.parentInstanceId, definitionId: position.definitionId, label: definitionAt(detail.definition, position.definitionPath)?.name ?? position.definitionId, status, kind: 'position' }, position.parentInstanceId, position.definitionId)
   snapshot.waitingPositions.forEach(position => placeholder(position, 'waiting'))
   snapshot.skippedPositions.forEach(position => placeholder(position, 'skipped'))
 
@@ -80,9 +79,9 @@ export function buildCanvasGraph(detail: InstanceDetail): CanvasGraph {
         const inner = layout(item.id)
         item.style = { ...item.style, width: inner.width + GROUP_PADDING * 2, height: inner.height + GROUP_HEADER + GROUP_PADDING }
       }
-      const row = positions.get(item.data.label) ?? []
+      const row = positions.get(item.data.definitionId) ?? []
       row.push(item)
-      positions.set(item.data.label, row)
+      positions.set(item.data.definitionId, row)
     }
     for (const row of positions.values()) row.sort((a, b) => (a.data.forItem?.index ?? 0) - (b.data.forItem?.index ?? 0) || a.id.localeCompare(b.id))
     const parentPath = instances.get(frameId)?.definitionPath

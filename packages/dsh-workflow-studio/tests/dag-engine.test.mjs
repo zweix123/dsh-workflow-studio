@@ -85,11 +85,11 @@ test('conditions allow missing inputs and skipped positions never become exits',
 
 test('for instances wait for common dependencies, aggregate in original order and fill extra fields', () => {
   const e = compile(dag([node('prepare', {}, { jobs }), node('config', {}, { currency: 'string' }), node('worker', { value: 'number', currency: 'string' }, { price: 'number', nested: array('number') }), node('finish', { price: array('number') }, { total: 'number' }), edge('prepare', 'worker', { for: 'jobs' }), edge('config', 'worker'), edge('worker', 'finish')], {}, { total: 'number' })).createExecution({});
-  submit(e, 'prepare', { jobs: [{ key: 'a/:', value: 10 }, { key: 'b', value: 20 }] });
+  submit(e, 'prepare', { jobs: [{ key: 'a_1', value: 10 }, { key: 'b', value: 20 }] });
   assert.equal(task(e, 'worker'), undefined);
   submit(e, 'config', { currency: 'CNY' });
   const workers = e.getFrontier(); assert.equal(workers.length, 2);
-  assert.deepEqual(workers.map(t => t.forItem), [{ key: 'a/:', index: 0 }, { key: 'b', index: 1 }]);
+  assert.deepEqual(workers.map(t => t.forItem), [{ key: 'a_1', index: 0 }, { key: 'b', index: 1 }]);
   e.submit(workers[1].instanceId, { price: 20, nested: [2], note: undefined });
   assert.equal(task(e, 'finish'), undefined);
   assert.equal(e.getSnapshot().waitingPositions.some(p => p.definitionId === 'worker'), false);
@@ -152,7 +152,7 @@ test('downstream type failure and nested DAG completion failure publish no parti
 });
 
 test('recursion unfolds on demand and returns through parent DAGs', () => {
-  const definition = dag([node('step', { items: array('string') }, { items: array('string'), again: 'boolean' }), edge('step', 'D', { if: 'again' })], { items: array('string') }, {}, 'D');
+  const definition = dag([node('step', { items: array('string') }, { items: array('string'), again: 'boolean' }), edge('step', 'recursive', { if: 'again' })], { items: array('string') }, {}, 'recursive');
   const e = compile(definition).createExecution({ items: ['a', 'b'] });
   for (const expected of [['a', 'b'], ['b'], []]) {
     const t = task(e, 'step'); assert.deepEqual(t.input.items, expected);
@@ -263,9 +263,9 @@ test('definition JSON restrictions and extension fields have no orchestration se
   invalid(new Proxy(dag([]), { ownKeys() { calls++; return []; } }), ['INVALID_JSON_VALUE']); assert.equal(calls, 0);
   const e = compile(dag([node('a', {}, {}, { if: false, for: [1], handler: { name: 'a' } })])).createExecution({});
   assert.equal(task(e, 'a').definition.if, false); submit(e, 'a', { date: new Date(), fn() {} });
-  const negativeZero = compile(dag([node('negativeZero', {}, {}, { numericMetadata: -0 })]));
+  const negativeZero = compile(dag([node('negative-zero', {}, {}, { numericMetadata: -0 })]));
   assert.ok(Object.is(negativeZero.getDefinition().dag[0].numericMetadata, -0));
-  assert.ok(Object.is(task(negativeZero.createExecution({}), 'negativeZero').definition.numericMetadata, -0));
+  assert.ok(Object.is(task(negativeZero.createExecution({}), 'negative-zero').definition.numericMetadata, -0));
 });
 
 test('different legal submission orders produce equal results', () => {
@@ -300,7 +300,7 @@ test('for exit aggregate conflict rolls back last item and keeps previously comp
 });
 
 test('recursive for preserves separate identities and input item schema', () => {
-  const definition = dag([node('step', { value: 'number' }, { again: 'boolean', jobs }), edge('step', 'D', { if: 'again', for: 'jobs' })], { value: 'number' }, {}, 'D');
+  const definition = dag([node('step', { value: 'number' }, { again: 'boolean', jobs }), edge('step', 'recursive', { if: 'again', for: 'jobs' })], { value: 'number' }, {}, 'recursive');
   const e = compile(definition).createExecution({ value: 2 });
   submit(e, 'step', { again: true, jobs: [{ key: 'a', value: 0 }, { key: 'b', value: 0 }] });
   const workers = e.getFrontier(); assert.deepEqual(workers.map(w => w.input.value), [0, 0]);
@@ -310,7 +310,7 @@ test('recursive for preserves separate identities and input item schema', () => 
 });
 
 test('long recursive chain completes through iterative internal propagation', () => {
-  const e = compile(dag([node('step', { remaining: 'number' }, { remaining: 'number', again: 'boolean' }), edge('step', 'D', { if: 'again' })], { remaining: 'number' }, {}, 'D')).createExecution({ remaining: 1200 });
+  const e = compile(dag([node('step', { remaining: 'number' }, { remaining: 'number', again: 'boolean' }), edge('step', 'recursive', { if: 'again' })], { remaining: 'number' }, {}, 'recursive')).createExecution({ remaining: 1200 });
   for (let n = 1200; n >= 0; n--) {
     const t = task(e, 'step'); assert.equal(t.input.remaining, n);
     e.submit(t.instanceId, { remaining: n - 1, again: n > 0 });
@@ -352,7 +352,7 @@ test('dynamic for checks actual values and preserves known compile-time conflict
   rejected(execution, id, { selected: 'bad', sets: { good: [], bad: [{ key: 'a', value: 2 }, { key: 'a', value: 3 }] } }, 'DUPLICATE_FOR_KEY');
   rejected(execution, id, { selected: 'bad', sets: { good: [], bad: [{ key: 'a', value: 'wrong' }] } }, 'INVALID_FIELD_TYPE');
   rejected(execution, id, { selected: 'bad', sets: { good: [], bad: [{ key: 'a', shared: 'conflict' }] } }, 'INPUT_KEY_CONFLICT');
-  submit(execution, 'source', { selected: 'good', sets: { good: [{ key: 'with /任意:', value: 2 }] } });
+  submit(execution, 'source', { selected: 'good', sets: { good: [{ key: 'with-business', value: 2 }] } });
   assert.deepEqual(task(execution, 'worker').input, { value: 2, shared: 'saved' });
   invalid(dag([...definition.dag, node('another', {}, { shared: 'string' }), edge('another', 'worker')]), ['INPUT_SCHEMA_KEY_CONFLICT']);
   const wrongType = structuredClone(definition); wrongType.dag[2].input_schema.shared = 'number';
@@ -390,7 +390,7 @@ test('missing expression values follow library defaults and final contracts; fai
   assert.throws(() => failing.submit(sourceId, { n: 1 }), error => error.code === 'EXPRESSION_EVALUATION_ERROR' && error.location.definitionPath.at(-1) === 'if' && error.cause instanceof Error);
   assert.equal(task(failing, 'source').instanceId, sourceId);
   assert.throws(() => compile(dag([dag([], {}, {}, 'empty'), node('target'), edge('empty', 'target', { if: '["false"] | first' })])).createExecution({}), error => error instanceof InitializationError && error.code === 'EXPRESSION_EVALUATION_ERROR');
-  assert.throws(() => compile(dag([node('rootInput', { value: 'boolean' })], { value: 'boolean' })).createExecution({ value: 'wrong' }), error => error instanceof InitializationError && error.code === 'INVALID_FIELD_TYPE');
+  assert.throws(() => compile(dag([node('root-input', { value: 'boolean' })], { value: 'boolean' })).createExecution({ value: 'wrong' }), error => error instanceof InitializationError && error.code === 'INVALID_FIELD_TYPE');
 });
 
 test('random edge decisions resample after rollback but persisted expansion restores without sampling', t => {
@@ -463,4 +463,83 @@ test('dynamic for consumes arrays and rows under the existing own-data container
   const row = Object.create(null); Object.defineProperties(row, { key: { value: 'own' }, value: { value: 2 } });
   submit(execution, 'source', { selected: 'extra', sets: { extra: [row] } });
   assert.deepEqual(task(execution, 'worker').input, { value: 2 });
+});
+
+test('definition identifiers share exact ASCII rules while names remain optional display text', () => {
+  const valid = ['a', '0', '2review', 'review_v2', 'review.zh', 'review-step', 'a'.repeat(1024)];
+  const invalidIds = ['', '中文', 'Review', '_review', 'review_', 'review..zh', 'review-_task', ' review', 'review ', 'review task', 'review\n', 'review\r', 'review\t', 'review\0', 'review\u200b'];
+  for (const id of valid) {
+    for (const definition of [dag([], {}, {}, id), dag([node(id)]), dag([dag([], {}, {}, id)]), dag([node('source'), node('target'), edge('source', 'target', { id })])]) {
+      assert.doesNotThrow(() => compile(definition), id);
+    }
+  }
+  for (const id of invalidIds) {
+    for (const definition of [dag([], {}, {}, id), dag([node(id)]), dag([dag([], {}, {}, id)]), dag([node('source'), node('target'), edge('source', 'target', { id })])]) invalid(definition, ['INVALID_STANDARD_FIELD']);
+  }
+  const named = { ...dag([node('first', {}, {}, { name: '同名' }), { ...dag([node('inside')], {}, {}, 'nested'), name: '同名' }, edge('first', 'nested', { id: 'link', name: '中文连线' })]), name: ' 根名称 ' };
+  const program = compile(named);
+  assert.deepEqual(program.getDefinition(), named);
+  const execution = program.createExecution({});
+  assert.equal(task(execution, 'first').definition.name, '同名');
+  submit(execution, 'first', {});
+  const restored = program.restoreExecution(execution.exportState());
+  assert.equal(task(restored, 'inside').definition.id, 'inside');
+  assert.deepEqual(restored.getSnapshot(), execution.getSnapshot());
+  for (const name of ['', ' \n\t', null, 0, false, [], {}]) {
+    for (const definition of [{ ...dag([]), name }, dag([node('a', {}, {}, { name })]), dag([{ ...dag([], {}, {}, 'nested'), name }]), dag([node('a'), node('b'), edge('a', 'b', { id: 'link', name })])]) invalid(definition, ['INVALID_STANDARD_FIELD']);
+  }
+  invalid(dag([node('same', {}, {}, { name: '甲' }), node('same', {}, {}, { name: '乙' })]), ['DUPLICATE_ID']);
+});
+
+test('for keys use exact identifiers, roll back atomically and survive partial completion and restore', () => {
+  for (const expression of ['jobs', 'sets[selected]']) {
+    const program = compile(dag([node('source', {}, { jobs, sets: object({}), selected: 'string' }), node('worker', { value: 'number' }, { result: 'number' }), edge('source', 'worker', { for: expression })], {}, { result: array('number') }));
+    const execution = program.createExecution({});
+    for (const key of ['中文', 'a/b', 'A', 'a ', 'a\n', 'a\0', 'a..b', 'a-_b']) {
+      const rows = [{ key: 'valid', value: 1 }, { key, value: 2 }];
+      const before = execution.exportState();
+      rejected(execution, task(execution, 'source').instanceId, { jobs: rows, sets: { batch: rows }, selected: 'batch' }, 'INVALID_FOR_KEY');
+      assert.deepEqual(execution.exportState(), before);
+    }
+    const rows = ['0', 'a_b', 'a.b', 'a-b'].map((key, value) => ({ key, value }));
+    submit(execution, 'source', { jobs: rows, sets: { batch: rows }, selected: 'batch' });
+    const workers = execution.getFrontier();
+    assert.deepEqual(workers.map(item => item.forItem.key), ['0', 'a_b', 'a.b', 'a-b']);
+    assert.ok(workers.every(item => !Object.hasOwn(item.input, 'key')));
+    execution.submit(workers[3].instanceId, { result: 3 });
+    const restored = program.restoreExecution(execution.exportState());
+    assert.deepEqual(restored.getFrontier(), execution.getFrontier());
+    for (const worker of restored.getFrontier().reverse()) restored.submit(worker.instanceId, { result: worker.input.value });
+    assert.deepEqual(restored.getResult(), { status: 'completed', output: { result: [0, 1, 2, 3] } });
+  }
+});
+
+test('JSON business field names stay unrestricted at every declared object level', () => {
+  const keys = ['', '中文', 'a.b', 'a-b', 'line\nquote"\\', '__proto__', 'constructor'];
+  const properties = Object.fromEntries(keys.map(key => [key, 'string']));
+  const schema = { payload: object(properties), ...properties };
+  const value = Object.fromEntries(keys.map(key => [key, `value:${key}`]));
+  const data = { payload: { ...value }, ...value };
+  const definition = dag([node('first', schema, schema), node('second', schema, schema), edge('first', 'second')], schema, schema);
+  const execution = compile(definition).createExecution(data);
+  assert.deepEqual(task(execution, 'first').input, data);
+  submit(execution, 'first', data);
+  assert.deepEqual(task(execution, 'second').input, data);
+  submit(execution, 'second', data);
+  assert.deepEqual(execution.getResult(), { status: 'completed', output: data });
+});
+
+test('separate expansions may reuse the same item key without changing instance identity scopes', () => {
+  const execution = compile(dag([
+    node('left', {}, { left_jobs: jobs }), node('right', {}, { right_jobs: jobs }), node('left-worker'), node('right-worker'),
+    edge('left', 'left-worker', { for: 'left_jobs' }), edge('right', 'right-worker', { for: 'right_jobs' }),
+  ])).createExecution({});
+  submit(execution, 'left', { left_jobs: [{ key: 'same', value: 1 }] });
+  submit(execution, 'right', { right_jobs: [{ key: 'same', value: 2 }] });
+  const workers = execution.getFrontier();
+  assert.equal(workers.length, 2);
+  assert.notEqual(workers[0].instanceId, workers[1].instanceId);
+  assert.deepEqual(workers.map(item => item.forItem), [{ key: 'same', index: 0 }, { key: 'same', index: 0 }]);
+  for (const item of workers) execution.submit(item.instanceId, {});
+  assert.deepEqual(execution.getResult(), { status: 'completed', output: {} });
 });

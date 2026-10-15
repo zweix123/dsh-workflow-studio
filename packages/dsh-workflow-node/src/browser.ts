@@ -1,3 +1,4 @@
+import { isIdentifier } from './index.js'
 import type { Context } from '@deepseek-ai/cordis'
 import type { ClientNode } from './client.js'
 import type { NodeText } from './index.js'
@@ -15,6 +16,8 @@ export class BrowserNodeRegistry {
   private revision = 0
   constructor(private readonly translate: (namespace: string, key: string) => string = (_namespace, key) => key) {}
   register(owner: Context, source: string, node: ClientNode): void {
+    if (!isIdentifier(node.kind)) throw new Error('Invalid node kind')
+    for (const handler of [...Object.keys(node.handlers ?? {}), ...Object.keys(node.interactions ?? {})]) if (!isIdentifier(handler)) throw new Error(`Invalid node handler ${handler}`)
     // The host client Loader's entry name is its composed package/module id.
     const identity = owner.fiber.entry?.options.name ?? owner.fiber.runtime?.name
     if (identity && identity !== source) throw new Error('Node view source must match its host browser package identity')

@@ -4,7 +4,7 @@
 
 ## 用途与最小示例
 
-`node_kind: agent` 由 Agent 处理任务，支持可持续交流的台前模式和直接执行任务的台后模式。以下是放入 DAG 的 `dag` 数组中的节点定义；完整模板还需根 `id`、`name`、`type: dag`。
+`node_kind: agent` 由 Agent 处理任务，支持可持续交流的台前模式和直接执行任务的台后模式。以下是放入 DAG 的 `dag` 数组中的节点定义；完整模板还需根 `id`、`type: dag`；可选 `name` 与统一 ID 规则见[整体 DAG 语法](../../dag-syntax.zh.md#31-工作流模板与节点类型)。
 
 ```yaml
 id: discuss
